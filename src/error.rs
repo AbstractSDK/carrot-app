@@ -1,8 +1,8 @@
 use abstract_app::AppError as AbstractAppError;
 use abstract_core::AbstractError;
 use abstract_sdk::AbstractSdkError;
-use cosmwasm_std::StdError;
-use cw_asset::AssetError;
+use cosmwasm_std::{Coin, StdError};
+use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
 use thiserror::Error;
 
@@ -25,4 +25,16 @@ pub enum AppError {
 
     #[error("{0}")]
     DappError(#[from] AbstractAppError),
+
+    #[error("Unauthorized")]
+    Unauthorized {},
+
+    #[error("Wrong denom deposited, expected exactly {expected}, got {got:?}")]
+    DepositError { expected: AssetInfo, got: Vec<Coin> },
+
+    #[error("Wrong asset info stored, expected Native")]
+    WrongAssetInfo {},
+
+    #[error("No position registered in contract, please make a deposit before !")]
+    NoPosition {},
 }

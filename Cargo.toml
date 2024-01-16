@@ -48,6 +48,8 @@ abstract-sdk = { version = "0.19.2" }
 # Dependencies for interface
 abstract-interface = { version = "0.19.2", optional = true }
 cw-orch = { version = "0.16.4", optional = true }
+osmosis-std = "0.22.0"
+prost = "0.12.3"
 
 [dev-dependencies]
 app = { path = ".", features = ["interface"] }

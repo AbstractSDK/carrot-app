@@ -1,9 +1,10 @@
 use crate::msg::AppMigrateMsg;
+use crate::replies::SUCCESSFUL_DEPOSIT_REPLY_ID;
 use crate::{
     error::AppError,
     handlers,
     msg::{AppExecuteMsg, AppInstantiateMsg, AppQueryMsg},
-    replies::{self, INSTANTIATE_REPLY_ID},
+    replies::{self},
 };
 use abstract_app::AppContract;
 use cosmwasm_std::Response;
@@ -11,7 +12,7 @@ use cosmwasm_std::Response;
 /// The version of your app
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The id of the app
-pub const APP_ID: &str = "my-namespace:app";
+pub const APP_ID: &str = "abstract-sdk:savings-app";
 
 /// The type of the result returned by your app's entry points.
 pub type AppResult<T = Response> = Result<T, AppError>;
@@ -24,7 +25,7 @@ const APP: App = App::new(APP_ID, APP_VERSION, None)
     .with_execute(handlers::execute_handler)
     .with_query(handlers::query_handler)
     .with_migrate(handlers::migrate_handler)
-    .with_replies(&[(INSTANTIATE_REPLY_ID, replies::instantiate_reply)]);
+    .with_replies(&[(SUCCESSFUL_DEPOSIT_REPLY_ID, replies::succesful_deposit)]);
 
 // Export handlers
 #[cfg(feature = "export")]

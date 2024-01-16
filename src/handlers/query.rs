@@ -1,22 +1,35 @@
 use crate::contract::{App, AppResult};
-use crate::msg::{AppQueryMsg, ConfigResponse, CountResponse};
-use crate::state::{CONFIG, COUNT};
-use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult};
+use crate::msg::{AppQueryMsg, AvailableRewardsResponse, StateResponse};
+use crate::state::CONFIG;
+use cosmwasm_std::{coin, coins, to_json_binary, BalanceResponse, Binary, Deps, Env, StdResult};
 
-pub fn query_handler(deps: Deps, _env: Env, _app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
+pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {
-        AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        AppQueryMsg::Count {} => to_json_binary(&query_count(deps)?),
+        AppQueryMsg::State {} => to_json_binary(&query_state(deps)?),
+        AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
+        AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
     }
     .map_err(Into::into)
 }
 
-fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
-    let _config = CONFIG.load(deps.storage)?;
-    Ok(ConfigResponse {})
+fn query_state(deps: Deps) -> StdResult<StateResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    Ok(StateResponse {
+        deposit_info: config.deposit_info.into(),
+        quasar_pool: config.quasar_pool.to_string(),
+    })
 }
 
-fn query_count(deps: Deps) -> StdResult<CountResponse> {
-    let count = COUNT.load(deps.storage)?;
-    Ok(CountResponse { count })
+fn query_balance(deps: Deps, app: &App) -> StdResult<BalanceResponse> {
+    let config = CONFIG.load(deps.storage)?;
+
+    Ok(BalanceResponse {
+        amount: coin(0, config.deposit_info.to_string()),
+    })
+}
+fn query_rewards(deps: Deps, app: &App) -> StdResult<AvailableRewardsResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    Ok(AvailableRewardsResponse {
+        available_rewards: coins(0, config.deposit_info.to_string()),
+    })
 }

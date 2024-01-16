@@ -1,5 +1,3 @@
-mod instantiate;
-
-pub use instantiate::instantiate_reply;
-
-pub const INSTANTIATE_REPLY_ID: u64 = 1u64;
+mod deposit;
+pub use deposit::succesful_deposit;
+pub const SUCCESSFUL_DEPOSIT_REPLY_ID: u64 = 1u64;

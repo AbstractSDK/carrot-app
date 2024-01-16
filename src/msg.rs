@@ -1,4 +1,6 @@
 use cosmwasm_schema::QueryResponses;
+use cosmwasm_std::{Coin, Int64, Uint128};
+use cw_asset::AssetInfoBase;
 
 use crate::contract::App;
 
@@ -8,8 +10,10 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
-    /// Initial count
-    pub count: i32,
+    /// Deposit denomination to accept deposits
+    pub deposit_denom: String,
+    /// Id of the pool used to get rewards
+    pub quasar_pool: String,
 }
 
 /// App execute messages
@@ -17,14 +21,18 @@ pub struct AppInstantiateMsg {
 #[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
-    /// Increment count by 1
-    Increment {},
-    /// Admin method - reset count
-    Reset {
-        /// Count value after reset
-        count: i32,
-    },
-    UpdateConfig {},
+    /// Deposit funds onto the app
+    #[cfg_attr(feature = "interface", payable)]
+    Deposit {},
+    /// Partial withdraw of the funds available on the app
+    Withdraw { amount: Uint128 },
+    /// Withdraw everything that is on the app
+    WithdrawAll {},
+    /// Auto-compounds the pool rewards into the pool
+    Autocompound {},
+
+    /// Internal Restakes all the funds that are owned by the contract
+    Restake {},
 }
 
 /// App query messages
@@ -33,19 +41,28 @@ pub enum AppExecuteMsg {
 #[cfg_attr(feature = "interface", impl_into(QueryMsg))]
 #[derive(QueryResponses)]
 pub enum AppQueryMsg {
-    #[returns(ConfigResponse)]
-    Config {},
-    #[returns(CountResponse)]
-    Count {},
+    #[returns(StateResponse)]
+    State {},
+    #[returns(BalanceResponse)]
+    Balance {},
+    #[returns(AvailableRewardsResponse)]
+    AvailableRewards {},
 }
 
 #[cosmwasm_schema::cw_serde]
 pub enum AppMigrateMsg {}
 
 #[cosmwasm_schema::cw_serde]
-pub struct ConfigResponse {}
+pub struct StateResponse {
+    pub deposit_info: AssetInfoBase<String>,
+    pub quasar_pool: String,
+}
 
 #[cosmwasm_schema::cw_serde]
-pub struct CountResponse {
-    pub count: i32,
+pub struct BalanceResponse {
+    pub balance: Vec<Coin>,
+}
+#[cosmwasm_schema::cw_serde]
+pub struct AvailableRewardsResponse {
+    pub available_rewards: Vec<Coin>,
 }
