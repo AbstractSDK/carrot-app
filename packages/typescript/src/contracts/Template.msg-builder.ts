@@ -4,19 +4,47 @@
 * and run the @abstract-money/ts-codegen generate command to regenerate this file.
 */
 
-import { InstantiateMsg, ExecuteMsg, QueryMsg, MigrateMsg, ConfigResponse } from "./Template.types";
+import { ExecuteMsg, BaseExecuteMsg, AppExecuteMsg, StdAck, Binary, IbcResponseMsg, Empty, InstantiateMsg, BaseInstantiateMsg, AppInstantiateMsg, AppMigrateMsg, MigrateMsg, BaseMigrateMsg, QueryMsg, BaseQueryMsg, AppQueryMsg } from "./Template.types";
 import { CamelCasedProperties } from "type-fest";
 export abstract class TemplateExecuteMsgBuilder {
-  static updateConfig = (): ExecuteMsg => {
+  static base = (baseExecuteMsg: BaseExecuteMsg): ExecuteMsg => {
     return {
-      update_config: ({} as const)
+      base: baseExecuteMsg
+    };
+  };
+  static module = (appExecuteMsg: AppExecuteMsg): ExecuteMsg => {
+    return {
+      module: appExecuteMsg
+    };
+  };
+  static ibcCallback = ({
+    id,
+    msg
+  }: CamelCasedProperties<Extract<ExecuteMsg, {
+    ibc_callback: unknown;
+  }>["ibc_callback"]>): ExecuteMsg => {
+    return {
+      ibc_callback: ({
+        id,
+        msg
+      } as const)
+    };
+  };
+  static receive = (): ExecuteMsg => {
+    return {
+      receive: ({} as const)
     };
   };
 }
 export abstract class TemplateQueryMsgBuilder {
-  static config = (): QueryMsg => {
+  static base = (baseQueryMsg: BaseQueryMsg): QueryMsg => {
     return {
-      config: ({} as const)
+      base: baseQueryMsg
+    };
+  };
+  static module = (appQueryMsg: AppQueryMsg): QueryMsg => {
+    return {
+      module: appQueryMsg
     };
   };
 }

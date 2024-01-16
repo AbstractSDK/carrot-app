@@ -76,7 +76,7 @@ fn successful_reset() -> anyhow::Result<()> {
 
     app.call_as(&account.manager.address()?).reset(42)?;
     let count: CountResponse = app.count()?;
-    assert_eq!(count.count, 6);
+    assert_eq!(count.count, 42);
     Ok(())
 }
 

@@ -8,13 +8,14 @@ import { CamelCasedProperties } from "type-fest";
 import { SigningCosmWasmClient, ExecuteResult } from "@cosmjs/cosmwasm-stargate";
 import { AbstractQueryClient, AbstractAccountQueryClient, AbstractAccountClient, AppExecuteMsg, AppExecuteMsgFactory, AbstractClient } from "@abstract-money/abstract.js";
 import { StdFee, Coin } from "@cosmjs/amino";
-import { InstantiateMsg, ExecuteMsg, QueryMsg, MigrateMsg, ConfigResponse } from "./Template.types";
+import { ExecuteMsg, BaseExecuteMsg, AppExecuteMsg, StdAck, Binary, IbcResponseMsg, Empty, InstantiateMsg, BaseInstantiateMsg, AppInstantiateMsg, AppMigrateMsg, MigrateMsg, BaseMigrateMsg, QueryMsg, BaseQueryMsg, AppQueryMsg } from "./Template.types";
 import { TemplateQueryMsgBuilder, TemplateExecuteMsgBuilder } from "./Template.msg-builder";
 export interface ITemplateQueryClient {
   moduleId: string;
   accountQueryClient: AbstractAccountQueryClient;
   _moduleAddress: string | undefined;
-  config: () => Promise<ConfigResponse>;
+  base: () => Promise<BaseResponse>;
+  module: () => Promise<ModuleResponse>;
   connectSigningClient: (signingClient: SigningCosmWasmClient, address: string) => TemplateClient;
   getAddress: () => Promise<string>;
 }
@@ -43,11 +44,15 @@ export class TemplateQueryClient implements ITemplateQueryClient {
       proxyAddress
     });
     this.moduleId = moduleId;
-    this.config = this.config.bind(this);
+    this.base = this.base.bind(this);
+    this.module = this.module.bind(this);
   }
 
-  config = async (): Promise<ConfigResponse> => {
-    return this._query(TemplateQueryMsgBuilder.config());
+  base = async (): Promise<BaseResponse> => {
+    return this._query(TemplateQueryMsgBuilder.base());
+  };
+  module = async (): Promise<ModuleResponse> => {
+    return this._query(TemplateQueryMsgBuilder.module());
   };
   getAddress = async (): Promise<string> => {
     if (!this._moduleAddress) {
@@ -75,7 +80,10 @@ export class TemplateQueryClient implements ITemplateQueryClient {
 }
 export interface ITemplateClient extends ITemplateQueryClient {
   accountClient: AbstractAccountClient;
-  updateConfig: (fee?: number | StdFee | "auto", memo?: string, _funds?: Coin[]) => Promise<ExecuteResult>;
+  base: (fee?: number | StdFee | "auto", memo?: string, _funds?: Coin[]) => Promise<ExecuteResult>;
+  module: (fee?: number | StdFee | "auto", memo?: string, _funds?: Coin[]) => Promise<ExecuteResult>;
+  ibcCallback: (fee?: number | StdFee | "auto", memo?: string, _funds?: Coin[]) => Promise<ExecuteResult>;
+  receive: (fee?: number | StdFee | "auto", memo?: string, _funds?: Coin[]) => Promise<ExecuteResult>;
 }
 export class TemplateClient extends TemplateQueryClient implements ITemplateClient {
   accountClient: AbstractAccountClient;
@@ -101,11 +109,23 @@ export class TemplateClient extends TemplateQueryClient implements ITemplateClie
       moduleId
     });
     this.accountClient = AbstractAccountClient.fromQueryClient(this.accountQueryClient, abstractClient);
-    this.updateConfig = this.updateConfig.bind(this);
+    this.base = this.base.bind(this);
+    this.module = this.module.bind(this);
+    this.ibcCallback = this.ibcCallback.bind(this);
+    this.receive = this.receive.bind(this);
   }
 
-  updateConfig = async (fee: number | StdFee | "auto" = "auto", memo?: string, _funds?: Coin[]): Promise<ExecuteResult> => {
-    return this._execute(TemplateExecuteMsgBuilder.updateConfig(), fee, memo, _funds);
+  base = async (fee: number | StdFee | "auto" = "auto", memo?: string, _funds?: Coin[]): Promise<ExecuteResult> => {
+    return this._execute(TemplateExecuteMsgBuilder.base(), fee, memo, _funds);
+  };
+  module = async (fee: number | StdFee | "auto" = "auto", memo?: string, _funds?: Coin[]): Promise<ExecuteResult> => {
+    return this._execute(TemplateExecuteMsgBuilder.module(), fee, memo, _funds);
+  };
+  ibcCallback = async (fee: number | StdFee | "auto" = "auto", memo?: string, _funds?: Coin[]): Promise<ExecuteResult> => {
+    return this._execute(TemplateExecuteMsgBuilder.ibcCallback(), fee, memo, _funds);
+  };
+  receive = async (fee: number | StdFee | "auto" = "auto", memo?: string, _funds?: Coin[]): Promise<ExecuteResult> => {
+    return this._execute(TemplateExecuteMsgBuilder.receive(), fee, memo, _funds);
   };
   _execute = async (msg: ExecuteMsg, fee: number | StdFee | "auto" = "auto", memo?: string, _funds?: Coin[]): Promise<ExecuteResult> => {
     const moduleMsg: AppExecuteMsg<ExecuteMsg> = AppExecuteMsgFactory.executeApp(msg);

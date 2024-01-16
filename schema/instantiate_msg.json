@@ -29,6 +29,16 @@
     "AppInstantiateMsg": {
       "description": "App instantiate message",
       "type": "object",
+      "required": [
+        "count"
+      ],
+      "properties": {
+        "count": {
+          "description": "Initial count",
+          "type": "integer",
+          "format": "int32"
+        }
+      },
       "additionalProperties": false
     },
     "BaseInstantiateMsg": {

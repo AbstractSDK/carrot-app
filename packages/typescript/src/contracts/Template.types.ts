@@ -4,13 +4,75 @@
 * and run the @abstract-money/ts-codegen generate command to regenerate this file.
 */
 
-export interface InstantiateMsg {}
 export type ExecuteMsg = {
+  base: BaseExecuteMsg;
+} | {
+  module: AppExecuteMsg;
+} | {
+  ibc_callback: IbcResponseMsg;
+} | {
+  receive: Empty;
+};
+export type BaseExecuteMsg = {
+  update_config: {
+    ans_host_address?: string | null;
+    version_control_address?: string | null;
+  };
+};
+export type AppExecuteMsg = {
+  increment: {};
+} | {
+  reset: {
+    count: number;
+  };
+} | {
   update_config: {};
 };
-export type QueryMsg = {
-  config: {};
+export type StdAck = {
+  result: Binary;
+} | {
+  error: string;
 };
-export type MigrateMsg = string;
-export interface ConfigResponse {}
+export type Binary = string;
+export interface IbcResponseMsg {
+  id: string;
+  msg: StdAck;
+}
+export interface Empty {
+  [k: string]: unknown;
+}
+export interface InstantiateMsg {
+  base: BaseInstantiateMsg;
+  module: AppInstantiateMsg;
+}
+export interface BaseInstantiateMsg {
+  ans_host_address: string;
+  version_control_address: string;
+}
+export interface AppInstantiateMsg {
+  count: number;
+}
+export type AppMigrateMsg = string;
+export interface MigrateMsg {
+  base: BaseMigrateMsg;
+  module: AppMigrateMsg;
+}
+export interface BaseMigrateMsg {}
+export type QueryMsg = {
+  base: BaseQueryMsg;
+} | {
+  module: AppQueryMsg;
+};
+export type BaseQueryMsg = {
+  base_config: {};
+} | {
+  base_admin: {};
+} | {
+  module_data: {};
+};
+export type AppQueryMsg = {
+  config: {};
+} | {
+  count: {};
+};
 export type TemplateExecuteMsg = ExecuteMsg;

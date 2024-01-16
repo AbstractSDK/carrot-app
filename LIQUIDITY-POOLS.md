@@ -15,7 +15,7 @@ Ly = Dy/(\sqrt{P_u} - \sqrt{P_l})
 
 Then we compute dx and dy again which are the final amount we will provide
 
-Dx = (L(\sqrt{p(i_u)} - \sqrt{p(i_c)}))/(\sqrt{p(i_u)}\sqrt{p(i_c)})$$ 
+Dx = (L(\sqrt{U} - \sqrt{L}))/(\sqrt{U}\sqrt{L})$$ 
 
 
 Dy = L*(\sqrt{p(i_c)} - \sqrt{p(i_l)})$$
