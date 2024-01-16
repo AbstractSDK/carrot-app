@@ -1,3 +1,4 @@
+use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::QueryResponses;
 use cosmwasm_std::{Coin, Int64, Uint128};
 use cw_asset::AssetInfoBase;
@@ -14,6 +15,8 @@ pub struct AppInstantiateMsg {
     pub deposit_denom: String,
     /// Id of the pool used to get rewards
     pub quasar_pool: String,
+    /// Dex that we are ok to swap on !
+    pub exchanges: Vec<DexName>,
 }
 
 /// App execute messages
@@ -31,8 +34,10 @@ pub enum AppExecuteMsg {
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},
 
-    /// Internal Restakes all the funds that are owned by the contract
-    Restake {},
+    /// Internal swap all funds that are owned by the contract to match the current position ratio
+    InternalSwapAll {},
+    /// Internal Deposit all the funds in the contract
+    InternalDepositAll {},
 }
 
 /// App query messages
@@ -56,6 +61,7 @@ pub enum AppMigrateMsg {}
 pub struct StateResponse {
     pub deposit_info: AssetInfoBase<String>,
     pub quasar_pool: String,
+    pub exchanges: Vec<DexName>,
 }
 
 #[cosmwasm_schema::cw_serde]

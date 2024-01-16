@@ -1,4 +1,5 @@
-use cosmwasm_std::{Addr};
+use abstract_dex_adapter::msg::DexName;
+use cosmwasm_std::Addr;
 use cw_asset::AssetInfo;
 use cw_storage_plus::Item;
 
@@ -8,6 +9,7 @@ use crate::{contract::AppResult, error::AppError};
 pub struct Config {
     pub deposit_info: AssetInfo,
     pub quasar_pool: Addr,
+    pub exchanges: Vec<DexName>,
 }
 
 impl Config {

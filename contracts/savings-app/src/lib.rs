@@ -1,3 +1,4 @@
+pub mod cl_vault;
 pub mod contract;
 pub mod error;
 mod handlers;

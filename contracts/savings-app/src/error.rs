@@ -37,4 +37,7 @@ pub enum AppError {
 
     #[error("No position registered in contract, please make a deposit before !")]
     NoPosition {},
+
+    #[error("No swap fund to swap assets into each other")]
+    NoSwapPossibility {},
 }
