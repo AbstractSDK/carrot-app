@@ -6,4 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cw-orch = { version = "0.19" }
+cw-orch = { version = "0.19.1", features = [
+    "daemon",
+], git = "https://github.com/AbstractSDK/cw-orchestrator", branch = "feature/add-authz-wrapping"}
+osmosis-std = { version = "0.21.0" }
+cosmos-sdk-proto = { version = "0.20.0" }
+dotenv = "0.15.0"
+env_logger = "0.10.0"
+log = "0.4.20"
+tonic = "0.10.0"
+# app = { path = "../contracts/savings-app" }
