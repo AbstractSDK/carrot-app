@@ -30,20 +30,20 @@ async fn fetch_contracts(channel: Channel, code_id: u64) -> anyhow::Result<Vec<S
 
 fn autocompound(daemon: &Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
     for contract in contract_addrs {
-        // let addr = Addr::unchecked(contract);
-        // use app::msg::*;
+        let addr = Addr::unchecked(contract);
+        use app::msg::*;
         // TODO: Should look into different query to see the cooldown
-        // let available_rewards: AvailableRewardsResponse =
-        // daemon.query(&QueryMsg::from(AppQueryMsg::AvailableRewards {}), &addr)?;
+        let available_rewards: AvailableRewardsResponse =
+        daemon.query(&QueryMsg::from(AppQueryMsg::AvailableRewards {}), &addr)?;
         // If not empty - autocompound
-        // if !available_rewards.available_rewards.is_empty() {
+        if !available_rewards.available_rewards.is_empty() {
         // TODO:  Daemon set authZ
-        //     daemon.execute(
-        //         &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
-        //         &[],
-        //         &addr,
-        //     )?;
-        // }
+            daemon.execute(
+                &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
+                &[],
+                &addr,
+            )?;
+        }
     }
 
     // We can try to batch it, but it could be PIAS to not gas overflow
