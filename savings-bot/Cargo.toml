@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 cw-orch = { version = "0.19.1", features = [
     "daemon",
-], git = "https://github.com/AbstractSDK/cw-orchestrator", branch = "feature/add-authz-wrapping"}
+], git = "https://github.com/AbstractSDK/cw-orchestrator", branch = "feature/add-authz-wrapping" }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
