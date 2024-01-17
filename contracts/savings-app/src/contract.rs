@@ -3,7 +3,6 @@ use crate::{
     error::AppError,
     handlers,
     msg::{AppExecuteMsg, AppInstantiateMsg, AppQueryMsg},
-    replies::{self},
 };
 use abstract_app::AppContract;
 use abstract_core::objects::dependency::StaticDependency;
@@ -21,7 +20,7 @@ pub type AppResult<T = Response> = Result<T, AppError>;
 pub type App = AppContract<AppError, AppInstantiateMsg, AppExecuteMsg, AppQueryMsg, AppMigrateMsg>;
 
 const DEX_DEPENDENCY: StaticDependency = StaticDependency::new(
-    abstract_dex_adapter::EXCHANGE,
+    abstract_dex_adapter::DEX_ADAPTER_ID,
     &[abstract_dex_adapter::contract::CONTRACT_VERSION],
 );
 

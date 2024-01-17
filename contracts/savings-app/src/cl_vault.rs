@@ -3,6 +3,8 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Uint128};
 
+use crate::msg::AssetsBalanceResponse;
+
 #[cw_serde]
 pub enum ExecuteMsg {
     ExactDeposit {
@@ -23,6 +25,7 @@ pub enum VaultMessage {
 #[cw_serde]
 pub enum QueryMsg {
     TotalAssets {},
+    ConvertToAssets { amount: Uint128 },
     VaultExtension(VaultQuery),
 }
 
@@ -38,6 +41,10 @@ pub enum VaultQuery {
 pub enum BalancesQuery {
     #[returns(UserSharesBalanceResponse)]
     UserSharesBalance { user: String },
+    #[returns(AssetsBalanceResponse)]
+    UserAssetsBalance { user: String },
+    #[returns(UserRewardsResponse)]
+    UserRewards { user: String },
 }
 
 #[cw_serde]
@@ -49,4 +56,9 @@ pub struct TotalAssetsResponse {
 #[cw_serde]
 pub struct UserSharesBalanceResponse {
     pub balance: Uint128,
+}
+
+#[cw_serde]
+pub struct UserRewardsResponse {
+    pub rewards: Vec<Coin>,
 }

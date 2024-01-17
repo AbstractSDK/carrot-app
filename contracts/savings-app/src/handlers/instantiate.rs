@@ -1,5 +1,5 @@
 use abstract_sdk::AbstractResponse;
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{DepsMut, Env, MessageInfo};
 
 use crate::contract::{App, AppResult};
 use crate::msg::AppInstantiateMsg;
@@ -21,5 +21,5 @@ pub fn instantiate_handler(
     CONFIG.save(deps.storage, &config)?;
 
     // Example instantiation that doesn't do anything
-    Ok(app.tag_response(Response::new(), "instantiate_savings_app"))
+    Ok(app.response("instantiate_savings_app"))
 }

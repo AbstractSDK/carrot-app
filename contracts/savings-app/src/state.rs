@@ -21,10 +21,4 @@ impl Config {
     }
 }
 
-#[cosmwasm_schema::cw_serde]
-pub struct State {
-    pub current_position_id: Option<u64>,
-}
-
 pub const CONFIG: Item<Config> = Item::new("config");
-pub const STATE: Item<State> = Item::new("state");

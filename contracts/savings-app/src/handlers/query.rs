@@ -1,15 +1,14 @@
+use crate::cl_vault::{self, BalancesQuery, UserRewardsResponse};
 use crate::contract::{App, AppResult};
-use crate::msg::{AppQueryMsg, AvailableRewardsResponse, StateResponse};
+use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, StateResponse};
 use crate::state::CONFIG;
-use cosmwasm_std::{
-    coin, coins, to_json_binary, BalanceResponse, Binary, Deps, Env, StdResult, Uint128,
-};
+use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult, Uint128};
 
-pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
+pub fn query_handler(deps: Deps, env: Env, _app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {
         AppQueryMsg::State {} => to_json_binary(&query_state(deps)?),
-        AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
-        AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
+        AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, env)?),
+        AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, env)?),
     }
     .map_err(Into::into)
 }
@@ -23,17 +22,31 @@ fn query_state(deps: Deps) -> StdResult<StateResponse> {
     })
 }
 
-fn query_balance(deps: Deps, app: &App) -> StdResult<BalanceResponse> {
+fn query_balance(deps: Deps, env: Env) -> StdResult<AssetsBalanceResponse> {
     let config = CONFIG.load(deps.storage)?;
 
-    Ok(BalanceResponse {
-        amount: coin(0, config.deposit_info.to_string()),
-    })
+    deps.querier.query_wasm_smart(
+        config.quasar_pool.to_string(),
+        &cl_vault::QueryMsg::VaultExtension(cl_vault::VaultQuery::Balances(
+            BalancesQuery::UserAssetsBalance {
+                user: env.contract.address.to_string(),
+            },
+        )),
+    )
 }
-fn query_rewards(deps: Deps, app: &App) -> StdResult<AvailableRewardsResponse> {
+fn query_rewards(deps: Deps, env: Env) -> StdResult<AvailableRewardsResponse> {
     let config = CONFIG.load(deps.storage)?;
+
+    let response: UserRewardsResponse = deps.querier.query_wasm_smart(
+        config.quasar_pool.to_string(),
+        &cl_vault::QueryMsg::VaultExtension(cl_vault::VaultQuery::Balances(
+            BalancesQuery::UserRewards {
+                user: env.contract.address.to_string(),
+            },
+        )),
+    )?;
     Ok(AvailableRewardsResponse {
-        available_rewards: coins(0, config.deposit_info.to_string()),
+        available_rewards: response.rewards,
     })
 }
 

@@ -6,7 +6,7 @@ use crate::cl_vault::{
 use crate::contract::{App, AppResult};
 use crate::error::AppError;
 use crate::msg::{AppExecuteMsg, ExecuteMsg};
-use crate::state::{CONFIG, STATE};
+use crate::state::CONFIG;
 use abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
 use abstract_core::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::api::Dex;
@@ -60,7 +60,7 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     });
 
     Ok(app
-        .tag_response(Response::default(), "deposit")
+        .response("deposit")
         .add_message(msg_swap)
         .add_message(msg_deposit))
 }
@@ -78,7 +78,7 @@ fn withdraw(
     let (withdraw_msg, withdraw_amount) = _inner_withdraw(deps, &env, amount, &app)?;
 
     Ok(app
-        .tag_response(Response::default(), "withdraw")
+        .response("withdraw")
         .add_attribute("withdraw_amount", withdraw_amount)
         .add_message(withdraw_msg))
 }
@@ -109,19 +109,10 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     });
 
     Ok(app
-        .tag_response(Response::default(), "auto-compound")
+        .response("auto-compound")
         .add_message(msg_claim)
         .add_message(msg_swap)
         .add_message(msg_deposit))
-}
-
-fn restake(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
-    // Only the authorized addresses (admin ?) can auto-compound
-    if env.contract.address != info.sender {
-        return Err(AppError::Unauthorized {});
-    }
-
-    Ok(app.tag_response(Response::default(), "restake"))
 }
 
 fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> AppResult<Response> {
@@ -160,9 +151,7 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
         ],
     });
 
-    Ok(app
-        .tag_response(Response::default(), "deposit_all")
-        .add_message(msg))
+    Ok(app.response("deposit_all").add_message(msg))
 }
 
 fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
@@ -170,7 +159,6 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
         return Err(AppError::Unauthorized {});
     }
     let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
     let ans = app.name_service(deps.as_ref());
 
     // First we query the pool to know the ratio we can provide liquidity at :
@@ -182,10 +170,14 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
 
     let token0 = all_quasar_assets.token0;
     let token1 = all_quasar_assets.token1;
-    let quasar_asset_entries = ans.query(&AssetList::from(&vec![token0, token1]).to_vec())?;
+    let quasar_asset_entries =
+        ans.query(&AssetList::from(&vec![token0.clone(), token1.clone()]).to_vec())?;
     let asset_pairing_resp: Vec<AssetPairingMapEntry> = ans.pool_list(
         Some(AssetPairingFilter {
-            asset_pair: Some((quasar_asset_entries[0].name, quasar_asset_entries[1].name)),
+            asset_pair: Some((
+                quasar_asset_entries[0].name.clone(),
+                quasar_asset_entries[1].name.clone(),
+            )),
             dex: None,
         }),
         None,
@@ -201,10 +193,7 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
 
     let dex_name = pair.dex();
 
-    let ratio = Decimal::from_ratio(
-        all_quasar_assets.token0.amount,
-        all_quasar_assets.token1.amount,
-    );
+    let ratio = Decimal::from_ratio(token0.amount, token1.amount);
 
     // Then we do swaps to get the right ratio of liquidity to provide
 
@@ -213,19 +202,18 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
 
     let funds = ContractBalances {
         token0: AnsAsset {
-            name: quasar_asset_entries[0].name,
+            name: quasar_asset_entries[0].name.clone(),
             amount: balances.token0,
         },
         token1: AnsAsset {
-            name: quasar_asset_entries[1].name,
+            name: quasar_asset_entries[1].name.clone(),
             amount: balances.token1,
         },
     };
 
     let price = get_price_for(
-        deps.as_ref(),
-        quasar_asset_entries[0],
-        quasar_asset_entries[1].name,
+        quasar_asset_entries[0].clone(),
+        quasar_asset_entries[1].name.clone(),
         &app.dex(deps.as_ref(), dex_name.to_string()),
     )?;
 
@@ -240,9 +228,7 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
         None,
     )?;
 
-    Ok(app
-        .tag_response(Response::default(), "swap_all")
-        .add_message(trigger_swap_msg))
+    Ok(app.response("swap_all").add_message(trigger_swap_msg))
 }
 
 fn _inner_withdraw(
@@ -252,8 +238,6 @@ fn _inner_withdraw(
     app: &App,
 ) -> AppResult<(CosmosMsg, Uint128)> {
     let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
-    let position_id = state.current_position_id.ok_or(AppError::NoPosition {})?;
 
     let liquidity_amount = if let Some(amount) = amount {
         amount
@@ -281,13 +265,8 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount))
 }
 
-fn get_price_for(
-    deps: Deps,
-    token0: OfferAsset,
-    token1: AssetEntry,
-    dex: &Dex<App>,
-) -> AppResult<Decimal> {
-    let swap_response = dex.simulate_swap(token0, token1)?;
+fn get_price_for(token0: OfferAsset, token1: AssetEntry, dex: &Dex<App>) -> AppResult<Decimal> {
+    let swap_response = dex.simulate_swap(token0.clone(), token1)?;
 
     Ok(Decimal::from_ratio(
         swap_response.return_amount,

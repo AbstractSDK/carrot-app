@@ -1,6 +1,6 @@
 use abstract_dex_adapter::msg::DexName;
-use cosmwasm_schema::QueryResponses;
-use cosmwasm_std::{Coin, Int64, Uint128};
+use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::{Coin, Uint128};
 use cw_asset::AssetInfoBase;
 
 use crate::contract::App;
@@ -48,7 +48,7 @@ pub enum AppExecuteMsg {
 pub enum AppQueryMsg {
     #[returns(StateResponse)]
     State {},
-    #[returns(BalanceResponse)]
+    #[returns(AssetsBalanceResponse)]
     Balance {},
     #[returns(AvailableRewardsResponse)]
     AvailableRewards {},
@@ -71,4 +71,9 @@ pub struct BalanceResponse {
 #[cosmwasm_schema::cw_serde]
 pub struct AvailableRewardsResponse {
     pub available_rewards: Vec<Coin>,
+}
+
+#[cw_serde]
+pub struct AssetsBalanceResponse {
+    pub balances: Vec<Coin>,
 }
