@@ -2,6 +2,7 @@ use abstract_app::abstract_core::app::{AppConfigResponse, BaseQueryMsg};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient, QueryContractsByCodeRequest,
 };
+use cw_orch::daemon::queriers::Authz;
 use cw_orch::daemon::sender::{Sender, SenderOptions};
 use cw_orch::daemon::Wallet;
 use cw_orch::prelude::*;
@@ -33,18 +34,33 @@ async fn fetch_contracts(channel: Channel, code_id: u64) -> anyhow::Result<Vec<S
     anyhow::Ok(contract_addrs)
 }
 
-fn update_sender_to_grant(daemon: &mut Daemon, contract_addr: &Addr) -> anyhow::Result<()> {
+// TODO: are we using wasm execute grant here?
+const MSG_TYPE_URL: &str = "";
+
+fn daemon_with_savings_authz(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<Daemon> {
     // Get config of an app to get proxy address(granter)
     let app_config: AppConfigResponse =
         daemon.query(&QueryMsg::Base(BaseQueryMsg::BaseConfig {}), &contract_addr)?;
 
-    // TODO: check if grant is indeed given
+    // Check if grant is indeed given
     let authz_granter = app_config.proxy_address;
-    daemon.set_sender(Wallet::new(Sender::new_with_options(
-        &daemon.state(),
-        sender_options_constructor(authz_granter.to_string()),
-    )?));
-    Ok(())
+    let authz_querier: Authz = daemon.query_client();
+    let grantee = daemon.sender().to_string();
+    let grants = daemon.rt_handle.block_on(async {
+        authz_querier
+            .grants(
+                authz_granter.to_string(),
+                grantee,
+                MSG_TYPE_URL.to_string(),
+                None,
+            )
+            .await
+    })?;
+    if grants.grants.is_empty() {
+        return Err(anyhow::anyhow!("Missing required grant"));
+    }
+
+    Ok(daemon.with_authz(authz_granter))
 }
 
 fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
@@ -55,11 +71,8 @@ fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Res
             daemon.query(&QueryMsg::from(AppQueryMsg::AvailableRewards {}), &addr)?;
         // If not empty - autocompound
         if !available_rewards.available_rewards.is_empty() {
-            // Update sender on daemon to use grant of contract
-            let sender_update_result = update_sender_to_grant(daemon, &addr);
-
             // Execute autocompound, if we have grant(s)
-            if sender_update_result.is_ok() {
+            if let Ok(daemon) = daemon_with_savings_authz(daemon, &addr) {
                 daemon.execute(
                     &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
                     &[],
