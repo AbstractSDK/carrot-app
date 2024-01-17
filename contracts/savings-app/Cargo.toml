@@ -41,24 +41,28 @@ thiserror = { version = "1.0.50" }
 schemars = "0.8"
 cw-asset = { version = "3.0" }
 
-abstract-core = { version = "0.19.2" }
-abstract-app = { version = "0.19.2" }
-abstract-sdk = { version = "0.19.2" }
+abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 
 # Dependencies for interface
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", tag = "v0.19.2" }
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 
-abstract-interface = { version = "0.19.2", optional = true }
-cw-orch = { version = "0.16.4", optional = true }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
+cw-orch = { version = "0.19.1", optional = true }
 
 [dev-dependencies]
 app = { path = ".", features = ["interface"] }
-abstract-interface = { version = "0.19.2", features = ["daemon"] }
-abstract-testing = { version = "0.19.2" }
-abstract-sdk = { version = "0.19.2", features = ["test-utils"] }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+  "daemon",
+] }
+abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+  "test-utils",
+] }
 speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
-cw-orch = { version = "0.16.3", features = ["daemon"] }
+cw-orch = { version = "0.19.1", features = ["daemon"] }
 clap = { version = "4.3.7", features = ["derive"] }

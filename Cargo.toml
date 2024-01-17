@@ -4,3 +4,13 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
+
+
+[patch.crates-io]
+abstract-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "feature/add-authz-wrapping" }
