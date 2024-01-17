@@ -4,7 +4,7 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-
+cw-orch = "0.19.1"
 
 [patch.crates-io]
 abstract-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
