@@ -1,8 +1,5 @@
 use std::collections::HashSet;
 
-use crate::cl_vault::{
-    self, BalancesQuery, TotalAssetsResponse, UserSharesBalanceResponse, VaultMessage, VaultQuery,
-};
 use crate::contract::{App, AppResult};
 use crate::error::AppError;
 use crate::msg::{AppExecuteMsg, ExecuteMsg};
@@ -18,6 +15,11 @@ use cosmwasm_std::{
     Response, Uint128, WasmMsg, WasmQuery,
 };
 use cw_asset::AssetList;
+
+use crate::cl_vault::msg::ExtensionExecuteMsg;
+use crate::cl_vault::msg::ExtensionQueryMsg;
+use crate::cl_vault::query::{TotalAssetsResponse, UserSharesBalanceResponse};
+use crate::cl_vault::{self, msg::UserBalanceQueryMsg};
 
 use super::query::{query_balances, ContractBalances};
 const MAX_SPREAD_PERCENT: u64 = 20;
@@ -90,8 +92,8 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 
     let msg_claim = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.quasar_pool.to_string(),
-        msg: to_json_binary(&cl_vault::ExecuteMsg::VaultExtension(
-            VaultMessage::ClaimRewards {},
+        msg: to_json_binary(&cl_vault::msg::ExecuteMsg::VaultExtension(
+            ExtensionExecuteMsg::ClaimRewards {},
         ))?,
         funds: vec![],
     });
@@ -125,7 +127,7 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
     let all_quasar_assets: TotalAssetsResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: config.quasar_pool.to_string(),
-            msg: to_json_binary(&crate::cl_vault::QueryMsg::TotalAssets {})?,
+            msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::TotalAssets {})?,
         }))?;
 
     // After the swap we can deposit the exact amount of tokens inside the quasar pool
@@ -138,7 +140,7 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.quasar_pool.to_string(),
-        msg: to_json_binary(&crate::cl_vault::ExecuteMsg::ExactDeposit { recipient: None })?,
+        msg: to_json_binary(&crate::cl_vault::msg::ExecuteMsg::ExactDeposit { recipient: None })?,
         funds: vec![
             Coin {
                 denom: all_quasar_assets.token0.denom,
@@ -165,7 +167,7 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
     let all_quasar_assets: TotalAssetsResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: config.quasar_pool.to_string(),
-            msg: to_json_binary(&crate::cl_vault::QueryMsg::TotalAssets {})?,
+            msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::TotalAssets {})?,
         }))?;
 
     let token0 = all_quasar_assets.token0;
@@ -244,8 +246,8 @@ fn _inner_withdraw(
     } else {
         let user_shares: UserSharesBalanceResponse = deps.querier.query_wasm_smart(
             config.quasar_pool.to_string(),
-            &cl_vault::QueryMsg::VaultExtension(VaultQuery::Balances(
-                BalancesQuery::UserSharesBalance {
+            &cl_vault::msg::QueryMsg::VaultExtension(ExtensionQueryMsg::Balances(
+                UserBalanceQueryMsg::UserSharesBalance {
                     user: env.contract.address.to_string(),
                 },
             )),
@@ -256,7 +258,7 @@ fn _inner_withdraw(
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.quasar_pool.to_string(),
-        msg: to_json_binary(&cl_vault::ExecuteMsg::Redeem {
+        msg: to_json_binary(&cl_vault::msg::ExecuteMsg::Redeem {
             recipient: Some(app.account_base(deps.as_ref())?.proxy.to_string()),
             amount: liquidity_amount,
         })?,

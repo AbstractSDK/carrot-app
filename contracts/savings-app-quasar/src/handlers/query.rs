@@ -1,7 +1,9 @@
-use crate::cl_vault::{self, BalancesQuery, UserRewardsResponse};
+use crate::cl_vault::{self};
 use crate::contract::{App, AppResult};
 use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, StateResponse};
 use crate::state::CONFIG;
+use cl_vault::msg::{ExtensionQueryMsg, QueryMsg, UserBalanceQueryMsg};
+use cl_vault::query::UserRewardsResponse;
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult, Uint128};
 
 pub fn query_handler(deps: Deps, env: Env, _app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -27,8 +29,8 @@ fn query_balance(deps: Deps, env: Env) -> StdResult<AssetsBalanceResponse> {
 
     deps.querier.query_wasm_smart(
         config.quasar_pool.to_string(),
-        &cl_vault::QueryMsg::VaultExtension(cl_vault::VaultQuery::Balances(
-            BalancesQuery::UserAssetsBalance {
+        &QueryMsg::VaultExtension(ExtensionQueryMsg::Balances(
+            UserBalanceQueryMsg::UserAssetsBalance {
                 user: env.contract.address.to_string(),
             },
         )),
@@ -39,8 +41,8 @@ fn query_rewards(deps: Deps, env: Env) -> StdResult<AvailableRewardsResponse> {
 
     let response: UserRewardsResponse = deps.querier.query_wasm_smart(
         config.quasar_pool.to_string(),
-        &cl_vault::QueryMsg::VaultExtension(cl_vault::VaultQuery::Balances(
-            BalancesQuery::UserRewards {
+        &QueryMsg::VaultExtension(ExtensionQueryMsg::Balances(
+            UserBalanceQueryMsg::UserRewards {
                 user: env.contract.address.to_string(),
             },
         )),

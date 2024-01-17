@@ -55,7 +55,17 @@ abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch
 
 abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
 cw-orch = { version = "0.19.1", optional = true }
+# cl-vault = { git = "https://github.com/abstractsdk/quasar", version = "0.1.0", features = [
+#   "library",
+# ] }
+cl-vault = { path = "../../../quasar/smart-contracts/contracts/cl-vault", features = [
+  "library",
+] }
 
+cw-vault-multi-standard = { git = "https://github.com/quasar-finance/cw-vault-standard", features = [
+  "lockup",
+  "force-unlock",
+] }
 [dev-dependencies]
 app = { path = ".", features = ["interface"] }
 abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [

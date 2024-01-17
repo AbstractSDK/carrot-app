@@ -1,4 +1,5 @@
-pub mod cl_vault;
+// pub mod cl_vault;
+pub use cl_vault;
 pub mod contract;
 pub mod error;
 mod handlers;
