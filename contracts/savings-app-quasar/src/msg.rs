@@ -12,6 +12,7 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
     /// Deposit denomination to accept deposits
+    // TODO: Do we want to replace it to AssetEntry?
     pub deposit_denom: String,
     /// Id of the pool used to get rewards
     pub quasar_pool: String,

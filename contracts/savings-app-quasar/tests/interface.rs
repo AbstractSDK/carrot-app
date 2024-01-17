@@ -1,8 +1,13 @@
 use abstract_client::Namespace;
+use abstract_core::objects::AssetEntry;
+use abstract_core::objects::PoolMetadata;
+use abstract_core::objects::PoolType;
+use abstract_core::objects::pool_id::PoolAddressBase;
 use abstract_interface::Abstract;
 use cl_vault::state::VaultConfig;
 use cosmwasm_std::Decimal;
 use cosmwasm_std::coin;
+use cw_asset::AssetInfoUnchecked;
 use cw_orch::anyhow;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
@@ -94,16 +99,35 @@ pub const SPREAD_FACTOR: &str = "10";
 pub const INITIAL_LOWER_TICK: i64 = -100;
 pub const INITIAL_UPPER_TICK: i64 = 100;
 
-pub fn deploy<Chain: CwEnv + Stargate>(chain: Chain, pool_id: u64) -> anyhow::Result<()> {
+pub fn deploy<Chain: CwEnv + Stargate>(
+    chain: Chain,
+    pool_id: u64,
+) -> anyhow::Result<AbstractClient<Chain>> {
     // We create two tokenfactory denoms
     create_denom(chain.clone(), USDC.to_string())?;
     create_denom(chain.clone(), USDT.to_string())?;
     mint_lots_of_denom(chain.clone(), USDC.to_string())?;
     mint_lots_of_denom(chain.clone(), USDT.to_string())?;
 
+    let asset0 = factory_denom(&chain, USDC);
+    let asset1 = factory_denom(&chain, USDT);
     // We add some liquidity
+    let client = AbstractClient::builder(chain.clone())
+        .dex(DEX_NAME)
+        .assets(vec![
+            (USDC.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
+            (USDT.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
+        ])
+        .pool(
+            PoolAddressBase::Id(pool_id),
+            PoolMetadata {
+                dex: DEX_NAME.to_owned(),
+                pool_type: PoolType::ConcentratedLiquidity,
+                assets: vec![AssetEntry::new(USDC), AssetEntry::new(USDT)],
+            },
+        )
+        .build()?;
 
-    let client = AbstractClient::builder(chain.clone()).build()?;
     // We register the pool inside the ans host
 
     // We deploy the app
@@ -140,10 +164,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(chain: Chain, pool_id: u64) -> anyhow::Re
             initial_upper_tick: INITIAL_UPPER_TICK,
         },
         None,
-        Some(&[
-            coin(2, factory_denom(&chain, USDC)),
-            coin(2, factory_denom(&chain, USDT)),
-        ]),
+        Some(&[coin(2, asset0), coin(2, asset1)]),
     )?;
 
     // We deploy the savings-app on top of the quasar contract
@@ -159,7 +180,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(chain: Chain, pool_id: u64) -> anyhow::Re
             &[],
         )?;
 
-    Ok(())
+    Ok(client)
 }
 
 fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
@@ -211,12 +232,10 @@ fn integration() -> anyhow::Result<()> {
     dotenv::dotenv()?;
     env_logger::init();
     let chain = OsmosisTestTube::new(coins(100_000_000_000_000, "uosmo"));
-    let abs = Abstract::deploy_on(chain.clone(), chain.sender().to_string())?;
-
     // We create a usdt-usdc pool
     let pool_id = create_pool(chain.clone())?;
 
-    deploy(chain, pool_id)?;
+    let abs = deploy(chain, pool_id)?;
 
     Ok(())
 }

@@ -52,7 +52,9 @@ abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "cw-o
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 
 # Dependencies for interface
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+  "osmosis",
+] }
 
 abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
 # cw-orch = { version = "0.19.1", optional = true }
