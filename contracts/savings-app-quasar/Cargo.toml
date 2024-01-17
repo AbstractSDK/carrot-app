@@ -24,7 +24,7 @@ name = "schema"
 required-features = ["schema"]
 
 [features]
-default = ["export"]
+default = ["export", "interface"]
 export = []
 # enable node-backed tests (ensure Docker is running)
 # run with `cargo test --jobs 1 --features node-tests`
@@ -34,6 +34,7 @@ interface = [
   "dep:abstract-interface",
   "dep:cw-orch",
   "abstract-app/interface-macro",
+  "abstract-dex-adapter/interface",
 ]
 schema = ["abstract-app/schema"]
 
@@ -54,24 +55,34 @@ abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-o
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 
 abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
-cw-orch = { version = "0.19.1", optional = true }
-# cl-vault = { git = "https://github.com/abstractsdk/quasar", version = "0.1.0", features = [
-#   "library",
-# ] }
-cl-vault = { path = "../../../quasar/smart-contracts/contracts/cl-vault", features = [
+# cw-orch = { version = "0.19.1", optional = true }
+cw-orch = { path = "../../../cw-orchestrator/cw-orch", optional = true }
+cl-vault = { git = "https://github.com/abstractsdk/quasar", version = "0.1.0", features = [
   "library",
 ] }
+# cl-vault = { path = "../../../quasar/smart-contracts/contracts/cl-vault", features = [
+#   "library",
+# ] }
 
 cw-vault-multi-standard = { git = "https://github.com/quasar-finance/cw-vault-standard", features = [
   "lockup",
   "force-unlock",
 ] }
+
+
 [dev-dependencies]
-app = { path = ".", features = ["interface"] }
+osmosis-std = { version = "0.22.0" }
 abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+
   "daemon",
 ] }
+
+prost = { version = "0.12.3" }
+prost-types = { version = "0.12.3" }
+log = { version = "0.4.20" }
+app = { path = ".", features = ["interface"] }
 abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
   "test-utils",
 ] }
@@ -79,5 +90,7 @@ speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
-cw-orch = { version = "0.19.1", features = ["daemon"] }
+cw-orch = { path = "../../../cw-orchestrator/cw-orch", features = [
+  "osmosis-test-tube",
+] }
 clap = { version = "4.3.7", features = ["derive"] }
