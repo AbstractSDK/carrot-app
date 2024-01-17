@@ -140,7 +140,10 @@ pub fn deploy<Chain: CwEnv + Stargate>(chain: Chain, pool_id: u64) -> anyhow::Re
             initial_upper_tick: INITIAL_UPPER_TICK,
         },
         None,
-        None,
+        Some(&[
+            coin(2, factory_denom(&chain, USDC)),
+            coin(2, factory_denom(&chain, USDT)),
+        ]),
     )?;
 
     // We deploy the savings-app on top of the quasar contract
@@ -175,7 +178,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     //     }],
     //     None,
     // )?;
-    let pool_response = GovWithAppAccess::new(&*chain.app.borrow())
+    let pool_response = GovWithAppAccess::new(&chain.app.borrow())
         .propose_and_execute(
             CreateConcentratedLiquidityPoolsProposal::TYPE_URL.to_string(),
             CreateConcentratedLiquidityPoolsProposal {

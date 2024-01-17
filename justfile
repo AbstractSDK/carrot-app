@@ -54,8 +54,8 @@ juno-local:
 wasm:
   #!/usr/bin/env bash
 
-  # Delete all the current wasms first
-  rm -rf ./artifacts/*.wasm
+  # Don't delete cw_vault
+  # rm -rf ./artifacts/*.wasm
 
   if [[ $(arch) == "arm64" ]]; then
     image="cosmwasm/optimizer-arm64"

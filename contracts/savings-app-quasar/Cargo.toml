@@ -24,7 +24,7 @@ name = "schema"
 required-features = ["schema"]
 
 [features]
-default = ["export", "interface"]
+default = ["export"]
 export = []
 # enable node-backed tests (ensure Docker is running)
 # run with `cargo test --jobs 1 --features node-tests`

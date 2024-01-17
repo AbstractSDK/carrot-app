@@ -107,10 +107,3 @@ fn main() -> anyhow::Result<()> {
     autocompound(&mut daemon, contract_addrs)?;
     Ok(())
 }
-
-// TODO: remove when constructor to SenderOptions added
-fn sender_options_constructor(granter: String) -> SenderOptions {
-    let mut sender_options = SenderOptions::default();
-    sender_options.authz_granter = Some(granter);
-    sender_options
-}
