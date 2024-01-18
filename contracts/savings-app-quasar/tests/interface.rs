@@ -1,23 +1,29 @@
+use abstract_client::Application;
+use abstract_client::Environment;
 use abstract_client::Namespace;
 use abstract_core::objects::AssetEntry;
 use abstract_core::objects::PoolMetadata;
 use abstract_core::objects::PoolType;
 use abstract_core::objects::pool_id::PoolAddressBase;
+use abstract_dex_adapter::msg::OfferAsset;
 use abstract_interface::Abstract;
 use cl_vault::state::VaultConfig;
 use cosmwasm_std::Decimal;
 use cosmwasm_std::coin;
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::anyhow;
+use cw_orch::build::BuildPostfix;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Module;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::poolmodel::concentrated::v1beta1::{
     MsgCreateConcentratedPool, MsgCreateConcentratedPoolResponse};
+use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePosition;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolsRequest;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMint;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMintResponse;
+use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1;
 use cw_orch::prelude::*;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::CreateConcentratedLiquidityPoolsProposal;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolRecord;
@@ -28,6 +34,7 @@ use prost_types::Any;
 use abstract_client::AbstractClient;
 use cosmwasm_std::coins;
 use app::msg::AppInstantiateMsg;
+use app::msg::AppExecuteMsgFns;
 
 #[cw_orch::interface(
     app::cl_vault::msg::InstantiateMsg,
@@ -99,16 +106,11 @@ pub const SPREAD_FACTOR: &str = "10";
 pub const INITIAL_LOWER_TICK: i64 = -100;
 pub const INITIAL_UPPER_TICK: i64 = 100;
 
+// Deploys abstract and other contracts
 pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
-) -> anyhow::Result<AbstractClient<Chain>> {
-    // We create two tokenfactory denoms
-    create_denom(chain.clone(), USDC.to_string())?;
-    create_denom(chain.clone(), USDT.to_string())?;
-    mint_lots_of_denom(chain.clone(), USDC.to_string())?;
-    mint_lots_of_denom(chain.clone(), USDT.to_string())?;
-
+) -> anyhow::Result<Application<Chain, app::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
     // We register the pool inside the Abstract ANS
@@ -162,26 +164,36 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             initial_upper_tick: INITIAL_UPPER_TICK,
         },
         None,
-        Some(&[coin(2, asset0), coin(2, asset1)]),
+        // Need to deposit few asset to create initial position, pretending those tokens are burned
+        Some(&[coin(2, asset0.clone()), coin(2, asset1)]),
     )?;
 
     // We deploy the savings-app on top of the quasar contract
-    let savings_app = publisher
-        .account()
-        .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
-            &AppInstantiateMsg {
-                deposit_denom: USDC.to_string(),
-                quasar_pool: quasar_pool.address()?.to_string(),
-                exchanges: vec![DEX_NAME.to_string()],
-            },
-            Empty {},
-            &[],
-        )?;
+    let savings_app: Application<Chain, app::AppInterface<Chain>> =
+        publisher
+            .account()
+            .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
+                &AppInstantiateMsg {
+                    deposit_denom: asset0,
+                    quasar_pool: quasar_pool.address()?.to_string(),
+                    exchanges: vec![DEX_NAME.to_string()],
+                },
+                Empty {},
+                &[],
+            )?;
 
-    Ok(client)
+    Ok(savings_app)
 }
 
 fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
+    // We create two tokenfactory denoms
+    create_denom(chain.clone(), USDC.to_string())?;
+    create_denom(chain.clone(), USDT.to_string())?;
+    mint_lots_of_denom(chain.clone(), USDC.to_string())?;
+    mint_lots_of_denom(chain.clone(), USDT.to_string())?;
+
+    let asset0 = factory_denom(&chain, USDC);
+    let asset1 = factory_denom(&chain, USDT);
     // Message for an actual chain (creating concentrated pool)
     // let create_pool_response = chain.commit_any::<MsgCreateConcentratedPoolResponse>(
     //     vec![Any {
@@ -197,7 +209,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     //     }],
     //     None,
     // )?;
-    let pool_response = GovWithAppAccess::new(&chain.app.borrow())
+    let _proposal_response = GovWithAppAccess::new(&chain.app.borrow())
         .propose_and_execute(
             CreateConcentratedLiquidityPoolsProposal::TYPE_URL.to_string(),
             CreateConcentratedLiquidityPoolsProposal {
@@ -215,25 +227,67 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
             &chain.sender,
         )
         .unwrap();
+    let test_tube = chain.app.borrow();
+    let cl = ConcentratedLiquidity::new(&*test_tube);
 
-    let pools = ConcentratedLiquidity::new(&*chain.app.borrow())
-        .query_pools(&PoolsRequest { pagination: None })
-        .unwrap();
+    let pools = cl.query_pools(&PoolsRequest { pagination: None }).unwrap();
 
     let pool = Pool::decode(pools.pools[0].value.as_slice()).unwrap();
-
+    cl.create_position(
+        MsgCreatePosition {
+            pool_id: pool.id,
+            sender: chain.sender().to_string(),
+            lower_tick: INITIAL_LOWER_TICK,
+            upper_tick: INITIAL_UPPER_TICK,
+            tokens_provided: vec![
+                v1beta1::Coin {
+                    denom: asset0,
+                    amount: "100_000_000".to_owned(),
+                },
+                v1beta1::Coin {
+                    denom: asset1,
+                    amount: "100_000_000".to_owned(),
+                },
+            ],
+            token_min_amount0: "0".to_string(),
+            token_min_amount1: "0".to_string(),
+        },
+        &chain.sender,
+    )?;
     Ok(pool.id)
 }
 
-#[test]
-fn integration() -> anyhow::Result<()> {
+fn setup_test_tube() -> anyhow::Result<(
+    u64,
+    Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
+)> {
     dotenv::dotenv()?;
     env_logger::init();
-    let chain = OsmosisTestTube::new(coins(100_000_000_000_000, "uosmo"));
+    let chain = OsmosisTestTube::new(coins(LOTS, "uosmo"));
     // We create a usdt-usdc pool
     let pool_id = create_pool(chain.clone())?;
 
-    let abs = deploy(chain, pool_id)?;
+    let savings_app = deploy(chain, pool_id)?;
+    Ok((pool_id, savings_app))
+}
 
+#[test]
+fn deposit_lands() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
+    let chain = savings_app.get_chain().clone();
+    let chain_name: String = BuildPostfix::<OsmosisTestTube>::ChainName(&chain).into();
+    println!("chain_name: {chain_name}");
+    // Checking why simulate_swap fails:
+    // let abstract = Abstract::load_from(chain)?;
+    use abstract_dex_adapter::msg::DexQueryMsgFns as _;
+    let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
+    let resp = dex_adapter.simulate_swap(
+        AssetEntry::new(USDT),
+        OfferAsset::new(USDC, 2_u128),
+        Some(DEX_NAME.to_owned()),
+    );
+    println!("{resp:?}");
+
+    // savings_app.deposit(&[coin(100, factory_denom(&chain, USDC))])?;
     Ok(())
 }

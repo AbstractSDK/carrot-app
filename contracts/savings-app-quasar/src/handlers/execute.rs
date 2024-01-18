@@ -12,7 +12,7 @@ use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::{AbstractNameService, AbstractResponse, AccountIdentification};
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, QueryRequest,
-    Response, Uint128, WasmMsg, WasmQuery,
+    Response, StdError, Uint128, WasmMsg, WasmQuery,
 };
 use cw_asset::AssetList;
 
@@ -124,11 +124,13 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
     let config = CONFIG.load(deps.storage)?;
 
     // We just want to query the token0 and token1
-    let all_quasar_assets: TotalAssetsResponse =
-        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+    let all_quasar_assets: TotalAssetsResponse = deps
+        .querier
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: config.quasar_pool.to_string(),
             msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::TotalAssets {})?,
-        }))?;
+        }))
+        .map_err(|_| StdError::generic_err("Failed to get TotalAssets2"))?;
 
     // After the swap we can deposit the exact amount of tokens inside the quasar pool
     let funds = query_balances(
@@ -136,7 +138,8 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
         &env,
         &all_quasar_assets.token0.denom,
         &all_quasar_assets.token1.denom,
-    )?;
+    )
+    .map_err(|_| StdError::generic_err("Failed to get self balance 2"))?;
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.quasar_pool.to_string(),
@@ -164,11 +167,13 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
     let ans = app.name_service(deps.as_ref());
 
     // First we query the pool to know the ratio we can provide liquidity at :
-    let all_quasar_assets: TotalAssetsResponse =
-        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+    let all_quasar_assets: TotalAssetsResponse = deps
+        .querier
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: config.quasar_pool.to_string(),
             msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::TotalAssets {})?,
-        }))?;
+        }))
+        .map_err(|_| StdError::generic_err("Failed to query TotalAssets"))?;
 
     let token0 = all_quasar_assets.token0;
     let token1 = all_quasar_assets.token1;
@@ -200,7 +205,8 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
     // Then we do swaps to get the right ratio of liquidity to provide
 
     // We query the pool to swap on:
-    let balances = query_balances(deps.as_ref(), &env, &token0.denom, &token1.denom)?;
+    let balances = query_balances(deps.as_ref(), &env, &token0.denom, &token1.denom)
+        .map_err(|_| StdError::generic_err("Failed to query contract balance"))?;
 
     let funds = ContractBalances {
         token0: AnsAsset {
@@ -217,7 +223,13 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
         quasar_asset_entries[0].clone(),
         quasar_asset_entries[1].name.clone(),
         &app.dex(deps.as_ref(), dex_name.to_string()),
-    )?;
+    )
+    .map_err(|_| {
+        StdError::generic_err(format!(
+            "Failed to get price for assets: {:?}, {:?}",
+            quasar_asset_entries[0], quasar_asset_entries[1].name
+        ))
+    })?;
 
     let (offer_asset, ask_asset) = get_swap_for_ratio(funds, price, ratio)?;
 
