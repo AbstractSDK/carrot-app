@@ -10,6 +10,7 @@ pub struct Config {
     pub deposit_info: AssetInfo,
     pub quasar_pool: Addr,
     pub exchanges: Vec<DexName>,
+    pub bot_addr: Addr,
 }
 
 impl Config {

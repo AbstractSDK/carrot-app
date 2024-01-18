@@ -177,6 +177,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     deposit_denom: asset0,
                     quasar_pool: quasar_pool.address()?.to_string(),
                     exchanges: vec![DEX_NAME.to_string()],
+                    // bot_addr: chain.sender().to_string(),
                 },
                 Empty {},
                 &[],

@@ -18,6 +18,8 @@ pub struct AppInstantiateMsg {
     pub quasar_pool: String,
     /// Dex that we are ok to swap on !
     pub exchanges: Vec<DexName>,
+    // Address of the bot, who will call autocompound
+    // pub bot_addr: String,
 }
 
 /// App execute messages
