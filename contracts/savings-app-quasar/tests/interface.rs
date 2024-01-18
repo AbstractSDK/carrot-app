@@ -111,7 +111,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
 
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
-    // We add some liquidity
+    // We register the pool inside the Abstract ANS
     let client = AbstractClient::builder(chain.clone())
         .dex(DEX_NAME)
         .assets(vec![
@@ -127,8 +127,6 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             },
         )
         .build()?;
-
-    // We register the pool inside the ans host
 
     // We deploy the app
     let publisher = client
