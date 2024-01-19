@@ -53,13 +53,11 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
     })
 }
 
-pub fn query_balances(
-    deps: Deps,
-    app: &App,
-    token0: &str,
-    token1: &str,
-) -> AppResult<ContractBalances<Uint128>> {
+pub fn query_balances(deps: Deps, app: &App) -> AppResult<ContractBalances<Uint128>> {
     let addr = app.proxy_address(deps)?;
+    let config = CONFIG.load(deps.storage)?;
+    let token0 = config.pool.token0;
+    let token1 = config.pool.token1;
 
     let asset0_balance = deps.querier.query_balance(addr.clone(), token0)?;
     let asset1_balance = deps.querier.query_balance(addr, token1)?;

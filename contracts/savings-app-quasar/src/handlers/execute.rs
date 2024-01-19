@@ -10,7 +10,7 @@ use abstract_dex_adapter::api::Dex;
 use abstract_dex_adapter::msg::OfferAsset;
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::{AbstractNameService, AbstractResponse, AccountIdentification};
-use abstract_sdk::{AccountAction, Execution};
+use abstract_sdk::{AccountAction, Execution, ExecutorMsg};
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, QueryRequest,
     Response, StdError, Uint128, WasmMsg, WasmQuery,
@@ -115,7 +115,7 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
     let config = CONFIG.load(deps.storage)?;
 
     // We need to know how many assets are inside the proxy contract
-    let funds = query_balances(deps, &app, &config.pool.token0, &config.pool.token1)
+    let funds = query_balances(deps, &app)
         .map_err(|_| StdError::generic_err("Failed to get self balance 2"))?;
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
@@ -185,7 +185,7 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
     // Then we do swaps to get the right ratio of liquidity to provide
 
     // We query the pool to swap on:
-    let balances = query_balances(deps.as_ref(), &app, &token0.denom, &token1.denom)
+    let balances = query_balances(deps.as_ref(), &app)
         .map_err(|_| StdError::generic_err("Failed to query contract balance"))?;
 
     let funds = ContractBalances {
@@ -231,7 +231,7 @@ fn _inner_withdraw(
     _env: &Env,
     amount: Option<Uint128>,
     app: &App,
-) -> AppResult<(CosmosMsg, Uint128)> {
+) -> AppResult<(ExecutorMsg, Uint128)> {
     let config = CONFIG.load(deps.storage)?;
 
     let liquidity_amount = if let Some(amount) = amount {
@@ -257,7 +257,12 @@ fn _inner_withdraw(
         })?,
         funds: vec![],
     });
-    Ok((msg, liquidity_amount))
+
+    let proxy_msg = app
+        .executor(deps.as_ref())
+        .execute(vec![AccountAction::from_vec(vec![msg])])?;
+
+    Ok((proxy_msg, liquidity_amount))
 }
 
 fn get_price_for(token0: OfferAsset, token1: AssetEntry, dex: &Dex<App>) -> AppResult<Decimal> {
