@@ -14,4 +14,4 @@ abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "cw-
 abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "feature/add-authz-wrapping" }
+cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "fix/savings-app-fixes" }

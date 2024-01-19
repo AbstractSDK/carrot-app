@@ -280,15 +280,14 @@ fn deposit_lands() -> anyhow::Result<()> {
     println!("chain_name: {chain_name}");
     // Checking why simulate_swap fails:
     // let abstract = Abstract::load_from(chain)?;
-    use abstract_dex_adapter::msg::DexQueryMsgFns as _;
-    let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
-    let resp = dex_adapter.simulate_swap(
-        AssetEntry::new(USDT),
-        OfferAsset::new(USDC, 2_u128),
-        Some(DEX_NAME.to_owned()),
-    );
-    println!("{resp:?}");
+    // use abstract_dex_adapter::msg::DexQueryMsgFns as _;
+    // let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
+    // let resp = dex_adapter.simulate_swap(
+    //     AssetEntry::new(USDT),
+    //     OfferAsset::new(USDC, 2_u128),
+    //     Some(DEX_NAME.to_owned()),
+    // )?;
 
-    // savings_app.deposit(&[coin(100, factory_denom(&chain, USDC))])?;
+    savings_app.deposit(&[coin(1000, factory_denom(&chain, USDC))])?;
     Ok(())
 }

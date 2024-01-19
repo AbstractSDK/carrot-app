@@ -3,10 +3,7 @@ use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient, QueryContractsByCodeRequest,
 };
 use cw_orch::daemon::queriers::Authz;
-use cw_orch::daemon::sender::{Sender, SenderOptions};
-use cw_orch::daemon::Wallet;
 use cw_orch::prelude::*;
-use cw_orch::state::ChainState;
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMO_5, Daemon},
@@ -40,7 +37,7 @@ const MSG_TYPE_URL: &str = "";
 fn daemon_with_savings_authz(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<Daemon> {
     // Get config of an app to get proxy address(granter)
     let app_config: AppConfigResponse =
-        daemon.query(&QueryMsg::Base(BaseQueryMsg::BaseConfig {}), &contract_addr)?;
+        daemon.query(&QueryMsg::Base(BaseQueryMsg::BaseConfig {}), contract_addr)?;
 
     // Check if grant is indeed given
     let authz_granter = app_config.proxy_address;
@@ -60,7 +57,7 @@ fn daemon_with_savings_authz(daemon: &Daemon, contract_addr: &Addr) -> anyhow::R
         return Err(anyhow::anyhow!("Missing required grant"));
     }
 
-    Ok(daemon.with_authz(authz_granter))
+    Ok(daemon.with_authz_granter(authz_granter))
 }
 
 fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
