@@ -118,6 +118,7 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
     let funds = query_balances(deps, &app)
         .map_err(|_| StdError::generic_err("Failed to get self balance 2"))?;
 
+    let funds_log = format!("{funds:?}");
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.quasar_pool.to_string(),
         msg: to_json_binary(&crate::cl_vault::msg::ExecuteMsg::ExactDeposit { recipient: None })?,
@@ -137,7 +138,10 @@ fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> Ap
         .executor(deps)
         .execute(vec![AccountAction::from_vec(vec![msg])])?;
 
-    Ok(app.response("deposit_all").add_message(proxy_msg))
+    Ok(app
+        .response("deposit_all")
+        .add_message(proxy_msg)
+        .add_attribute("depositing_funds_to_quasar", funds_log))
 }
 
 fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
@@ -200,6 +204,8 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
     };
 
     let price = get_price_for(
+        // TODO: Maybe it be some constant value for amount instead?
+        // currently if quasar balance is near zero it will give wrong price
         quasar_asset_entries[0].clone(),
         quasar_asset_entries[1].name.clone(),
         &app.dex(deps.as_ref(), dex_name.to_string()),
@@ -311,5 +317,66 @@ fn get_swap_for_ratio(
             },
             funds.token0.name,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TODO: more tests on swap for ratio
+    #[test]
+    fn swap_for_ratio_one_to_one() {
+        let (swap, ask_asset) = get_swap_for_ratio(
+            ContractBalances {
+                token0: AnsAsset {
+                    name: AssetEntry::new("USDC"),
+                    amount: Uint128::new(1000),
+                },
+                token1: AnsAsset {
+                    name: AssetEntry::new("USDT"),
+                    amount: Uint128::zero(),
+                },
+            },
+            Decimal::one(),
+            Decimal::one(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            swap,
+            AnsAsset {
+                name: AssetEntry::new("usdc"),
+                amount: Uint128::new(500)
+            }
+        );
+        assert_eq!(ask_asset, AssetEntry::new("usdt"));
+    }
+
+    #[test]
+    fn swap_for_ratio_almost_one_to_one() {
+        let (swap, ask_asset) = get_swap_for_ratio(
+            ContractBalances {
+                token0: AnsAsset {
+                    name: AssetEntry::new("USDC"),
+                    amount: Uint128::new(1000),
+                },
+                token1: AnsAsset {
+                    name: AssetEntry::new("USDT"),
+                    amount: Uint128::zero(),
+                },
+            },
+            Decimal::from_ratio(499_u128, 500_u128),
+            Decimal::one(),
+        )
+        .unwrap();
+        assert_eq!(
+            swap,
+            AnsAsset {
+                name: AssetEntry::new("usdc"),
+                amount: Uint128::new(500)
+            }
+        );
+        assert_eq!(ask_asset, AssetEntry::new("usdt"));
     }
 }

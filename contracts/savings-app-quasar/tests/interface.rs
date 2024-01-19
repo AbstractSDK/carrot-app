@@ -13,6 +13,8 @@ use cosmwasm_std::coin;
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::anyhow;
 use cw_orch::build::BuildPostfix;
+use cw_orch::environment::BankQuerier;
+use cw_orch::environment::BankSetter;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Module;
@@ -34,7 +36,7 @@ use prost_types::Any;
 use abstract_client::AbstractClient;
 use cosmwasm_std::coins;
 use app::msg::AppInstantiateMsg;
-use app::msg::AppExecuteMsgFns;
+use app::msg::{AppExecuteMsgFns, AppQueryMsgFns};
 
 #[cw_orch::interface(
     app::cl_vault::msg::InstantiateMsg,
@@ -165,7 +167,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         },
         None,
         // Need to deposit few asset to create initial position, pretending those tokens are burned
-        Some(&[coin(2, asset0.clone()), coin(2, asset1)]),
+        Some(&[coin(500, asset0.clone()), coin(500, asset1)]),
     )?;
 
     // We deploy the savings-app on top of the quasar contract
@@ -234,7 +236,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
                 pool_records: vec![PoolRecord {
                     denom0: factory_denom(&chain, USDC),
                     denom1: factory_denom(&chain, USDT),
-                    tick_spacing: 1,
+                    tick_spacing: 100,
                     spread_factor: "0".to_string(),
                 }],
             },
@@ -289,19 +291,30 @@ fn setup_test_tube() -> anyhow::Result<(
 #[test]
 fn deposit_lands() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube()?;
+
     let chain = savings_app.get_chain().clone();
-    let chain_name: String = BuildPostfix::<OsmosisTestTube>::ChainName(&chain).into();
-    println!("chain_name: {chain_name}");
     // Checking why simulate_swap fails:
-    // let abstract = Abstract::load_from(chain)?;
+    // let chain_name: String = BuildPostfix::<OsmosisTestTube>::ChainName(&chain).into();
+    // println!("chain_name: {chain_name}");
+    // let abs = abstract_interface::Abstract::load_from(chain)?;
     // use abstract_dex_adapter::msg::DexQueryMsgFns as _;
     // let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
     // let resp = dex_adapter.simulate_swap(
     //     AssetEntry::new(USDT),
-    //     OfferAsset::new(USDC, 2_u128),
+    //     abstract_dex_adapter::msg::OfferAsset::new(USDC, 500_u128),
     //     Some(DEX_NAME.to_owned()),
     // )?;
+    // println!("resp: {resp:?}");
 
-    savings_app.deposit(&[coin(1000, factory_denom(&chain, USDC))])?;
+    let proxy_addr = savings_app.account().proxy()?;
+    chain.bank_send(
+        proxy_addr.to_string(),
+        vec![coin(5000, factory_denom(&chain, USDC))],
+    )?;
+    savings_app.deposit()?;
+    let balance = savings_app.balance()?;
+    println!("{balance:?}");
+    let proxy_balance = chain.balance(proxy_addr, None)?;
+    println!("proxy_balance: {proxy_balance:?}");
     Ok(())
 }

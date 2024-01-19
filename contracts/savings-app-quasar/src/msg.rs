@@ -12,7 +12,6 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
     /// Deposit denomination to accept deposits
-    // TODO: Do we want to replace it to AssetEntry?
     pub deposit_denom: String,
     /// Id of the pool used to get rewards
     pub quasar_pool: String,
@@ -26,7 +25,7 @@ pub struct AppInstantiateMsg {
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
     /// Deposit funds onto the app
-    #[cfg_attr(feature = "interface", payable)]
+    // #[cfg_attr(feature = "interface", payable)]
     Deposit {},
     /// Partial withdraw of the funds available on the app
     Withdraw { amount: Uint128 },

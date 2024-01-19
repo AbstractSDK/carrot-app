@@ -68,6 +68,7 @@ pub fn query_balances(deps: Deps, app: &App) -> AppResult<ContractBalances<Uint1
     })
 }
 
+#[derive(Debug)]
 pub struct ContractBalances<T> {
     pub token0: T,
     pub token1: T,
