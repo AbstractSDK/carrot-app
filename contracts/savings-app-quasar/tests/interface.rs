@@ -1,12 +1,12 @@
 use abstract_client::Application;
-use abstract_client::Environment;
 use abstract_client::Namespace;
+use abstract_core::adapter::AdapterBaseMsg;
+use abstract_core::adapter::BaseExecuteMsg;
 use abstract_core::objects::AssetEntry;
 use abstract_core::objects::PoolMetadata;
 use abstract_core::objects::PoolType;
 use abstract_core::objects::pool_id::PoolAddressBase;
-use abstract_dex_adapter::msg::OfferAsset;
-use abstract_interface::Abstract;
+use abstract_dex_adapter::msg::ExecuteMsg;
 use cl_vault::state::VaultConfig;
 use cosmwasm_std::Decimal;
 use cosmwasm_std::coin;
@@ -182,6 +182,20 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 Empty {},
                 &[],
             )?;
+
+    // We update authorized addresses on the adapter for the app
+    savings_app
+        .account()
+        .execute_on_module::<abstract_dex_adapter::interface::DexAdapter<Chain>>(
+            &ExecuteMsg::Base(BaseExecuteMsg {
+                proxy_address: Some(savings_app.account().proxy()?.to_string()),
+                msg: AdapterBaseMsg::UpdateAuthorizedAddresses {
+                    to_add: vec![savings_app.addr_str()?],
+                    to_remove: vec![],
+                },
+            }),
+            &[],
+        )?;
 
     Ok(savings_app)
 }
