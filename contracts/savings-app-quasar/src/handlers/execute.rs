@@ -3,13 +3,14 @@ use std::collections::HashSet;
 use crate::contract::{App, AppResult};
 use crate::error::AppError;
 use crate::msg::{AppExecuteMsg, ExecuteMsg};
-use crate::state::CONFIG;
+use crate::state::{assert_contract, CONFIG};
 use abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
 use abstract_core::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::api::Dex;
 use abstract_dex_adapter::msg::OfferAsset;
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::{AbstractNameService, AbstractResponse, AccountIdentification};
+use abstract_sdk::{AccountAction, Execution};
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, QueryRequest,
     Response, StdError, Uint128, WasmMsg, WasmQuery,
@@ -37,18 +38,17 @@ pub fn execute_handler(
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
         AppExecuteMsg::InternalSwapAll {} => internal_swap_correct_amount(deps, env, info, app),
-        AppExecuteMsg::InternalDepositAll {} => {
-            if info.sender != env.contract.address {
-                return Err(AppError::Unauthorized {});
-            }
-            internal_deposit_all(deps.as_ref(), env, info, app)
-        }
+        AppExecuteMsg::InternalDepositAll {} => internal_deposit_all(deps.as_ref(), env, info, app),
     }
 }
 
 fn deposit(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Only the authorized addresses (admin ?) can deposit
-    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
+    app.admin
+        .assert_admin(deps.as_ref(), &info.sender)
+        .or(assert_contract(&info, &env))?;
+
+    // When depositing, we just use all the funds available on the account (should be an associated sub-account)
     let msg_swap = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::InternalSwapAll {}))?,
@@ -98,71 +98,51 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         funds: vec![],
     });
 
-    let msg_swap = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: env.contract.address.to_string(),
-        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::InternalSwapAll {}))?,
-        funds: vec![],
-    });
-
     let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
-        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::InternalDepositAll {}))?,
+        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {}))?,
         funds: vec![],
     });
 
     Ok(app
         .response("auto-compound")
         .add_message(msg_claim)
-        .add_message(msg_swap)
         .add_message(msg_deposit))
 }
 
 fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> AppResult<Response> {
-    if info.sender != env.contract.address {
-        return Err(AppError::Unauthorized {});
-    }
+    assert_contract(&info, &env)?;
     let config = CONFIG.load(deps.storage)?;
 
-    // We just want to query the token0 and token1
-    let all_quasar_assets: TotalAssetsResponse = deps
-        .querier
-        .query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: config.quasar_pool.to_string(),
-            msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::TotalAssets {})?,
-        }))
-        .map_err(|_| StdError::generic_err("Failed to get TotalAssets2"))?;
-
-    // After the swap we can deposit the exact amount of tokens inside the quasar pool
-    let funds = query_balances(
-        deps,
-        &env,
-        &all_quasar_assets.token0.denom,
-        &all_quasar_assets.token1.denom,
-    )
-    .map_err(|_| StdError::generic_err("Failed to get self balance 2"))?;
+    // We need to know how many assets are inside the proxy contract
+    let funds = query_balances(deps, &app, &config.pool.token0, &config.pool.token1)
+        .map_err(|_| StdError::generic_err("Failed to get self balance 2"))?;
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.quasar_pool.to_string(),
         msg: to_json_binary(&crate::cl_vault::msg::ExecuteMsg::ExactDeposit { recipient: None })?,
         funds: vec![
             Coin {
-                denom: all_quasar_assets.token0.denom,
+                denom: config.pool.token0,
                 amount: funds.token0,
             },
             Coin {
-                denom: all_quasar_assets.token1.denom,
+                denom: config.pool.token1,
                 amount: funds.token1,
             },
         ],
     });
 
-    Ok(app.response("deposit_all").add_message(msg))
+    let proxy_msg = app
+        .executor(deps)
+        .execute(vec![AccountAction::from_vec(vec![msg])])?;
+
+    Ok(app.response("deposit_all").add_message(proxy_msg))
 }
 
 fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
-    if info.sender != env.contract.address {
-        return Err(AppError::Unauthorized {});
-    }
+    assert_contract(&info, &env)?;
+
     let config = CONFIG.load(deps.storage)?;
     let ans = app.name_service(deps.as_ref());
 
@@ -205,7 +185,7 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
     // Then we do swaps to get the right ratio of liquidity to provide
 
     // We query the pool to swap on:
-    let balances = query_balances(deps.as_ref(), &env, &token0.denom, &token1.denom)
+    let balances = query_balances(deps.as_ref(), &app, &token0.denom, &token1.denom)
         .map_err(|_| StdError::generic_err("Failed to query contract balance"))?;
 
     let funds = ContractBalances {
@@ -242,12 +222,13 @@ fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app:
         None,
     )?;
 
+    // this message gets executed on the account proxy already
     Ok(app.response("swap_all").add_message(trigger_swap_msg))
 }
 
 fn _inner_withdraw(
     deps: DepsMut,
-    env: &Env,
+    _env: &Env,
     amount: Option<Uint128>,
     app: &App,
 ) -> AppResult<(CosmosMsg, Uint128)> {
@@ -260,7 +241,7 @@ fn _inner_withdraw(
             config.quasar_pool.to_string(),
             &cl_vault::msg::QueryMsg::VaultExtension(ExtensionQueryMsg::Balances(
                 UserBalanceQueryMsg::UserSharesBalance {
-                    user: env.contract.address.to_string(),
+                    user: app.proxy_address(deps.as_ref())?.to_string(),
                 },
             )),
         )?;

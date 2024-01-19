@@ -1,5 +1,5 @@
 use abstract_dex_adapter::msg::DexName;
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Env, MessageInfo};
 use cw_asset::AssetInfo;
 use cw_storage_plus::Item;
 
@@ -10,7 +10,7 @@ pub struct Config {
     pub deposit_info: AssetInfo,
     pub quasar_pool: Addr,
     pub exchanges: Vec<DexName>,
-    pub bot_addr: Addr,
+    pub pool: cl_vault::state::PoolConfig,
 }
 
 impl Config {
@@ -19,6 +19,14 @@ impl Config {
             AssetInfo::Native(denom) => Ok(denom.clone()),
             _ => Err(AppError::WrongAssetInfo {}),
         }
+    }
+}
+
+pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
+    if info.sender == env.contract.address {
+        Ok(())
+    } else {
+        Err(AppError::Unauthorized {})
     }
 }
 
