@@ -14,4 +14,4 @@ dotenv = "0.15.0"
 env_logger = "0.10.0"
 log = "0.4.20"
 tonic = "0.10.0"
-app = { path = "../contracts/savings-app-quasar" }
+app = { path = "../contracts/savings-app" }
