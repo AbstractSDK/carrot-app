@@ -87,6 +87,6 @@ abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-o
 speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"
-env_logger = "0.10.0"
+env_logger = "0.11.0"
 cw-orch = { workspace = true, features = ["osmosis-test-tube"] }
 clap = { version = "4.3.7", features = ["derive"] }
