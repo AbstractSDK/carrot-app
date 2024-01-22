@@ -26,6 +26,9 @@ pub enum AppError {
     #[error("{0}")]
     DappError(#[from] AbstractAppError),
 
+    #[error(transparent)]
+    ProstDecodeError(#[from] prost::DecodeError),
+
     #[error("Unauthorized")]
     Unauthorized {},
 
@@ -35,9 +38,12 @@ pub enum AppError {
     #[error("Wrong asset info stored, expected Native")]
     WrongAssetInfo {},
 
-    #[error("No position registered in contract, please make a deposit before !")]
+    #[error("No position registered in contract, please create a position !")]
     NoPosition {},
 
     #[error("No swap fund to swap assets into each other")]
     NoSwapPossibility {},
+
+    #[error("No top level account owner.")]
+    NoTopLevelAccount {},
 }

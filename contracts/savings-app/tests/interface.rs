@@ -2,24 +2,20 @@ use abstract_client::Application;
 use abstract_client::Namespace;
 use abstract_core::adapter::AdapterBaseMsg;
 use abstract_core::adapter::BaseExecuteMsg;
+use abstract_core::objects::pool_id::PoolAddressBase;
 use abstract_core::objects::AssetEntry;
 use abstract_core::objects::PoolMetadata;
 use abstract_core::objects::PoolType;
-use abstract_core::objects::pool_id::PoolAddressBase;
 use abstract_dex_adapter::msg::ExecuteMsg;
-use cl_vault::state::VaultConfig;
-use cosmwasm_std::Decimal;
 use cosmwasm_std::coin;
+use cosmwasm_std::Decimal;
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::anyhow;
-use cw_orch::build::BuildPostfix;
 use cw_orch::environment::BankQuerier;
-use cw_orch::environment::BankSetter;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Module;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::poolmodel::concentrated::v1beta1::{
-    MsgCreateConcentratedPool, MsgCreateConcentratedPoolResponse};
+
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePosition;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolsRequest;
@@ -37,22 +33,6 @@ use abstract_client::AbstractClient;
 use cosmwasm_std::coins;
 use app::msg::AppInstantiateMsg;
 use app::msg::{AppExecuteMsgFns, AppQueryMsgFns};
-
-#[cw_orch::interface(
-    app::cl_vault::msg::InstantiateMsg,
-    app::cl_vault::msg::QueryMsg,
-    app::cl_vault::msg::ExecuteMsg,
-    app::cl_vault::msg::MigrateMsg
-)]
-pub struct QuasarPool;
-
-impl<Chain: CwEnv> Uploadable for QuasarPool<Chain> {
-    fn wasm(&self) -> WasmPath {
-        artifacts_dir_from_workspace!()
-            .find_wasm_path("cl_vault")
-            .unwrap()
-    }
-}
 
 fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
     format!("factory/{}/{}", chain.sender(), subdenom)
@@ -146,39 +126,15 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // The savings app
     publisher.publish_app::<app::contract::interface::AppInterface<Chain>>()?;
 
-    // We deploy quasar on top of this pool
-    let quasar_pool = QuasarPool::new("quasar:cl-vault", chain.clone());
-    quasar_pool.upload()?;
-    quasar_pool.instantiate(
-        &app::cl_vault::msg::InstantiateMsg {
-            thesis: "You can become rich dear person".to_string(),
-            name: VAULT_NAME.to_string(),
-            admin: chain.sender().to_string(),
-            range_admin: chain.sender().to_string(),
-            pool_id,
-            config: VaultConfig {
-                performance_fee: Decimal::percent(20),
-                treasury: chain.sender(),
-                swap_max_slippage: Decimal::percent(1),
-            },
-            vault_token_subdenom: VAULT_SUBDENOM.to_string(),
-            initial_lower_tick: INITIAL_LOWER_TICK,
-            initial_upper_tick: INITIAL_UPPER_TICK,
-        },
-        None,
-        // Need to deposit few asset to create initial position, pretending those tokens are burned
-        Some(&[coin(500, asset0.clone()), coin(500, asset1)]),
-    )?;
-
-    // We deploy the savings-app on top of the quasar contract
+    // We deploy the savings-app
     let savings_app: Application<Chain, app::AppInterface<Chain>> =
         publisher
             .account()
             .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
                 &AppInstantiateMsg {
                     deposit_denom: asset0,
-                    quasar_pool: quasar_pool.address()?.to_string(),
                     exchanges: vec![DEX_NAME.to_string()],
+                    pool_id,
                     // bot_addr: chain.sender().to_string(),
                 },
                 Empty {},
@@ -307,11 +263,8 @@ fn deposit_lands() -> anyhow::Result<()> {
     // println!("resp: {resp:?}");
 
     let proxy_addr = savings_app.account().proxy()?;
-    chain.bank_send(
-        proxy_addr.to_string(),
-        vec![coin(5000, factory_denom(&chain, USDC))],
-    )?;
-    savings_app.deposit()?;
+
+    savings_app.deposit(vec![coin(5000, factory_denom(&chain, USDC))])?;
     let balance = savings_app.balance()?;
     println!("{balance:?}");
     let proxy_balance = chain.balance(proxy_addr, None)?;

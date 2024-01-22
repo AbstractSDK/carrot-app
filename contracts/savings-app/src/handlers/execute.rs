@@ -1,28 +1,27 @@
-use std::collections::HashSet;
-
 use crate::contract::{App, AppResult};
-use crate::error::AppError;
+use crate::helpers::{get_user, wrap_authz};
 use crate::msg::{AppExecuteMsg, ExecuteMsg};
-use crate::state::{assert_contract, CONFIG};
-use abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
+use crate::replies::CREATE_POSITION_ID;
+use crate::state::{assert_contract, get_osmosis_position, get_position, CONFIG};
 use abstract_core::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::api::Dex;
-use abstract_dex_adapter::msg::OfferAsset;
-use abstract_dex_adapter::DexInterface;
-use abstract_sdk::features::{AbstractNameService, AbstractResponse, AccountIdentification};
-use abstract_sdk::{AccountAction, Execution, ExecutorMsg};
-use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, QueryRequest,
-    Response, StdError, Uint128, WasmMsg, WasmQuery,
+use abstract_dex_adapter::msg::{
+    DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse, OfferAsset,
 };
-use cw_asset::AssetList;
+use abstract_dex_adapter::DexInterface;
+use abstract_sdk::features::{AbstractResponse, AccountIdentification};
+use cosmwasm_std::{
+    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
+    WasmMsg,
+};
+use osmosis_std::types::cosmos::bank::v1beta1::MsgSend;
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
+    MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
+    MsgWithdrawPosition,
+};
+use osmosis_std::{cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins};
 
-use crate::cl_vault::msg::ExtensionExecuteMsg;
-use crate::cl_vault::msg::ExtensionQueryMsg;
-use crate::cl_vault::query::{TotalAssetsResponse, UserSharesBalanceResponse};
-use crate::cl_vault::{self, msg::UserBalanceQueryMsg};
-
-use super::query::{query_balances, ContractBalances};
+use super::query::ContractBalances;
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 pub fn execute_handler(
@@ -33,38 +32,106 @@ pub fn execute_handler(
     msg: AppExecuteMsg,
 ) -> AppResult {
     match msg {
-        AppExecuteMsg::Deposit {} => deposit(deps, env, info, app),
+        AppExecuteMsg::CreatePosition {
+            lower_tick,
+            upper_tick,
+            funds,
+            asset0,
+            asset1,
+        } => create_position(
+            deps, env, info, app, funds, lower_tick, upper_tick, asset0, asset1,
+        ),
+        AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
-        AppExecuteMsg::InternalSwapAll {} => internal_swap_correct_amount(deps, env, info, app),
-        AppExecuteMsg::InternalDepositAll {} => internal_deposit_all(deps.as_ref(), env, info, app),
     }
 }
 
-fn deposit(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
-    // Only the authorized addresses (admin ?) can deposit
+fn create_position(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    app: App,
+    funds: Vec<Coin>,
+    lower_tick: i64,
+    upper_tick: i64,
+    asset0: Coin,
+    asset1: Coin,
+) -> AppResult {
+    let config = CONFIG.load(deps.storage)?;
+
+    // TODO verify authz permissions before creating the position
+    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
+
+    // First we do the swap
+    let (offer_asset, ask_asset, resulting_assets) =
+        tokens_to_swap(deps.as_ref(), funds, asset0, asset1)?;
+
+    let swap_msgs = swap_msg(deps.as_ref(), &env, offer_asset, ask_asset, &app)?;
+
+    let sender = get_user(deps.as_ref(), &app)?;
+
+    // Then we create the position
+    let create_msg = wrap_authz(
+        MsgCreatePosition {
+            pool_id: config.pool_config.pool_id,
+            sender: sender.clone(),
+            lower_tick,
+            upper_tick,
+            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
+            token_min_amount0: "0".to_string(), // No min amount here
+            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
+        },
+        sender,
+        &env,
+    );
+
+    // We need to get the ID for this position in the reply
+
+    Ok(app
+        .response("create_position")
+        .add_submessage(SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID))
+        .add_messages(swap_msgs))
+}
+
+fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
+    // Only the authorized addresses (admin ?) + the smart contract can deposit
     app.admin
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
 
-    // When depositing, we just use all the funds available on the account (should be an associated sub-account)
-    let msg_swap = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: env.contract.address.to_string(),
-        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::InternalSwapAll {}))?,
-        funds: vec![],
-    });
+    let pool = get_osmosis_position(deps.as_ref())?;
+    let position = pool.position.unwrap();
 
-    let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: env.contract.address.to_string(),
-        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::InternalDepositAll {}))?,
-        funds: vec![],
-    });
+    let asset0 = try_proto_to_cosmwasm_coins(pool.asset0.clone())?[0].clone();
+    let asset1 = try_proto_to_cosmwasm_coins(pool.asset1.clone())?[0].clone();
+
+    // When depositing, we start by adapting the available funds to the expected pool funds ratio
+    // We do so by computing the swap information
+    let (offer_asset, ask_asset, resulting_assets) =
+        tokens_to_swap(deps.as_ref(), funds, asset0, asset1)?;
+
+    // Then we execute the swap
+    let swap_msgs = swap_msg(deps.as_ref(), &env, offer_asset, ask_asset, &app)?;
+
+    let deposit_msg = wrap_authz(
+        MsgAddToPosition {
+            position_id: position.position_id,
+            sender: position.address.clone(),
+            amount0: resulting_assets[0].amount.to_string(),
+            amount1: resulting_assets[1].amount.to_string(),
+            token_min_amount0: "0".to_string(), // No min, this always works
+            token_min_amount1: "0".to_string(), // No min, this always works
+        },
+        position.address,
+        &env,
+    );
 
     Ok(app
         .response("deposit")
-        .add_message(msg_swap)
-        .add_message(msg_deposit))
+        .add_messages(swap_msgs)
+        .add_message(deposit_msg))
 }
 
 fn withdraw(
@@ -86,260 +153,264 @@ fn withdraw(
 }
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
-    // Only the authorized addresses (admin ?) can auto-compound
-    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
-    let config = CONFIG.load(deps.storage)?;
+    // Everyone can autocompound
 
-    let msg_claim = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.quasar_pool.to_string(),
-        msg: to_json_binary(&cl_vault::msg::ExecuteMsg::VaultExtension(
-            ExtensionExecuteMsg::ClaimRewards {},
-        ))?,
-        funds: vec![],
-    });
+    let pool = get_osmosis_position(deps.as_ref())?;
+    let position = pool.position.unwrap();
 
+    // TODO make sure we merge them, so that there are no collisions
+    let string_incentives = pool
+        .claimable_incentives
+        .into_iter()
+        .chain(pool.claimable_spread_rewards)
+        .collect::<Vec<_>>();
+
+    let incentives = try_proto_to_cosmwasm_coins(string_incentives.clone())?;
+
+    let msg_incentives = wrap_authz(
+        MsgCollectIncentives {
+            position_ids: vec![position.position_id],
+            sender: position.address.clone(),
+        },
+        position.address.clone(),
+        &env,
+    );
+    let msg_spread_rewards = wrap_authz(
+        MsgCollectSpreadRewards {
+            position_ids: vec![position.position_id],
+            sender: position.address.clone(),
+        },
+        position.address.clone(),
+        &env,
+    );
+
+    // We send the collected rewards to the proxy
+    let msg_send = wrap_authz(
+        MsgSend {
+            from_address: position.address.clone(),
+            to_address: app.proxy_address(deps.as_ref())?.into_string(),
+            amount: string_incentives,
+        },
+        position.address,
+        &env,
+    );
+
+    // Finally we ask for a full deposit from the proxy to the position
     let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
-        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {}))?,
+        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
+            funds: incentives,
+        }))?,
         funds: vec![],
     });
 
     Ok(app
         .response("auto-compound")
-        .add_message(msg_claim)
+        .add_message(msg_incentives)
+        .add_message(msg_spread_rewards)
+        .add_message(msg_send)
         .add_message(msg_deposit))
 }
 
-fn internal_deposit_all(deps: Deps, env: Env, info: MessageInfo, app: App) -> AppResult<Response> {
-    assert_contract(&info, &env)?;
+fn swap_msg(
+    deps: Deps,
+    env: &Env,
+    offer_asset: AnsAsset,
+    ask_asset: AssetEntry,
+    app: &App,
+) -> AppResult<Vec<CosmosMsg>> {
     let config = CONFIG.load(deps.storage)?;
+    let position = get_position(deps)?;
 
-    // We need to know how many assets are inside the proxy contract
-    let funds = query_balances(deps, &app)
-        .map_err(|_| StdError::generic_err("Failed to get self balance 2"))?;
-
-    let funds_log = format!("{funds:?}");
-    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.quasar_pool.to_string(),
-        msg: to_json_binary(&crate::cl_vault::msg::ExecuteMsg::ExactDeposit { recipient: None })?,
-        funds: vec![
-            Coin {
-                denom: config.pool.token0,
-                amount: funds.token0,
+    let dex = app.dex(deps, config.exchange.clone());
+    let trigger_swap_msg: GenerateMessagesResponse = dex.query(DexQueryMsg::GenerateMessages {
+        message: DexExecuteMsg::Action {
+            dex: config.exchange,
+            action: DexAction::Swap {
+                offer_asset,
+                ask_asset,
+                max_spread: Some(Decimal::percent(MAX_SPREAD_PERCENT)),
+                belief_price: None,
             },
-            Coin {
-                denom: config.pool.token1,
-                amount: funds.token1,
-            },
-        ],
-    });
-
-    let proxy_msg = app
-        .executor(deps)
-        .execute(vec![AccountAction::from_vec(vec![msg])])?;
-
-    Ok(app
-        .response("deposit_all")
-        .add_message(proxy_msg)
-        .add_attribute("depositing_funds_to_quasar", funds_log))
-}
-
-fn internal_swap_correct_amount(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
-    assert_contract(&info, &env)?;
-
-    let config = CONFIG.load(deps.storage)?;
-    let ans = app.name_service(deps.as_ref());
-
-    // First we query the pool to know the ratio we can provide liquidity at :
-    let all_quasar_assets: TotalAssetsResponse = deps
-        .querier
-        .query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: config.quasar_pool.to_string(),
-            msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::TotalAssets {})?,
-        }))
-        .map_err(|_| StdError::generic_err("Failed to query TotalAssets"))?;
-
-    let token0 = all_quasar_assets.token0;
-    let token1 = all_quasar_assets.token1;
-    let quasar_asset_entries =
-        ans.query(&AssetList::from(&vec![token0.clone(), token1.clone()]).to_vec())?;
-    let asset_pairing_resp: Vec<AssetPairingMapEntry> = ans.pool_list(
-        Some(AssetPairingFilter {
-            asset_pair: Some((
-                quasar_asset_entries[0].name.clone(),
-                quasar_asset_entries[1].name.clone(),
-            )),
-            dex: None,
-        }),
-        None,
-        None,
-    )?;
-
-    let exchange_strs: HashSet<&str> = config.exchanges.iter().map(AsRef::as_ref).collect();
-    let pair = asset_pairing_resp
-        .into_iter()
-        .find(|(pair, refs)| !refs.is_empty() && exchange_strs.contains(pair.dex()))
-        .ok_or(AppError::NoSwapPossibility {})?
-        .0;
-
-    let dex_name = pair.dex();
-
-    let ratio = Decimal::from_ratio(token0.amount, token1.amount);
-
-    // Then we do swaps to get the right ratio of liquidity to provide
-
-    // We query the pool to swap on:
-    let balances = query_balances(deps.as_ref(), &app)
-        .map_err(|_| StdError::generic_err("Failed to query contract balance"))?;
-
-    let funds = ContractBalances {
-        token0: AnsAsset {
-            name: quasar_asset_entries[0].name.clone(),
-            amount: balances.token0,
         },
-        token1: AnsAsset {
-            name: quasar_asset_entries[1].name.clone(),
-            amount: balances.token1,
-        },
-    };
-
-    let price = get_price_for(
-        // TODO: Maybe it be some constant value for amount instead?
-        // currently if quasar balance is near zero it will give wrong price
-        quasar_asset_entries[0].clone(),
-        quasar_asset_entries[1].name.clone(),
-        &app.dex(deps.as_ref(), dex_name.to_string()),
-    )
-    .map_err(|_| {
-        StdError::generic_err(format!(
-            "Failed to get price for assets: {:?}, {:?}",
-            quasar_asset_entries[0], quasar_asset_entries[1].name
-        ))
+        proxy_addr: position.owner.clone(),
     })?;
 
-    let (offer_asset, ask_asset) = get_swap_for_ratio(funds, price, ratio)?;
+    // swap(
+    //     offer_asset.clone(),
+    //     ask_asset.clone(),
+    //     Some(Decimal::percent(MAX_SPREAD_PERCENT)),
+    //     None,
+    // )?;
 
-    // We swap the right amount of funds
-    let dex = app.dex(deps.as_ref(), pair.dex().to_owned());
-    let trigger_swap_msg = dex.swap(
-        offer_asset.clone(),
-        ask_asset.clone(),
-        Some(Decimal::percent(MAX_SPREAD_PERCENT)),
-        None,
-    )?;
+    Ok(trigger_swap_msg
+        .messages
+        .into_iter()
+        .map(|m| wrap_authz(m, position.owner.clone(), env))
+        .collect())
+}
 
-    // this message gets executed on the account proxy already
-    Ok(app.response("swap_all").add_message(trigger_swap_msg))
+fn tokens_to_swap(
+    deps: Deps,
+    amount_to_swap: Vec<Coin>,
+    asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
+    asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle
+) -> AppResult<(AnsAsset, AssetEntry, Vec<Coin>)> {
+    let config = CONFIG.load(deps.storage)?;
+
+    let x0 = amount_to_swap
+        .iter()
+        .find(|c| c.denom == asset0.denom)
+        .cloned()
+        .unwrap_or(Coin {
+            denom: asset0.denom,
+            amount: Uint128::zero(),
+        });
+    let x1 = amount_to_swap
+        .iter()
+        .find(|c| c.denom == asset1.denom)
+        .cloned()
+        .unwrap_or(Coin {
+            denom: asset1.denom,
+            amount: Uint128::zero(),
+        });
+
+    // We will swap on the pool to get the right coin ratio
+
+    // We have x0 and x1 to deposit. Let p (or price) be the price of asset1 (the number of asset0 you get for 1 unit of asset1)
+    // In order to deposit, you need to have X0 and X1 such that X0/X1 = A0/A1 where A0 and A1 are the current liquidity inside the position
+    // That is equivalent to X0*A1 = X1*A0
+    // We need to find how much to swap.
+    // If x0*A1 < x1*A0, we need to have more x0 to balance the swap --> so we need to send some of x1 to swap (lets say we wend y1 to swap)
+    // So   X1 = x1-y1
+    //      X0 = x0 + price*y1
+    // Therefore, the following equation needs to be true
+    // (x0 + price*y1)*A1 = (x1-y1)*A0 or y1 = (x1*a0 - x0*a1)/(a0 + p*a1)
+    // If x0*A1 > x1*A0, we need to have more x1 to balance the swap --> so we need to send some of x0 to swap (lets say we wend y0 to swap)
+    // So   X0 = x0-y0
+    //      X1 = x1 + y0/price
+    // Therefore, the following equation needs to be true
+    // (x0-y0)*A1 = (x1 + y0/price)*A0 or y0 = (x0*a1 - x1*a0)/(a1 + a0/p)
+
+    let x0_a1 = x0.amount * asset1.amount;
+    let x1_a0 = x1.amount * asset0.amount;
+
+    // We start by assuming the price is 1
+    let price = Decimal::one();
+
+    let (offer_asset, ask_asset, resulting_balance) = if x0_a1 < x1_a0 {
+        let numerator = x1_a0 - x0_a1;
+        let denominator = asset0.amount + price * asset1.amount;
+        let y1 = numerator / denominator;
+
+        (
+            AnsAsset::new(config.pool_config.asset1, y1),
+            config.pool_config.asset0,
+            vec![
+                Coin {
+                    amount: x0.amount + price * y1,
+                    denom: x0.denom,
+                },
+                Coin {
+                    amount: x1.amount - y1,
+                    denom: x1.denom,
+                },
+            ],
+        )
+    } else {
+        let numerator = x0_a1 - x1_a0;
+        let denominator =
+            asset1.amount + Decimal::from_ratio(asset1.amount, 1u128) / price * Uint128::one();
+        let y0 = numerator / denominator;
+
+        (
+            AnsAsset::new(config.pool_config.asset0, numerator / denominator),
+            config.pool_config.asset1,
+            vec![
+                Coin {
+                    amount: x0.amount - y0,
+                    denom: x0.denom,
+                },
+                Coin {
+                    amount: x1.amount + Decimal::from_ratio(y0, 1u128) / price * Uint128::one(),
+                    denom: x1.denom,
+                },
+            ],
+        )
+    };
+
+    // TODO, compute the resulting balance to be able to deposit back into the pool
+    Ok((offer_asset, ask_asset, resulting_balance))
 }
 
 fn _inner_withdraw(
     deps: DepsMut,
-    _env: &Env,
+    env: &Env,
     amount: Option<Uint128>,
     app: &App,
-) -> AppResult<(ExecutorMsg, Uint128)> {
-    let config = CONFIG.load(deps.storage)?;
+) -> AppResult<(CosmosMsg, String)> {
+    let position = get_osmosis_position(deps.as_ref())?.position.unwrap();
 
     let liquidity_amount = if let Some(amount) = amount {
-        amount
+        amount.to_string()
     } else {
-        let user_shares: UserSharesBalanceResponse = deps.querier.query_wasm_smart(
-            config.quasar_pool.to_string(),
-            &cl_vault::msg::QueryMsg::VaultExtension(ExtensionQueryMsg::Balances(
-                UserBalanceQueryMsg::UserSharesBalance {
-                    user: app.proxy_address(deps.as_ref())?.to_string(),
-                },
-            )),
-        )?;
-
-        user_shares.balance
+        position.liquidity
     };
 
-    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.quasar_pool.to_string(),
-        msg: to_json_binary(&cl_vault::msg::ExecuteMsg::Redeem {
-            recipient: Some(app.account_base(deps.as_ref())?.proxy.to_string()),
-            amount: liquidity_amount,
-        })?,
-        funds: vec![],
-    });
+    // We need to execute withdraw on the user's behalf
+    let msg = wrap_authz(
+        MsgWithdrawPosition {
+            position_id: position.position_id,
+            sender: position.address.clone(),
+            liquidity_amount: liquidity_amount.clone(),
+        },
+        position.address,
+        env,
+    );
 
-    let proxy_msg = app
-        .executor(deps.as_ref())
-        .execute(vec![AccountAction::from_vec(vec![msg])])?;
-
-    Ok((proxy_msg, liquidity_amount))
-}
-
-fn get_price_for(token0: OfferAsset, token1: AssetEntry, dex: &Dex<App>) -> AppResult<Decimal> {
-    let swap_response = dex.simulate_swap(token0.clone(), token1)?;
-
-    Ok(Decimal::from_ratio(
-        swap_response.return_amount,
-        token0.amount,
-    ))
-}
-
-fn get_swap_for_ratio(
-    funds: ContractBalances<AnsAsset>,
-    price: Decimal,
-    ratio: Decimal,
-) -> AppResult<(OfferAsset, AssetEntry)> {
-    // ratio is considered non-zero and is expected token0/token1
-
-    if ratio * funds.token1.amount <= funds.token0.amount {
-        // if ratio <= token0/token1, we need to get more token1. So if x is amount of token0 we offer, we want (token0 - x)/(token1 + px) = r,
-        // p is the price (number of a1 per p0)
-        let offer_amount =
-            Decimal::from_ratio(funds.token0.amount - ratio * funds.token1.amount, 1u128)
-                / (Decimal::one() + price * ratio)
-                * Uint128::one();
-
-        Ok((
-            OfferAsset {
-                name: funds.token0.name,
-                amount: offer_amount,
-            },
-            funds.token1.name,
-        ))
-    } else {
-        // else, if ratio < token0/token1, we need to get more token0. So if x is amount of token0 we want to get, we want (token0 + x)/(token1 - px) = r,
-        // p is the price (number of a1 per p0)
-        let offer_amount =
-            Decimal::from_ratio(ratio * funds.token1.amount - funds.token0.amount, 1u128)
-                / (Decimal::one() + price * ratio)
-                * price
-                * Uint128::one();
-        Ok((
-            OfferAsset {
-                name: funds.token1.name,
-                amount: offer_amount,
-            },
-            funds.token0.name,
-        ))
-    }
+    Ok((msg, liquidity_amount))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use cosmwasm_std::{coin, coins, testing::mock_dependencies};
+    use cw_asset::AssetInfo;
 
-    // TODO: more tests on swap for ratio
+    use crate::state::{Config, PoolConfig};
+
+    use super::*;
+    pub const DEPOSIT_TOKEN: &str = "USDC";
+    pub const TOKEN0: &str = "USDT";
+    pub const TOKEN1: &str = DEPOSIT_TOKEN;
+
+    fn setup_config(deps: DepsMut) -> cw_orch::anyhow::Result<()> {
+        CONFIG.save(
+            deps.storage,
+            &Config {
+                deposit_info: AssetInfo::Native(DEPOSIT_TOKEN.to_string()),
+                pool_config: PoolConfig {
+                    pool_id: 45,
+                    token0: TOKEN0.to_string(),
+                    token1: TOKEN1.to_string(),
+                    asset0: AssetEntry::new(TOKEN0),
+                    asset1: AssetEntry::new(TOKEN1),
+                },
+                exchange: "osmosis".to_string(),
+            },
+        )?;
+        Ok(())
+    }
+
+    // TODO: more tests on tokens_to_swap
     #[test]
     fn swap_for_ratio_one_to_one() {
-        let (swap, ask_asset) = get_swap_for_ratio(
-            ContractBalances {
-                token0: AnsAsset {
-                    name: AssetEntry::new("USDC"),
-                    amount: Uint128::new(1000),
-                },
-                token1: AnsAsset {
-                    name: AssetEntry::new("USDT"),
-                    amount: Uint128::zero(),
-                },
-            },
-            Decimal::one(),
-            Decimal::one(),
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let (swap, ask_asset, final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(100_000_000, TOKEN0),
+            coin(100_000_000, TOKEN1),
         )
         .unwrap();
 
@@ -347,36 +418,77 @@ mod tests {
             swap,
             AnsAsset {
                 name: AssetEntry::new("usdc"),
-                amount: Uint128::new(500)
+                amount: Uint128::new(2500)
             }
         );
         assert_eq!(ask_asset, AssetEntry::new("usdt"));
     }
 
     #[test]
-    fn swap_for_ratio_almost_one_to_one() {
-        let (swap, ask_asset) = get_swap_for_ratio(
-            ContractBalances {
-                token0: AnsAsset {
-                    name: AssetEntry::new("USDC"),
-                    amount: Uint128::new(1000),
-                },
-                token1: AnsAsset {
-                    name: AssetEntry::new("USDT"),
-                    amount: Uint128::zero(),
-                },
-            },
-            Decimal::from_ratio(499_u128, 500_u128),
-            Decimal::one(),
+    fn swap_for_ratio_close_to_one() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 110_000_000;
+        let amount1 = 100_000_000;
+
+        let (swap, ask_asset, final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
         )
         .unwrap();
+
         assert_eq!(
             swap,
             AnsAsset {
-                name: AssetEntry::new("usdc"),
+                name: AssetEntry::new(DEPOSIT_TOKEN),
                 amount: Uint128::new(500)
             }
         );
-        assert_eq!(ask_asset, AssetEntry::new("usdt"));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
+    }
+
+    #[test]
+    fn swap_for_ratio_far_from_one() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let (swap, ask_asset, final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(90_000_000, TOKEN0),
+            coin(10_000_000, TOKEN1),
+        )
+        .unwrap();
+
+        assert_eq!(
+            swap,
+            AnsAsset {
+                name: AssetEntry::new(DEPOSIT_TOKEN),
+                amount: Uint128::new(500)
+            }
+        );
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
+    }
+    #[test]
+    fn swap_for_ratio_far_from_one_inverse() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let (swap, ask_asset, final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(10_000_000, TOKEN0),
+            coin(90_000_000, TOKEN1),
+        )
+        .unwrap();
+
+        assert_eq!(
+            swap,
+            AnsAsset {
+                name: AssetEntry::new(TOKEN1),
+                amount: Uint128::new(500)
+            }
+        );
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
     }
 }

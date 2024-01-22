@@ -1,4 +1,5 @@
 use crate::msg::AppMigrateMsg;
+use crate::replies::{create_position_reply, CREATE_POSITION_ID};
 use crate::{
     error::AppError,
     handlers,
@@ -29,6 +30,7 @@ const APP: App = App::new(APP_ID, APP_VERSION, None)
     .with_execute(handlers::execute_handler)
     .with_query(handlers::query_handler)
     .with_migrate(handlers::migrate_handler)
+    .with_replies(&[(CREATE_POSITION_ID, create_position_reply)])
     .with_dependencies(&[DEX_DEPENDENCY]);
 
 // Export handlers

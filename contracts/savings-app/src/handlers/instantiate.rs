@@ -1,15 +1,19 @@
+use std::collections::HashSet;
+
+use abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
+use abstract_sdk::features::AbstractNameService;
 use abstract_sdk::AbstractResponse;
-use cl_vault::msg::ClQueryMsg;
-use cl_vault::query::PoolResponse;
-use cosmwasm_std::to_json_binary;
-use cosmwasm_std::QueryRequest;
-use cosmwasm_std::StdError;
-use cosmwasm_std::WasmQuery;
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
+use cw_asset::AssetInfo;
 
 use crate::contract::{App, AppResult};
+use crate::error::AppError;
 use crate::msg::AppInstantiateMsg;
+use crate::state::PoolConfig;
 use crate::state::{Config, CONFIG};
+
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
+use osmosis_std::types::osmosis::poolmanager::v1beta1::PoolmanagerQuerier;
 
 pub fn instantiate_handler(
     deps: DepsMut,
@@ -18,23 +22,49 @@ pub fn instantiate_handler(
     app: App,
     msg: AppInstantiateMsg,
 ) -> AppResult {
-    let quasar_pool_addr = deps.api.addr_validate(&msg.quasar_pool)?;
-    // We query the pool information in advance to store that inside config
-    let quasar_pool_response: PoolResponse = deps
-        .querier
-        .query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: quasar_pool_addr.to_string(),
-            msg: to_json_binary(&crate::cl_vault::msg::QueryMsg::VaultExtension(
-                cl_vault::msg::ExtensionQueryMsg::ConcentratedLiquidity(ClQueryMsg::Pool {}),
-            ))?,
-        }))
-        .map_err(|_| StdError::generic_err("Failed to get pool info in instantiation"))?;
+    let pool: Pool = PoolmanagerQuerier::new(&deps.querier)
+        .pool(msg.pool_id)?
+        .pool
+        .unwrap()
+        .try_into()?;
+
+    // We query the ANS for useful information on the tokens and pool
+    let ans = app.name_service(deps.as_ref());
+    // ANS Asset entries to indentify the assets inside Abstract
+    let asset_entries = ans.query(&vec![
+        AssetInfo::Native(pool.token0.clone()),
+        AssetInfo::Native(pool.token1.clone()),
+    ])?;
+    let asset0 = asset_entries[0].clone();
+    let asset1 = asset_entries[1].clone();
+    let asset_pairing_resp: Vec<AssetPairingMapEntry> = ans.pool_list(
+        Some(AssetPairingFilter {
+            asset_pair: Some((asset0.clone(), asset1.clone())),
+            dex: None,
+        }),
+        None,
+        None,
+    )?;
+
+    // We query the dex that is accepted to swap the assets
+    let exchange_strs: HashSet<&str> = msg.exchanges.iter().map(AsRef::as_ref).collect();
+    let pair = asset_pairing_resp
+        .into_iter()
+        .find(|(pair, refs)| !refs.is_empty() && exchange_strs.contains(pair.dex()))
+        .ok_or(AppError::NoSwapPossibility {})?
+        .0;
+    let dex_name = pair.dex();
 
     let config: Config = Config {
         deposit_info: cw_asset::AssetInfoBase::Native(msg.deposit_denom),
-        quasar_pool: quasar_pool_addr,
-        exchanges: msg.exchanges,
-        pool: quasar_pool_response.pool_config,
+        exchange: dex_name.to_string(),
+        pool_config: PoolConfig {
+            pool_id: msg.pool_id,
+            token0: pool.token0.clone(),
+            token1: pool.token1.clone(),
+            asset0,
+            asset1,
+        },
     };
     CONFIG.save(deps.storage, &config)?;
 
