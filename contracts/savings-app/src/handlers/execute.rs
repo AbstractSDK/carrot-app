@@ -21,7 +21,7 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
 };
 use osmosis_std::{cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins};
 
-use super::query::ContractBalances;
+use super::query::{query_price, ContractBalances};
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 pub fn execute_handler(
@@ -65,8 +65,9 @@ fn create_position(
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
     // First we do the swap
+    let price = query_price(deps.as_ref(), &funds, &app)?;
     let (offer_asset, ask_asset, resulting_assets) =
-        tokens_to_swap(deps.as_ref(), funds, asset0, asset1)?;
+        tokens_to_swap(deps.as_ref(), funds, asset0, asset1, price)?;
 
     let swap_msgs = swap_msg(deps.as_ref(), &env, offer_asset, ask_asset, &app)?;
 
@@ -109,8 +110,10 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
 
     // When depositing, we start by adapting the available funds to the expected pool funds ratio
     // We do so by computing the swap information
+    let price = query_price(deps.as_ref(), &funds, &app)?;
+
     let (offer_asset, ask_asset, resulting_assets) =
-        tokens_to_swap(deps.as_ref(), funds, asset0, asset1)?;
+        tokens_to_swap(deps.as_ref(), funds, asset0, asset1, price)?;
 
     // Then we execute the swap
     let swap_msgs = swap_msg(deps.as_ref(), &env, offer_asset, ask_asset, &app)?;
@@ -254,7 +257,8 @@ fn tokens_to_swap(
     deps: Deps,
     amount_to_swap: Vec<Coin>,
     asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
-    asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle
+    asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle,
+    price: Decimal, // Relative price (when swapping amount0 for amount1, equals amount0/amount1)
 ) -> AppResult<(AnsAsset, AssetEntry, Vec<Coin>)> {
     let config = CONFIG.load(deps.storage)?;
 
@@ -295,9 +299,6 @@ fn tokens_to_swap(
     let x0_a1 = x0.amount * asset1.amount;
     let x1_a0 = x1.amount * asset0.amount;
 
-    // We start by assuming the price is 1
-    let price = Decimal::one();
-
     let (offer_asset, ask_asset, resulting_balance) = if x0_a1 < x1_a0 {
         let numerator = x1_a0 - x0_a1;
         let denominator = asset0.amount + price * asset1.amount;
@@ -320,7 +321,7 @@ fn tokens_to_swap(
     } else {
         let numerator = x0_a1 - x1_a0;
         let denominator =
-            asset1.amount + Decimal::from_ratio(asset1.amount, 1u128) / price * Uint128::one();
+            asset1.amount + Decimal::from_ratio(asset0.amount, 1u128) / price * Uint128::one();
         let y0 = numerator / denominator;
 
         (
@@ -383,6 +384,15 @@ mod tests {
     pub const TOKEN0: &str = "USDT";
     pub const TOKEN1: &str = DEPOSIT_TOKEN;
 
+    fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
+        let expected = expected.into().u128();
+        let result = result.u128();
+
+        if expected < result - 1 || expected > result + 1 {
+            panic!("Results are not close enough")
+        }
+    }
+
     fn setup_config(deps: DepsMut) -> cw_orch::anyhow::Result<()> {
         CONFIG.save(
             deps.storage,
@@ -411,6 +421,7 @@ mod tests {
             coins(5_000, DEPOSIT_TOKEN),
             coin(100_000_000, TOKEN0),
             coin(100_000_000, TOKEN1),
+            Decimal::one(),
         )
         .unwrap();
 
@@ -436,28 +447,27 @@ mod tests {
             coins(5_000, DEPOSIT_TOKEN),
             coin(amount0, TOKEN0),
             coin(amount1, TOKEN1),
+            Decimal::one(),
         )
         .unwrap();
 
-        assert_eq!(
-            swap,
-            AnsAsset {
-                name: AssetEntry::new(DEPOSIT_TOKEN),
-                amount: Uint128::new(500)
-            }
-        );
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
+        assert_is_around(swap.amount, 5_000 - 5_000 * amount1 / (amount1 + amount0));
+        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
     }
 
     #[test]
     fn swap_for_ratio_far_from_one() {
         let mut deps = mock_dependencies();
         setup_config(deps.as_mut()).unwrap();
+        let amount0 = 90_000_000;
+        let amount1 = 10_000_000;
         let (swap, ask_asset, final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
-            coin(90_000_000, TOKEN0),
-            coin(10_000_000, TOKEN1),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            Decimal::one(),
         )
         .unwrap();
 
@@ -465,30 +475,80 @@ mod tests {
             swap,
             AnsAsset {
                 name: AssetEntry::new(DEPOSIT_TOKEN),
-                amount: Uint128::new(500)
+                amount: Uint128::new(5_000 - 5_000 * amount1 / (amount1 + amount0))
             }
         );
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
     }
+
     #[test]
     fn swap_for_ratio_far_from_one_inverse() {
         let mut deps = mock_dependencies();
         setup_config(deps.as_mut()).unwrap();
+        let amount0 = 10_000_000;
+        let amount1 = 90_000_000;
         let (swap, ask_asset, final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
-            coin(10_000_000, TOKEN0),
-            coin(90_000_000, TOKEN1),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            Decimal::one(),
         )
         .unwrap();
 
-        assert_eq!(
-            swap,
-            AnsAsset {
-                name: AssetEntry::new(TOKEN1),
-                amount: Uint128::new(500)
-            }
-        );
+        assert_is_around(swap.amount, 5_000 - 5_000 * amount1 / (amount1 + amount0));
+        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
         assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
+    }
+
+    #[test]
+    fn swap_for_non_unit_price() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 10_000_000;
+        let amount1 = 90_000_000;
+        let price = Decimal::percent(150);
+        let (swap, ask_asset, final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            price.clone(),
+        )
+        .unwrap();
+
+        assert_is_around(
+            swap.amount,
+            5_000
+                - 5_000 * amount1
+                    / (amount1
+                        + (Decimal::from_ratio(amount0, 1u128) / price * Uint128::one()).u128()),
+        );
+        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
+    }
+
+    #[test]
+    fn swap_multiple_tokens_for_non_unit_price() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 10_000_000;
+        let amount1 = 10_000_000;
+        let price = Decimal::percent(150);
+        let (swap, ask_asset, final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            vec![coin(10_000, TOKEN0), coin(4_000, TOKEN1)],
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            price.clone(),
+        )
+        .unwrap();
+
+        assert_eq!(swap.name, AssetEntry::new(TOKEN0));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
+        assert_eq!(
+            10_000 - swap.amount.u128(),
+            4_000 + (Decimal::from_ratio(swap.amount, 1u128) / price * Uint128::one()).u128()
+        );
     }
 }

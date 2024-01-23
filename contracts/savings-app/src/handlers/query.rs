@@ -1,7 +1,10 @@
 use crate::contract::{App, AppResult};
+use crate::error::AppError;
 use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse};
 use crate::state::{get_osmosis_position, Config, CONFIG};
-use cosmwasm_std::{to_json_binary, Binary, Deps, Env};
+use abstract_core::objects::AnsAsset;
+use abstract_dex_adapter::DexInterface;
+use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Decimal256, Deps, Env};
 use osmosis_std::try_proto_to_cosmwasm_coins;
 
 pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -35,6 +38,40 @@ fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> 
     )?;
 
     Ok(AvailableRewardsResponse { available_rewards })
+}
+
+pub fn query_price(deps: Deps, funds: &Vec<Coin>, app: &App) -> AppResult<Decimal> {
+    let config = CONFIG.load(deps.storage)?;
+
+    let amount0 = funds
+        .iter()
+        .find(|c| c.denom == config.pool_config.token0)
+        .map(|c| c.amount)
+        .unwrap_or_default();
+    let amount1 = funds
+        .iter()
+        .find(|c| c.denom == config.pool_config.token1)
+        .map(|c| c.amount)
+        .unwrap_or_default();
+
+    // We take the biggest amount and simulate a swap for the corresponding asset
+    let price = if amount0 > amount1 {
+        let simulation_result = app.dex(deps, config.exchange).simulate_swap(
+            AnsAsset::new(config.pool_config.asset0, amount0),
+            config.pool_config.asset1,
+        )?;
+
+        Decimal::from_ratio(amount0, simulation_result.return_amount)
+    } else {
+        let simulation_result = app.dex(deps, config.exchange).simulate_swap(
+            AnsAsset::new(config.pool_config.asset1, amount1),
+            config.pool_config.asset0,
+        )?;
+
+        Decimal::from_ratio(simulation_result.return_amount, amount1)
+    };
+
+    Ok(price)
 }
 
 #[derive(Debug)]

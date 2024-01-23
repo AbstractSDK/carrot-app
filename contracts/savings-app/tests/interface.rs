@@ -158,6 +158,27 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     Ok(savings_app)
 }
 
+fn create_position<Chain: CwEnv>(
+    app: &Application<Chain, app::AppInterface<Chain>>,
+    funds: Vec<Coin>,
+    asset0: Coin,
+    asset1: Coin,
+) -> anyhow::Result<()> {
+    app.account()
+        .execute_on_module::<app::AppInterface<Chain>>(
+            &app::msg::AppExecuteMsg::CreatePosition {
+                lower_tick: INITIAL_LOWER_TICK,
+                upper_tick: INITIAL_UPPER_TICK,
+                funds,
+                asset0,
+                asset1,
+            }
+            .into(),
+            &[],
+        )?;
+    Ok(())
+}
+
 fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     // We create two tokenfactory denoms
     create_denom(chain.clone(), USDC.to_string())?;
@@ -263,6 +284,13 @@ fn deposit_lands() -> anyhow::Result<()> {
     // println!("resp: {resp:?}");
 
     let proxy_addr = savings_app.account().proxy()?;
+
+    create_position(
+        &savings_app,
+        coins(5_000, factory_denom(&chain, USDC)),
+        coin(100_000, factory_denom(&chain, USDT)),
+        coin(100_000, factory_denom(&chain, USDC)),
+    )?;
 
     savings_app.deposit(vec![coin(5000, factory_denom(&chain, USDC))])?;
     let balance = savings_app.balance()?;
