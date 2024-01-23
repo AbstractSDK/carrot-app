@@ -135,7 +135,6 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     deposit_denom: asset0,
                     exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
-                    // bot_addr: chain.sender().to_string(),
                 },
                 Empty {},
                 &[],
@@ -270,26 +269,45 @@ fn deposit_lands() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube()?;
 
     let chain = savings_app.get_chain().clone();
+    let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
     // Checking why simulate_swap fails:
-    // let chain_name: String = BuildPostfix::<OsmosisTestTube>::ChainName(&chain).into();
-    // println!("chain_name: {chain_name}");
-    // let abs = abstract_interface::Abstract::load_from(chain)?;
-    // use abstract_dex_adapter::msg::DexQueryMsgFns as _;
-    // let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
-    // let resp = dex_adapter.simulate_swap(
-    //     AssetEntry::new(USDT),
-    //     abstract_dex_adapter::msg::OfferAsset::new(USDC, 500_u128),
-    //     Some(DEX_NAME.to_owned()),
-    // )?;
-    // println!("resp: {resp:?}");
+    let abs = abstract_interface::Abstract::load_from(chain.clone())?;
+    use abstract_dex_adapter::msg::DexQueryMsgFns as _;
+    let resp = dex_adapter.simulate_swap(
+        AssetEntry::new(USDT),
+        abstract_dex_adapter::msg::OfferAsset::new(USDC, 500_u128),
+        Some(DEX_NAME.to_owned()),
+    )?;
+    println!("simulate_swap: {resp:?}");
+
+    // Checking why generate_message fails
+    // let resp: Result<abstract_dex_adapter::msg::GenerateMessagesResponse, _> =
+    //     dex_adapter.query(&abstract_core::adapter::QueryMsg::Module(
+    //         abstract_dex_adapter::msg::DexQueryMsg::GenerateMessages {
+    //             message: abstract_dex_adapter::msg::DexExecuteMsg::Action {
+    //                 dex: DEX_NAME.to_string(),
+    //                 action: abstract_dex_adapter::msg::DexAction::Swap {
+    //                     offer_asset: abstract_core::objects::AnsAsset {
+    //                         name: AssetEntry::new(USDT),
+    //                         amount: cosmwasm_std::Uint128::new(2499),
+    //                     },
+    //                     ask_asset: AssetEntry::new(USDC),
+    //                     max_spread: Some(Decimal::percent(20)),
+    //                     belief_price: None,
+    //                 },
+    //             },
+    //             sender: chain.sender().to_string(),
+    //         },
+    //     ));
+    // println!("generate_message: {resp:?}");
 
     let proxy_addr = savings_app.account().proxy()?;
 
     create_position(
         &savings_app,
         coins(5_000, factory_denom(&chain, USDC)),
-        coin(100_000, factory_denom(&chain, USDT)),
         coin(100_000, factory_denom(&chain, USDC)),
+        coin(100_000, factory_denom(&chain, USDT)),
     )?;
 
     savings_app.deposit(vec![coin(5000, factory_denom(&chain, USDC))])?;

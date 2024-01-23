@@ -69,6 +69,17 @@ wasm:
     --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
     ${image}:0.15.0
 
+# wasm fast
+wasm-f:
+  #!/usr/bin/env bash
+
+  cargo cw-optimizoor
+  # Remove architecture postfix
+  for file in ./artifacts/*-*.wasm
+  do
+    mv "$file" "${file%-*.wasm}.wasm" 2> /dev/null
+  done
+
 ## Frontend Helpers ##
 
 # Generate the typescript client for the app contract

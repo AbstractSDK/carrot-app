@@ -11,8 +11,8 @@ use abstract_dex_adapter::msg::{
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::{AbstractResponse, AccountIdentification};
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
-    WasmMsg,
+    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, StdError, SubMsg,
+    Uint128, WasmMsg,
 };
 use osmosis_std::types::cosmos::bank::v1beta1::MsgSend;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
@@ -223,10 +223,10 @@ fn swap_msg(
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     let config = CONFIG.load(deps.storage)?;
-    let position = get_position(deps)?;
+    let sender = get_user(deps, app)?;
 
     let dex = app.dex(deps, config.exchange.clone());
-    let trigger_swap_msg: GenerateMessagesResponse = dex.query(DexQueryMsg::GenerateMessages {
+    let query_msg = DexQueryMsg::GenerateMessages {
         message: DexExecuteMsg::Action {
             dex: config.exchange,
             action: DexAction::Swap {
@@ -236,8 +236,14 @@ fn swap_msg(
                 belief_price: None,
             },
         },
-        proxy_addr: position.owner.clone(),
-    })?;
+        sender: sender.clone(),
+    };
+    let trigger_swap_msg: GenerateMessagesResponse =
+        dex.query(query_msg.clone()).map_err(|_| {
+            cosmwasm_std::StdError::generic_err(format!(
+                "Failed to query generate message, query_msg: {query_msg:?}"
+            ))
+        })?;
 
     // swap(
     //     offer_asset.clone(),
@@ -249,7 +255,7 @@ fn swap_msg(
     Ok(trigger_swap_msg
         .messages
         .into_iter()
-        .map(|m| wrap_authz(m, position.owner.clone(), env))
+        .map(|m| wrap_authz(m, sender.clone(), env))
         .collect())
 }
 
@@ -299,6 +305,7 @@ fn tokens_to_swap(
     let x0_a1 = x0.amount * asset1.amount;
     let x1_a0 = x1.amount * asset0.amount;
 
+    // TODO: resulting_balance denoms is unsorted right now
     let (offer_asset, ask_asset, resulting_balance) = if x0_a1 < x1_a0 {
         let numerator = x1_a0 - x0_a1;
         let denominator = asset0.amount + price * asset1.amount;
