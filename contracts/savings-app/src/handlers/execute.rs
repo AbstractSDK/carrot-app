@@ -2,7 +2,7 @@ use crate::contract::{App, AppResult};
 use crate::helpers::{get_user, wrap_authz};
 use crate::msg::{AppExecuteMsg, ExecuteMsg};
 use crate::replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID};
-use crate::state::{assert_contract, get_osmosis_position, get_position, CONFIG};
+use crate::state::{assert_contract, get_osmosis_position, CONFIG, POSITION};
 use abstract_core::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::api::Dex;
 use abstract_dex_adapter::msg::{
@@ -88,12 +88,23 @@ fn create_position(
         &env,
     );
 
-    // We need to get the ID for this position in the reply
-
-    Ok(app
+    let mut response = app
         .response("create_position")
+        // We need to get the ID for this position in the reply
         .add_submessage(SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID))
-        .add_messages(swap_msgs))
+        .add_messages(swap_msgs);
+
+    // If we already have position open - withdraw all from it first
+    if POSITION.exists(deps.storage) {
+        let (withdraw_msg, withdraw_amount, total_amount) =
+            _inner_withdraw(deps, &env, None, &app)?;
+        response = response
+            .add_message(withdraw_msg)
+            .add_attribute("withdraw_amount", withdraw_amount)
+            .add_attribute("total_amount", total_amount);
+    }
+
+    Ok(response)
 }
 
 fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
@@ -147,11 +158,12 @@ fn withdraw(
     // Only the authorized addresses (admin ?) can withdraw
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    let (withdraw_msg, withdraw_amount) = _inner_withdraw(deps, &env, amount, &app)?;
+    let (withdraw_msg, withdraw_amount, total_amount) = _inner_withdraw(deps, &env, amount, &app)?;
 
     Ok(app
         .response("withdraw")
         .add_attribute("withdraw_amount", withdraw_amount)
+        .add_attribute("total_amount", total_amount)
         .add_message(withdraw_msg))
 }
 
@@ -161,12 +173,15 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     let pool = get_osmosis_position(deps.as_ref())?;
     let position = pool.position.unwrap();
 
-    // TODO make sure we merge them, so that there are no collisions
+    // TODO: make sure we merge them, so that there are no collisions
     let string_incentives = pool
         .claimable_incentives
         .into_iter()
         .chain(pool.claimable_spread_rewards)
         .collect::<Vec<_>>();
+    if string_incentives.is_empty() {
+        return Err(crate::error::AppError::NoRewards {});
+    }
 
     let incentives = try_proto_to_cosmwasm_coins(string_incentives.clone())?;
 
@@ -356,13 +371,14 @@ fn _inner_withdraw(
     env: &Env,
     amount: Option<Uint128>,
     app: &App,
-) -> AppResult<(CosmosMsg, String)> {
+) -> AppResult<(CosmosMsg, String, String)> {
     let position = get_osmosis_position(deps.as_ref())?.position.unwrap();
 
     let liquidity_amount = if let Some(amount) = amount {
         amount.to_string()
     } else {
-        position.liquidity
+        // TODO: it's decimals inside contracts
+        position.liquidity.replace(".", "")
     };
 
     // We need to execute withdraw on the user's behalf
@@ -376,7 +392,7 @@ fn _inner_withdraw(
         env,
     );
 
-    Ok((msg, liquidity_amount))
+    Ok((msg, liquidity_amount, position.liquidity))
 }
 
 #[cfg(test)]

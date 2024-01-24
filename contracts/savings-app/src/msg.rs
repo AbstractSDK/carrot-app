@@ -1,7 +1,7 @@
 use crate::{contract::App, state::Config};
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Uint128};
+use cosmwasm_std::{Coin, Decimal, Uint128};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
@@ -56,6 +56,7 @@ pub enum AppQueryMsg {
     Balance {},
     #[returns(AvailableRewardsResponse)]
     AvailableRewards {},
+    // TODO: Should be option if we keep it after debugging
     #[returns(crate::state::Position)]
     Position{},
 }
@@ -75,4 +76,5 @@ pub struct AvailableRewardsResponse {
 #[cw_serde]
 pub struct AssetsBalanceResponse {
     pub balances: Vec<Coin>,
+    pub liquidity: String
 }

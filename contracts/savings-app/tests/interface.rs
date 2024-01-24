@@ -7,9 +7,14 @@ use abstract_core::objects::AssetEntry;
 use abstract_core::objects::PoolMetadata;
 use abstract_core::objects::PoolType;
 use abstract_dex_adapter::msg::ExecuteMsg;
+use abstract_interface::Abstract;
+use abstract_interface::AbstractAccount;
+use app::msg::AssetsBalanceResponse;
+use app::msg::AvailableRewardsResponse;
 use app::state::Position;
 use cosmwasm_std::coin;
 use cosmwasm_std::Decimal;
+use cosmwasm_std::Uint128;
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::anyhow;
 use cw_orch::environment::BankQuerier;
@@ -24,6 +29,7 @@ use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ExecuteResponse;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Module;
+use cw_orch::osmosis_test_tube::osmosis_test_tube::PoolManager;
 
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePosition;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
@@ -33,9 +39,12 @@ use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::OsmosisTestApp;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Runner;
+use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition;
 use cw_orch::prelude::*;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::CreateConcentratedLiquidityPoolsProposal;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgAddToPosition;
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCollectIncentives;
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCollectSpreadRewards;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolRecord;
 use osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgCreateDenom;
 use osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgCreateDenomResponse;
@@ -95,10 +104,10 @@ pub const VAULT_NAME: &str = "quasar_vault";
 pub const VAULT_SUBDENOM: &str = "vault-token";
 
 pub const TICK_SPACING: u64 = 100;
-pub const SPREAD_FACTOR: &str = "10";
+pub const SPREAD_FACTOR: u64 = 1;
 
-pub const INITIAL_LOWER_TICK: i64 = -100;
-pub const INITIAL_UPPER_TICK: i64 = 100;
+pub const INITIAL_LOWER_TICK: i64 = -10000;
+pub const INITIAL_UPPER_TICK: i64 = 1000;
 
 // Deploys abstract and other contracts
 pub fn deploy<Chain: CwEnv + Stargate>(
@@ -224,8 +233,8 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
                 pool_records: vec![PoolRecord {
                     denom0: factory_denom(&chain, USDC),
                     denom1: factory_denom(&chain, USDT),
-                    tick_spacing: 100,
-                    spread_factor: "0".to_string(),
+                    tick_spacing: TICK_SPACING,
+                    spread_factor: Decimal::percent(SPREAD_FACTOR).atomics().to_string(),
                 }],
             },
             chain.sender().to_string(),
@@ -248,11 +257,11 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
                 tokens_provided: vec![
                     v1beta1::Coin {
                         denom: asset0,
-                        amount: "100_000_000".to_owned(),
+                        amount: "1_000_000".to_owned(),
                     },
                     v1beta1::Coin {
                         denom: asset1,
-                        amount: "100_000_000".to_owned(),
+                        amount: "1_000_000".to_owned(),
                     },
                 ],
                 token_min_amount0: "0".to_string(),
@@ -280,82 +289,43 @@ fn setup_test_tube() -> anyhow::Result<(
     let pool_id = create_pool(chain.clone())?;
 
     let savings_app = deploy(chain, pool_id)?;
+
+    // Give authorizations
+    give_authorizations(&savings_app)?;
     Ok((pool_id, savings_app))
 }
 
-#[test]
-fn deposit_lands() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
-
-    let chain = savings_app.get_chain().clone();
-    let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
-    // Checking why simulate_swap fails:
-    let abs = abstract_interface::Abstract::load_from(chain.clone())?;
-    use abstract_dex_adapter::msg::DexQueryMsgFns as _;
-    let resp = dex_adapter.simulate_swap(
-        AssetEntry::new(USDT),
-        abstract_dex_adapter::msg::OfferAsset::new(USDC, 500_u128),
-        Some(DEX_NAME.to_owned()),
-    )?;
-    println!("simulate_swap: {resp:?}");
-
-    // Checking why generate_message fails
-    // let resp: Result<abstract_dex_adapter::msg::GenerateMessagesResponse, _> =
-    //     dex_adapter.query(&abstract_core::adapter::QueryMsg::Module(
-    //         abstract_dex_adapter::msg::DexQueryMsg::GenerateMessages {
-    //             message: abstract_dex_adapter::msg::DexExecuteMsg::Action {
-    //                 dex: DEX_NAME.to_string(),
-    //                 action: abstract_dex_adapter::msg::DexAction::Swap {
-    //                     offer_asset: abstract_core::objects::AnsAsset {
-    //                         name: AssetEntry::new(USDT),
-    //                         amount: cosmwasm_std::Uint128::new(2499),
-    //                     },
-    //                     ask_asset: AssetEntry::new(USDC),
-    //                     max_spread: Some(Decimal::percent(20)),
-    //                     belief_price: None,
-    //                 },
-    //             },
-    //             sender: chain.sender().to_string(),
-    //         },
-    //     ));
-    // println!("generate_message: {resp:?}");
-
+fn give_authorizations(
+    savings_app: &Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
+) -> Result<(), anyhow::Error> {
+    let chain = savings_app.get_chain();
     let app = chain.app.borrow();
-    // TODO: User just gives everything lol
-    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-        MsgGrant {
-            granter: chain.sender().to_string(),
-            grantee: savings_app.addr_str().unwrap(),
-            grant: Some(Grant {
-                authorization: Some(
-                    GenericAuthorization {
-                        msg: MsgCreatePosition::TYPE_URL.to_string(),
-                    }
-                    .to_any(),
-                ),
-                expiration: None,
-            }),
-        },
-        MsgGrant::TYPE_URL,
-        chain.sender.as_ref(),
-    )?;
-    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-        MsgGrant {
-            granter: chain.sender().to_string(),
-            grantee: savings_app.addr_str().unwrap(),
-            grant: Some(Grant {
-                authorization: Some(
-                    GenericAuthorization {
-                        msg: MsgSwapExactAmountIn::TYPE_URL.to_string(),
-                    }
-                    .to_any(),
-                ),
-                expiration: None,
-            }),
-        },
-        MsgGrant::TYPE_URL,
-        chain.sender.as_ref(),
-    )?;
+    let authorization_urls = [
+        MsgCreatePosition::TYPE_URL,
+        MsgSwapExactAmountIn::TYPE_URL,
+        MsgAddToPosition::TYPE_URL,
+        MsgWithdrawPosition::TYPE_URL,
+        MsgCollectIncentives::TYPE_URL,
+        MsgCollectSpreadRewards::TYPE_URL,
+    ]
+    .map(ToOwned::to_owned);
+    let granter = chain.sender().to_string();
+    let grantee = savings_app.addr_str().unwrap();
+    for msg in authorization_urls {
+        let _: ExecuteResponse<MsgGrantResponse> = app.execute(
+            MsgGrant {
+                granter: granter.clone(),
+                grantee: grantee.clone(),
+                grant: Some(Grant {
+                    authorization: Some(GenericAuthorization { msg }.to_any()),
+                    expiration: None,
+                }),
+            },
+            MsgGrant::TYPE_URL,
+            chain.sender.as_ref(),
+        )?;
+    }
+    // TODO: keeping it separate since we may want to be more restrictive on this one
     let _: ExecuteResponse<MsgGrantResponse> = app.execute(
         MsgGrant {
             granter: chain.sender().to_string(),
@@ -373,49 +343,250 @@ fn deposit_lands() -> anyhow::Result<()> {
         MsgGrant::TYPE_URL,
         chain.sender.as_ref(),
     )?;
-    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-        MsgGrant {
-            granter: chain.sender().to_string(),
-            grantee: savings_app.addr_str().unwrap(),
-            grant: Some(Grant {
-                authorization: Some(
-                    GenericAuthorization {
-                        msg: MsgAddToPosition::TYPE_URL.to_string(),
-                    }
-                    .to_any(),
-                ),
-                expiration: None,
-            }),
-        },
-        MsgGrant::TYPE_URL,
-        chain.sender.as_ref(),
-    )?;
 
+    Ok(())
+}
+
+#[test]
+fn deposit_lands() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
+
+    let chain = savings_app.get_chain().clone();
+    { // Debug block
+         // let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
+         // Checking why simulate_swap fails:
+         // let abs = abstract_interface::Abstract::load_from(chain.clone())?;
+         // use abstract_dex_adapter::msg::DexQueryMsgFns as _;
+         // let resp = dex_adapter.simulate_swap(
+         //     AssetEntry::new(USDT),
+         //     abstract_dex_adapter::msg::OfferAsset::new(USDC, 500_u128),
+         //     Some(DEX_NAME.to_owned()),
+         // )?;
+         // println!("simulate_swap: {resp:?}");
+
+        // Checking why generate_message fails
+        // let resp: Result<abstract_dex_adapter::msg::GenerateMessagesResponse, _> =
+        //     dex_adapter.query(&abstract_core::adapter::QueryMsg::Module(
+        //         abstract_dex_adapter::msg::DexQueryMsg::GenerateMessages {
+        //             message: abstract_dex_adapter::msg::DexExecuteMsg::Action {
+        //                 dex: DEX_NAME.to_string(),
+        //                 action: abstract_dex_adapter::msg::DexAction::Swap {
+        //                     offer_asset: abstract_core::objects::AnsAsset {
+        //                         name: AssetEntry::new(USDT),
+        //                         amount: cosmwasm_std::Uint128::new(2499),
+        //                     },
+        //                     ask_asset: AssetEntry::new(USDC),
+        //                     max_spread: Some(Decimal::percent(20)),
+        //                     belief_price: None,
+        //                 },
+        //             },
+        //             sender: chain.sender().to_string(),
+        //         },
+        //     ));
+        // println!("generate_message: {resp:?}");
+    }
+
+    // Create position
     create_position(
         &savings_app,
         coins(5_000, factory_denom(&chain, USDC)),
-        coin(100_000, factory_denom(&chain, USDC)),
-        coin(100_000, factory_denom(&chain, USDT)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
-    let cl = ConcentratedLiquidity::new(&*app);
+    // Check almost everything landed
+    let balance: AssetsBalanceResponse = savings_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert_eq!(sum.u128(), 5_000 - 4);
+
+    // Do the deposit
+    savings_app.deposit(vec![coin(5_000, factory_denom(&chain, USDC))])?;
+    // Check almost everything landed
+    let balance: AssetsBalanceResponse = savings_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert_eq!(sum.u128(), 10_000 - 8);
+
+    // Do the second deposit
+    savings_app.deposit(vec![coin(5_000, factory_denom(&chain, USDC))])?;
+    // Check almost everything landed
+    let balance: AssetsBalanceResponse = savings_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert_eq!(sum.u128(), 15_000 - 12);
+
     // let position: Position = savings_app.position()?;
-    // let osm_position = cl.query_position_by_id(&PositionByIdRequest {
+    // let app = chain.app.borrow();
+    // let cl = ConcentratedLiquidity::new(&*app);
+    // let position_resp = cl.query_position_by_id(&PositionByIdRequest {
     //     position_id: position.position_id,
     // })?;
-    // println!("osm_position: {osm_position:?}");
+    // println!("position: {position:?}");
+    // cl.withdraw_position(
+    //     MsgWithdrawPosition {
+    //         position_id: position.position_id,
+    //         sender: chain.sender().to_string(),
+    //         liquidity_amount: position_resp.position.unwrap().position.unwrap().liquidity,
+    //     },
+    //     &chain.sender,
+    // )?;
+    // savings_app.withdraw(
+    //     position_resp
+    //         .position
+    //         .unwrap()
+    //         .position
+    //         .unwrap()
+    //         .liquidity
+    //         .parse()
+    //         .unwrap(),
+    // )?;
+    // savings_app.withdraw_all()?;
+    Ok(())
+}
 
-    let balance = savings_app.balance()?;
-    println!("{balance:?}");
+#[test]
+fn withdraw_position() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
 
-    savings_app.deposit(vec![coin(5000, factory_denom(&chain, USDC))])?;
-    // let position: Position = savings_app.position()?;
-    // let osm_position = cl.query_position_by_id(&PositionByIdRequest {
-    //     position_id: position.position_id,
-    // })?;
-    // println!("osm_position: {osm_position:?}");
+    let chain = savings_app.get_chain().clone();
 
-    let balance = savings_app.balance()?;
-    println!("{balance:?}");
+    // Create position
+    create_position(
+        &savings_app,
+        coins(10_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
+    )?;
 
+    let balance: AssetsBalanceResponse = savings_app.balance()?;
+    let balance_usdc_before_withdraw = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_before_withdraw = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+
+    // Withdraw half of liquidity
+    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint128::new(2);
+    savings_app.withdraw(half_of_liquidity)?;
+
+    let balance_usdc_after_half_withdraw = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_after_half_withdraw = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+
+    assert!(balance_usdc_after_half_withdraw.amount > balance_usdc_before_withdraw.amount);
+    assert!(balance_usdt_after_half_withdraw.amount > balance_usdt_before_withdraw.amount);
+
+    // Withdraw rest of liquidity
+    savings_app.withdraw_all()?;
+    let balance_usdc_after_full_withdraw = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_after_full_withdraw = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+
+    assert!(balance_usdc_after_full_withdraw.amount > balance_usdc_after_half_withdraw.amount);
+    assert!(balance_usdt_after_full_withdraw.amount > balance_usdt_after_half_withdraw.amount);
+    Ok(())
+}
+
+#[test]
+fn create_multiple_positions() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
+
+    let chain = savings_app.get_chain().clone();
+
+    // Create position
+    create_position(
+        &savings_app,
+        coins(10_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
+    )?;
+
+    let balance_usdc_first_position = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_first_position = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+    // Create position second time, user decided to close first one
+    create_position(
+        &savings_app,
+        coins(5_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
+    )?;
+
+    let balance_usdc_second_position = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_second_position = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+
+    // Should have more usd in total because we did withdraw before creating new position
+    assert!(
+        balance_usdc_second_position.amount + balance_usdt_second_position.amount
+            > balance_usdc_first_position.amount + balance_usdt_first_position.amount
+    );
+    Ok(())
+}
+
+#[test]
+fn check_autocompound() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
+
+    let chain = savings_app.get_chain().clone();
+
+    // Create position
+    create_position(
+        &savings_app,
+        coins(100_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
+    )?;
+
+    // Do some swaps
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
+    let abs = Abstract::load_from(chain.clone())?;
+    let account_id = savings_app.account().id()?;
+    let account = AbstractAccount::new(&abs, account_id);
+    chain.bank_send(
+        account.proxy.addr_str()?,
+        vec![
+            coin(200_000, factory_denom(&chain, USDC)),
+            coin(200_000, factory_denom(&chain, USDT)),
+        ],
+    )?;
+    for _ in 0..10 {
+        dex.swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+    }
+
+    let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
+    println!("rewards: {rewards:?}");
+    savings_app.autocompound()?;
     Ok(())
 }

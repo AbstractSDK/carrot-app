@@ -12,7 +12,7 @@ pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppR
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
         AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        AppQueryMsg::Position{} => to_json_binary(&get_position(deps)?)
+        AppQueryMsg::Position {} => to_json_binary(&get_position(deps)?),
     }
     .map_err(Into::into)
 }
@@ -24,8 +24,11 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
     let pool = get_osmosis_position(deps)?;
 
     let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
-
-    Ok(AssetsBalanceResponse { balances })
+    let liquidity = pool.position.unwrap().liquidity.replace(".", "");
+    Ok(AssetsBalanceResponse {
+        balances,
+        liquidity,
+    })
 }
 
 fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> {

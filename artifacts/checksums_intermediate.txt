@@ -1,1 +1,1 @@
-7a0a3b09e2e3269908cd81ea24b4f4e42bcfda21756b9c14418be0b5f27cc67d  app.wasm
+ce7cdfac541c063bc1ba4c4c9a193e9d6b5ac7da781bf0ab26c3e9922e9f3f20  app.wasm

@@ -46,4 +46,7 @@ pub enum AppError {
 
     #[error("No top level account owner.")]
     NoTopLevelAccount {},
+
+    #[error("No rewards for autocompound")]
+    NoRewards {},
 }
