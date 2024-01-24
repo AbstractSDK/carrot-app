@@ -238,27 +238,34 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     let pools = cl.query_pools(&PoolsRequest { pagination: None }).unwrap();
 
     let pool = Pool::decode(pools.pools[0].value.as_slice()).unwrap();
-    cl.create_position(
-        MsgCreatePosition {
-            pool_id: pool.id,
-            sender: chain.sender().to_string(),
-            lower_tick: INITIAL_LOWER_TICK,
-            upper_tick: INITIAL_UPPER_TICK,
-            tokens_provided: vec![
-                v1beta1::Coin {
-                    denom: asset0,
-                    amount: "100_000_000".to_owned(),
-                },
-                v1beta1::Coin {
-                    denom: asset1,
-                    amount: "100_000_000".to_owned(),
-                },
-            ],
-            token_min_amount0: "0".to_string(),
-            token_min_amount1: "0".to_string(),
-        },
-        &chain.sender,
-    )?;
+    let response = cl
+        .create_position(
+            MsgCreatePosition {
+                pool_id: pool.id,
+                sender: chain.sender().to_string(),
+                lower_tick: INITIAL_LOWER_TICK,
+                upper_tick: INITIAL_UPPER_TICK,
+                tokens_provided: vec![
+                    v1beta1::Coin {
+                        denom: asset0,
+                        amount: "100_000_000".to_owned(),
+                    },
+                    v1beta1::Coin {
+                        denom: asset1,
+                        amount: "100_000_000".to_owned(),
+                    },
+                ],
+                token_min_amount0: "0".to_string(),
+                token_min_amount1: "0".to_string(),
+            },
+            &chain.sender,
+        )?
+        .data;
+
+    // Was checking if id is wrong on a response. It's not
+
+    // let response = cl.query_position_by_id(&PositionByIdRequest { position_id: response.position_id });
+    // panic!("first position response: {response:?}");
     Ok(pool.id)
 }
 
@@ -313,10 +320,8 @@ fn deposit_lands() -> anyhow::Result<()> {
     //     ));
     // println!("generate_message: {resp:?}");
 
-    let proxy_addr = savings_app.account().proxy()?;
-
     let app = chain.app.borrow();
-    // TODO: We have an issue here (:
+    // TODO: User just gives everything lol
     let _: ExecuteResponse<MsgGrantResponse> = app.execute(
         MsgGrant {
             granter: chain.sender().to_string(),
@@ -392,15 +397,25 @@ fn deposit_lands() -> anyhow::Result<()> {
         coin(100_000, factory_denom(&chain, USDC)),
         coin(100_000, factory_denom(&chain, USDT)),
     )?;
+    let cl = ConcentratedLiquidity::new(&*app);
+    // let position: Position = savings_app.position()?;
+    // let osm_position = cl.query_position_by_id(&PositionByIdRequest {
+    //     position_id: position.position_id,
+    // })?;
+    // println!("osm_position: {osm_position:?}");
+
+    let balance = savings_app.balance()?;
+    println!("{balance:?}");
 
     savings_app.deposit(vec![coin(5000, factory_denom(&chain, USDC))])?;
-    let position: Position = savings_app.position()?;
-    let cl = ConcentratedLiquidity::new(&*app);
-    let osm_position = cl.query_position_by_id(&PositionByIdRequest{ position_id: position.position_id })?;
-    println!("osm_position: {osm_position:?}");
-    // let balance = savings_app.balance()?;
-    // println!("{balance:?}");
-    let proxy_balance = chain.balance(proxy_addr, None)?;
-    println!("proxy_balance: {proxy_balance:?}");
+    // let position: Position = savings_app.position()?;
+    // let osm_position = cl.query_position_by_id(&PositionByIdRequest {
+    //     position_id: position.position_id,
+    // })?;
+    // println!("osm_position: {osm_position:?}");
+
+    let balance = savings_app.balance()?;
+    println!("{balance:?}");
+
     Ok(())
 }

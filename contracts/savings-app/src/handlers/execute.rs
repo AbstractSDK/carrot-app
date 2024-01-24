@@ -1,7 +1,7 @@
 use crate::contract::{App, AppResult};
 use crate::helpers::{get_user, wrap_authz};
 use crate::msg::{AppExecuteMsg, ExecuteMsg};
-use crate::replies::CREATE_POSITION_ID;
+use crate::replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID};
 use crate::state::{assert_contract, get_osmosis_position, get_position, CONFIG};
 use abstract_core::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::api::Dex;
@@ -134,7 +134,7 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
     Ok(app
         .response("deposit")
         .add_messages(swap_msgs)
-        .add_message(deposit_msg))
+        .add_submessage(SubMsg::reply_on_success(deposit_msg, ADD_TO_POSITION_ID)))
 }
 
 fn withdraw(
