@@ -62,7 +62,13 @@ pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
     let position = get_position(deps)?;
 
     ConcentratedliquidityQuerier::new(&deps.querier)
-        .position_by_id(position.position_id)?
+        .position_by_id(position.position_id)
+        .map_err(|e| {
+            cosmwasm_std::StdError::generic_err(format!(
+                "Failed to query position by id: {}\n error: {e}",
+                position.position_id
+            ))
+        })?
         .position
         .ok_or(AppError::NoPosition {})
 }

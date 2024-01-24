@@ -1,7 +1,7 @@
 use crate::contract::{App, AppResult};
 use crate::error::AppError;
 use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse};
-use crate::state::{get_osmosis_position, Config, CONFIG};
+use crate::state::{get_osmosis_position, get_position, Config, CONFIG};
 use abstract_core::objects::AnsAsset;
 use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Decimal256, Deps, Env};
@@ -12,6 +12,7 @@ pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppR
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
         AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
+        AppQueryMsg::Position{} => to_json_binary(&get_position(deps)?)
     }
     .map_err(Into::into)
 }

@@ -56,6 +56,8 @@ pub enum AppQueryMsg {
     Balance {},
     #[returns(AvailableRewardsResponse)]
     AvailableRewards {},
+    #[returns(crate::state::Position)]
+    Position{},
 }
 
 #[cosmwasm_schema::cw_serde]
