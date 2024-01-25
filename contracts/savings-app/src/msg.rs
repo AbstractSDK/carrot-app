@@ -1,7 +1,4 @@
-use crate::{
-    contract::App,
-    state::{Config, Position},
-};
+use crate::{contract::App, state::Position};
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Uint128};
@@ -53,7 +50,7 @@ pub enum AppExecuteMsg {
 #[cfg_attr(feature = "interface", impl_into(QueryMsg))]
 #[derive(QueryResponses)]
 pub enum AppQueryMsg {
-    #[returns(Config)]
+    #[returns(crate::state::Config)]
     Config {},
     #[returns(AssetsBalanceResponse)]
     Balance {},

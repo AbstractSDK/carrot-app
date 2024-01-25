@@ -3,6 +3,7 @@ use abstract_client::Namespace;
 use abstract_core::adapter::AdapterBaseMsg;
 use abstract_core::adapter::BaseExecuteMsg;
 use abstract_core::objects::pool_id::PoolAddressBase;
+use abstract_core::objects::AccountId;
 use abstract_core::objects::AssetEntry;
 use abstract_core::objects::PoolMetadata;
 use abstract_core::objects::PoolType;
@@ -35,6 +36,7 @@ use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::b
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Runner;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition;
 use cw_orch::prelude::*;
+use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::CreateConcentratedLiquidityPoolsProposal;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgAddToPosition;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCollectIncentives;
@@ -298,6 +300,10 @@ fn give_authorizations(
     savings_app: &Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
 ) -> Result<(), anyhow::Error> {
     let chain = savings_app.get_chain();
+    let abs = Abstract::load_from(chain.clone())?;
+    let dex_fee_account = AbstractAccount::new(&abs, AccountId::local(0));
+    let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
+
     let app = chain.app.borrow();
     let authorization_urls = [
         MsgCreatePosition::TYPE_URL,
@@ -324,24 +330,34 @@ fn give_authorizations(
             chain.sender.as_ref(),
         )?;
     }
-    // TODO: keeping it separate since we may want to be more restrictive on this one
-    // let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-    //     MsgGrant {
-    //         granter: chain.sender().to_string(),
-    //         grantee: savings_app.addr_str().unwrap(),
-    //         grant: Some(Grant {
-    //             authorization: Some(
-    //                 GenericAuthorization {
-    //                     msg: MsgSend::TYPE_URL.to_string(),
-    //                 }
-    //                 .to_any(),
-    //             ),
-    //             expiration: None,
-    //         }),
-    //     },
-    //     MsgGrant::TYPE_URL,
-    //     chain.sender.as_ref(),
-    // )?;
+    // Dex fees
+    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
+        MsgGrant {
+            granter: chain.sender().to_string(),
+            grantee: savings_app.addr_str().unwrap(),
+            grant: Some(Grant {
+                authorization: Some(
+                    SendAuthorization {
+                        spend_limit: vec![
+                            osmosis_std::types::cosmos::base::v1beta1::Coin {
+                                denom: factory_denom(chain, USDC),
+                                amount: LOTS.to_string(),
+                            },
+                            osmosis_std::types::cosmos::base::v1beta1::Coin {
+                                denom: factory_denom(chain, USDT),
+                                amount: LOTS.to_string(),
+                            },
+                        ],
+                        allow_list: vec![dex_fee_addr],
+                    }
+                    .to_any(),
+                ),
+                expiration: None,
+            }),
+        },
+        MsgGrant::TYPE_URL,
+        chain.sender.as_ref(),
+    )?;
 
     Ok(())
 }

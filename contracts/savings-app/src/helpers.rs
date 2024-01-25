@@ -2,7 +2,10 @@ use cosmwasm_std::{CosmosMsg, Deps, Env, WasmMsg};
 use osmosis_std::{
     cosmwasm_to_proto_coins,
     shim::Any,
-    types::{cosmos::authz::v1beta1::MsgExec, cosmwasm::wasm::v1::MsgExecuteContract},
+    types::{
+        cosmos::{authz::v1beta1::MsgExec, bank::v1beta1::MsgSend},
+        cosmwasm::wasm::v1::MsgExecuteContract,
+    },
 };
 
 use prost::Message;
@@ -37,18 +40,18 @@ pub fn wrap_authz(
             not_supported => unimplemented!("{not_supported:?}"),
         },
         CosmosMsg::Stargate { type_url, value } => (type_url.clone(), value.into()),
-        // CosmosMsg::Bank(bank_msg) => match bank_msg {
-        //     cosmwasm_std::BankMsg::Send { to_address, amount } => (
-        //         MsgSend::TYPE_URL.to_string(),
-        //         MsgSend {
-        //             from_address: sender.to_string(),
-        //             to_address,
-        //             amount: cosmwasm_to_proto_coins(amount),
-        //         }
-        //         .encode_to_vec(),
-        //     ),
-        //     not_supported => unimplemented!("{not_supported:?}"),
-        // },
+        CosmosMsg::Bank(bank_msg) => match bank_msg {
+            cosmwasm_std::BankMsg::Send { to_address, amount } => (
+                MsgSend::TYPE_URL.to_string(),
+                MsgSend {
+                    from_address: sender.to_string(),
+                    to_address,
+                    amount: cosmwasm_to_proto_coins(amount),
+                }
+                .encode_to_vec(),
+            ),
+            not_supported => unimplemented!("{not_supported:?}"),
+        },
         not_supported => unimplemented!("{not_supported:?}"),
     };
 
