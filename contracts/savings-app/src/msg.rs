@@ -1,4 +1,7 @@
-use crate::{contract::App, state::Config};
+use crate::{
+    contract::App,
+    state::{Config, Position},
+};
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Uint128};
@@ -56,8 +59,7 @@ pub enum AppQueryMsg {
     Balance {},
     #[returns(AvailableRewardsResponse)]
     AvailableRewards {},
-    // TODO: Should be option if we keep it after debugging
-    #[returns(crate::state::Position)]
+    #[returns(PositionResponse)]
     Position {},
 }
 
@@ -77,4 +79,9 @@ pub struct AvailableRewardsResponse {
 pub struct AssetsBalanceResponse {
     pub balances: Vec<Coin>,
     pub liquidity: String,
+}
+
+#[cw_serde]
+pub struct PositionResponse {
+    pub position: Option<Position>,
 }

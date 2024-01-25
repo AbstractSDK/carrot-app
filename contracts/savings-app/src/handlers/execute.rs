@@ -257,13 +257,6 @@ fn swap_msg(
             ))
         })?;
 
-    // swap(
-    //     offer_asset.clone(),
-    //     ask_asset.clone(),
-    //     Some(Decimal::percent(MAX_SPREAD_PERCENT)),
-    //     None,
-    // )?;
-
     Ok(trigger_swap_msg
         .messages
         .into_iter()

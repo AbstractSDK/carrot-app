@@ -1,7 +1,7 @@
 use crate::contract::{App, AppResult};
 
-use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse};
-use crate::state::{get_osmosis_position, get_position, Config, CONFIG};
+use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, PositionResponse};
+use crate::state::{get_osmosis_position, Config, CONFIG, POSITION};
 use abstract_core::objects::AnsAsset;
 use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
@@ -12,9 +12,15 @@ pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppR
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
         AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        AppQueryMsg::Position {} => to_json_binary(&get_position(deps)?),
+        AppQueryMsg::Position {} => to_json_binary(&query_position(deps)?),
     }
     .map_err(Into::into)
+}
+
+fn query_position(deps: Deps) -> AppResult<PositionResponse> {
+    let position = POSITION.may_load(deps.storage)?;
+
+    Ok(PositionResponse { position })
 }
 
 fn query_config(deps: Deps) -> AppResult<Config> {
@@ -80,10 +86,4 @@ pub fn query_price(deps: Deps, funds: &[Coin], app: &App) -> AppResult<Decimal> 
     };
 
     Ok(price)
-}
-
-#[derive(Debug)]
-pub struct ContractBalances<T> {
-    pub token0: T,
-    pub token1: T,
 }
