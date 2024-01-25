@@ -6,4 +6,3 @@ tab_spaces = 4
 # nightly
 # group_imports = "StdExternalCrate"
 # imports_granularity = "Crate"
-
