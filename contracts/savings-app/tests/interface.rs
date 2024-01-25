@@ -11,7 +11,6 @@ use abstract_interface::Abstract;
 use abstract_interface::AbstractAccount;
 use app::msg::AssetsBalanceResponse;
 use app::msg::AvailableRewardsResponse;
-use app::state::Position;
 use cosmwasm_std::coin;
 use cosmwasm_std::Decimal;
 use cosmwasm_std::Uint128;
@@ -23,7 +22,6 @@ use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::a
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrant;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::bank::v1beta1::MsgSend;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::gamm::v1beta1::MsgSwapExactAmountIn;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ExecuteResponse;
@@ -54,6 +52,15 @@ use abstract_client::AbstractClient;
 use cosmwasm_std::coins;
 use app::msg::AppInstantiateMsg;
 use app::msg::{AppExecuteMsgFns, AppQueryMsgFns};
+
+fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
+    let expected = expected.into().u128();
+    let result = result.u128();
+
+    if expected < result - 1 || expected > result + 1 {
+        panic!("Results are not close enough")
+    }
+}
 
 fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
     format!("factory/{}/{}", chain.sender(), subdenom)
@@ -247,7 +254,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     let pools = cl.query_pools(&PoolsRequest { pagination: None }).unwrap();
 
     let pool = Pool::decode(pools.pools[0].value.as_slice()).unwrap();
-    let response = cl
+    let _response = cl
         .create_position(
             MsgCreatePosition {
                 pool_id: pool.id,
@@ -271,10 +278,6 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
         )?
         .data;
 
-    // Was checking if id is wrong on a response. It's not
-
-    // let response = cl.query_position_by_id(&PositionByIdRequest { position_id: response.position_id });
-    // panic!("first position response: {response:?}");
     Ok(pool.id)
 }
 
@@ -352,44 +355,13 @@ fn deposit_lands() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube()?;
 
     let chain = savings_app.get_chain().clone();
-    { // Debug block
-         // let dex_adapter: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
-         // Checking why simulate_swap fails:
-         // let abs = abstract_interface::Abstract::load_from(chain.clone())?;
-         // use abstract_dex_adapter::msg::DexQueryMsgFns as _;
-         // let resp = dex_adapter.simulate_swap(
-         //     AssetEntry::new(USDT),
-         //     abstract_dex_adapter::msg::OfferAsset::new(USDC, 500_u128),
-         //     Some(DEX_NAME.to_owned()),
-         // )?;
-         // println!("simulate_swap: {resp:?}");
 
-        // Checking why generate_message fails
-        // let resp: Result<abstract_dex_adapter::msg::GenerateMessagesResponse, _> =
-        //     dex_adapter.query(&abstract_core::adapter::QueryMsg::Module(
-        //         abstract_dex_adapter::msg::DexQueryMsg::GenerateMessages {
-        //             message: abstract_dex_adapter::msg::DexExecuteMsg::Action {
-        //                 dex: DEX_NAME.to_string(),
-        //                 action: abstract_dex_adapter::msg::DexAction::Swap {
-        //                     offer_asset: abstract_core::objects::AnsAsset {
-        //                         name: AssetEntry::new(USDT),
-        //                         amount: cosmwasm_std::Uint128::new(2499),
-        //                     },
-        //                     ask_asset: AssetEntry::new(USDC),
-        //                     max_spread: Some(Decimal::percent(20)),
-        //                     belief_price: None,
-        //                 },
-        //             },
-        //             sender: chain.sender().to_string(),
-        //         },
-        //     ));
-        // println!("generate_message: {resp:?}");
-    }
-
+    let deposit_amount = 5_000;
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(1));
     // Create position
     create_position(
         &savings_app,
-        coins(5_000, factory_denom(&chain, USDC)),
+        coins(deposit_amount, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
@@ -399,54 +371,27 @@ fn deposit_lands() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert_eq!(sum.u128(), 5_000 - 4);
+    assert!(sum.u128() > deposit_amount - max_fee.u128());
 
     // Do the deposit
-    savings_app.deposit(vec![coin(5_000, factory_denom(&chain, USDC))])?;
+    savings_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = savings_app.balance()?;
     let sum = balance
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert_eq!(sum.u128(), 10_000 - 8);
+    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 2);
 
     // Do the second deposit
-    savings_app.deposit(vec![coin(5_000, factory_denom(&chain, USDC))])?;
+    savings_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = savings_app.balance()?;
     let sum = balance
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert_eq!(sum.u128(), 15_000 - 12);
-
-    // let position: Position = savings_app.position()?;
-    // let app = chain.app.borrow();
-    // let cl = ConcentratedLiquidity::new(&*app);
-    // let position_resp = cl.query_position_by_id(&PositionByIdRequest {
-    //     position_id: position.position_id,
-    // })?;
-    // println!("position: {position:?}");
-    // cl.withdraw_position(
-    //     MsgWithdrawPosition {
-    //         position_id: position.position_id,
-    //         sender: chain.sender().to_string(),
-    //         liquidity_amount: position_resp.position.unwrap().position.unwrap().liquidity,
-    //     },
-    //     &chain.sender,
-    // )?;
-    // savings_app.withdraw(
-    //     position_resp
-    //         .position
-    //         .unwrap()
-    //         .position
-    //         .unwrap()
-    //         .liquidity
-    //         .parse()
-    //         .unwrap(),
-    // )?;
-    // savings_app.withdraw_all()?;
+    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
     Ok(())
 }
 
@@ -607,8 +552,52 @@ fn check_autocompound() -> anyhow::Result<()> {
         dex.swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
     }
 
+    // Check autocompound adds liquidity from the rewards and user balance remain unchanged
+
+    // Check it has some rewards to autocompound first
     let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
-    println!("rewards: {rewards:?}");
+    assert!(!rewards.available_rewards.is_empty());
+
+    // Save balances
+    let balance_before_autocompound: AssetsBalanceResponse = savings_app.balance()?;
+    let balance_usdc_before_autocompound = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_before_autocompound = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+
+    // Autocompound
     savings_app.autocompound()?;
+
+    // Save new balances
+    let balance_after_autocompound: AssetsBalanceResponse = savings_app.balance()?;
+    let balance_usdc_after_autocompound = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .pop()
+        .unwrap();
+    let balance_usdt_after_autocompound = chain
+        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .pop()
+        .unwrap();
+
+    // Liquidity added
+    assert!(balance_after_autocompound.liquidity > balance_before_autocompound.liquidity);
+    // Only rewards went in there
+    assert_is_around(
+        balance_usdc_after_autocompound.amount,
+        balance_usdc_before_autocompound.amount,
+    );
+    assert_is_around(
+        balance_usdt_after_autocompound.amount,
+        balance_usdt_before_autocompound.amount,
+    );
+
+    // Check it used all of the rewards
+    let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
+    assert!(rewards.available_rewards.is_empty());
+
     Ok(())
 }

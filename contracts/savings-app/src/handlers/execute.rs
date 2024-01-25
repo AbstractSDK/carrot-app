@@ -167,65 +167,61 @@ fn withdraw(
 }
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
+    // TODO: shouldn't we have some limit either:
+    // - config.cooldown
+    // - min rewards to autocompound
     // Everyone can autocompound
 
     let pool = get_osmosis_position(deps.as_ref())?;
     let position = pool.position.unwrap();
 
-    // TODO: make sure we merge them, so that there are no collisions
-    let string_incentives = pool
-        .claimable_incentives
-        .into_iter()
-        .chain(pool.claimable_spread_rewards)
-        .collect::<Vec<_>>();
-    if string_incentives.is_empty() {
+    let mut rewards = cosmwasm_std::Coins::default();
+    let mut collect_rewards_msgs = vec![];
+
+    if !pool.claimable_incentives.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
+            rewards.add(coin)?;
+        }
+        collect_rewards_msgs.push(wrap_authz(
+            MsgCollectIncentives {
+                position_ids: vec![position.position_id],
+                sender: position.address.clone(),
+            },
+            position.address.clone(),
+            &env,
+        ));
+    }
+
+    if !pool.claimable_spread_rewards.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
+            rewards.add(coin)?;
+        }
+        collect_rewards_msgs.push(wrap_authz(
+            MsgCollectSpreadRewards {
+                position_ids: vec![position.position_id],
+                sender: position.address.clone(),
+            },
+            position.address.clone(),
+            &env,
+        ))
+    }
+
+    if rewards.is_empty() {
         return Err(crate::error::AppError::NoRewards {});
     }
 
-    let incentives = try_proto_to_cosmwasm_coins(string_incentives.clone())?;
-
-    let msg_incentives = wrap_authz(
-        MsgCollectIncentives {
-            position_ids: vec![position.position_id],
-            sender: position.address.clone(),
-        },
-        position.address.clone(),
-        &env,
-    );
-    let msg_spread_rewards = wrap_authz(
-        MsgCollectSpreadRewards {
-            position_ids: vec![position.position_id],
-            sender: position.address.clone(),
-        },
-        position.address.clone(),
-        &env,
-    );
-
-    // We send the collected rewards to the proxy
-    let msg_send = wrap_authz(
-        MsgSend {
-            from_address: position.address.clone(),
-            to_address: app.proxy_address(deps.as_ref())?.into_string(),
-            amount: string_incentives,
-        },
-        position.address,
-        &env,
-    );
-
-    // Finally we ask for a full deposit from the proxy to the position
+    // Finally we ask for a full deposit from the wallet to the position
     let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
-            funds: incentives,
+            funds: rewards.into(),
         }))?,
         funds: vec![],
     });
 
     Ok(app
         .response("auto-compound")
-        .add_message(msg_incentives)
-        .add_message(msg_spread_rewards)
-        .add_message(msg_send)
+        .add_messages(collect_rewards_msgs)
         .add_message(msg_deposit))
 }
 

@@ -34,14 +34,18 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
 fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> {
     let pool = get_osmosis_position(deps)?;
 
-    // TODO make sure we merge them, so that there are no collisions
-    let available_rewards = try_proto_to_cosmwasm_coins(
-        pool.claimable_incentives
-            .into_iter()
-            .chain(pool.claimable_spread_rewards),
-    )?;
+    let mut rewards = cosmwasm_std::Coins::default();
+    for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
+        rewards.add(coin)?;
+    }
 
-    Ok(AvailableRewardsResponse { available_rewards })
+    for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
+        rewards.add(coin)?;
+    }
+
+    Ok(AvailableRewardsResponse {
+        available_rewards: rewards.into(),
+    })
 }
 
 pub fn query_price(deps: Deps, funds: &Vec<Coin>, app: &App) -> AppResult<Decimal> {
