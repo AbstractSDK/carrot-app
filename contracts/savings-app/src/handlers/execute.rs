@@ -4,24 +4,21 @@ use crate::msg::{AppExecuteMsg, ExecuteMsg};
 use crate::replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID};
 use crate::state::{assert_contract, get_osmosis_position, CONFIG, POSITION};
 use abstract_core::objects::{AnsAsset, AssetEntry};
-use abstract_dex_adapter::api::Dex;
-use abstract_dex_adapter::msg::{
-    DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse, OfferAsset,
-};
+use abstract_dex_adapter::msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse};
 use abstract_dex_adapter::DexInterface;
-use abstract_sdk::features::{AbstractResponse, AccountIdentification};
+use abstract_sdk::features::AbstractResponse;
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, StdError, SubMsg,
-    Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
+    WasmMsg,
 };
-use osmosis_std::types::cosmos::bank::v1beta1::MsgSend;
+
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
     MsgWithdrawPosition,
 };
 use osmosis_std::{cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins};
 
-use super::query::{query_price, ContractBalances};
+use super::query::query_price;
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 pub fn execute_handler(
@@ -48,6 +45,7 @@ pub fn execute_handler(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_position(
     deps: DepsMut,
     env: Env,
@@ -166,7 +164,7 @@ fn withdraw(
         .add_message(withdraw_msg))
 }
 
-fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
+fn autocompound(deps: DepsMut, env: Env, _info: MessageInfo, app: App) -> AppResult {
     // TODO: shouldn't we have some limit either:
     // - config.cooldown
     // - min rewards to autocompound
@@ -369,7 +367,7 @@ fn _inner_withdraw(
     deps: DepsMut,
     env: &Env,
     amount: Option<Uint128>,
-    app: &App,
+    _app: &App,
 ) -> AppResult<(CosmosMsg, String, String)> {
     let position = get_osmosis_position(deps.as_ref())?.position.unwrap();
 
@@ -377,7 +375,7 @@ fn _inner_withdraw(
         amount.to_string()
     } else {
         // TODO: it's decimals inside contracts
-        position.liquidity.replace(".", "")
+        position.liquidity.replace('.', "")
     };
 
     // We need to execute withdraw on the user's behalf
@@ -438,7 +436,7 @@ mod tests {
     fn swap_for_ratio_one_to_one() {
         let mut deps = mock_dependencies();
         setup_config(deps.as_mut()).unwrap();
-        let (swap, ask_asset, final_asset) = tokens_to_swap(
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
             coin(100_000_000, TOKEN0),
@@ -464,7 +462,7 @@ mod tests {
         let amount0 = 110_000_000;
         let amount1 = 100_000_000;
 
-        let (swap, ask_asset, final_asset) = tokens_to_swap(
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
             coin(amount0, TOKEN0),
@@ -484,7 +482,7 @@ mod tests {
         setup_config(deps.as_mut()).unwrap();
         let amount0 = 90_000_000;
         let amount1 = 10_000_000;
-        let (swap, ask_asset, final_asset) = tokens_to_swap(
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
             coin(amount0, TOKEN0),
@@ -509,7 +507,7 @@ mod tests {
         setup_config(deps.as_mut()).unwrap();
         let amount0 = 10_000_000;
         let amount1 = 90_000_000;
-        let (swap, ask_asset, final_asset) = tokens_to_swap(
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
             coin(amount0, TOKEN0),
@@ -530,12 +528,12 @@ mod tests {
         let amount0 = 10_000_000;
         let amount1 = 90_000_000;
         let price = Decimal::percent(150);
-        let (swap, ask_asset, final_asset) = tokens_to_swap(
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
             deps.as_ref(),
             coins(5_000, DEPOSIT_TOKEN),
             coin(amount0, TOKEN0),
             coin(amount1, TOKEN1),
-            price.clone(),
+            price,
         )
         .unwrap();
 
@@ -557,12 +555,12 @@ mod tests {
         let amount0 = 10_000_000;
         let amount1 = 10_000_000;
         let price = Decimal::percent(150);
-        let (swap, ask_asset, final_asset) = tokens_to_swap(
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
             deps.as_ref(),
             vec![coin(10_000, TOKEN0), coin(4_000, TOKEN1)],
             coin(amount0, TOKEN0),
             coin(amount1, TOKEN1),
-            price.clone(),
+            price,
         )
         .unwrap();
 

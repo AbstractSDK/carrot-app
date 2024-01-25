@@ -1,10 +1,10 @@
 use crate::contract::{App, AppResult};
-use crate::error::AppError;
+
 use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse};
 use crate::state::{get_osmosis_position, get_position, Config, CONFIG};
 use abstract_core::objects::AnsAsset;
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Decimal256, Deps, Env};
+use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
 use osmosis_std::try_proto_to_cosmwasm_coins;
 
 pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -24,7 +24,7 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
     let pool = get_osmosis_position(deps)?;
 
     let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
-    let liquidity = pool.position.unwrap().liquidity.replace(".", "");
+    let liquidity = pool.position.unwrap().liquidity.replace('.', "");
     Ok(AssetsBalanceResponse {
         balances,
         liquidity,
@@ -48,7 +48,7 @@ fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> 
     })
 }
 
-pub fn query_price(deps: Deps, funds: &Vec<Coin>, app: &App) -> AppResult<Decimal> {
+pub fn query_price(deps: Deps, funds: &[Coin], app: &App) -> AppResult<Decimal> {
     let config = CONFIG.load(deps.storage)?;
 
     let amount0 = funds

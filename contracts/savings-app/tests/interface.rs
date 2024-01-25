@@ -27,15 +27,12 @@ use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ExecuteResponse;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Module;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::PoolManager;
-
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePosition;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolsRequest;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMint;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMintResponse;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::OsmosisTestApp;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Runner;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition;
 use cw_orch::prelude::*;
