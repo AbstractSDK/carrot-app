@@ -125,7 +125,6 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
 
     let (offer_asset, ask_asset, resulting_assets) =
         tokens_to_swap(deps.as_ref(), funds, asset0, asset1, price)?;
-
     // Then we execute the swap
     let swap_msgs = swap_msg(deps.as_ref(), &env, offer_asset, ask_asset, &app)?;
 
@@ -237,6 +236,10 @@ fn swap_msg(
     ask_asset: AssetEntry,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
+    // Don't swap if not required
+    if offer_asset.amount.is_zero() {
+        return Ok(vec![]);
+    }
     let config = CONFIG.load(deps.storage)?;
     let sender = get_user(deps, app)?;
 

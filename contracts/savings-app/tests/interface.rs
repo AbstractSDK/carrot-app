@@ -283,7 +283,7 @@ fn setup_test_tube() -> anyhow::Result<(
     Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
 )> {
     dotenv::dotenv()?;
-    env_logger::init();
+    let _ = env_logger::builder().is_test(true).try_init();
     let chain = OsmosisTestTube::new(coins(LOTS, "uosmo"));
     // We create a usdt-usdc pool
     let pool_id = create_pool(chain.clone())?;
@@ -551,6 +551,28 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         balance_usdc_second_position.amount + balance_usdt_second_position.amount
             > balance_usdc_first_position.amount + balance_usdt_first_position.amount
     );
+    Ok(())
+}
+
+#[test]
+fn deposit_both_assets() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
+
+    let chain = savings_app.get_chain().clone();
+
+    // Create position
+    create_position(
+        &savings_app,
+        coins(10_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
+    )?;
+
+    savings_app.deposit(vec![
+        coin(258, factory_denom(&chain, USDC)),
+        coin(234, factory_denom(&chain, USDT)),
+    ])?;
+
     Ok(())
 }
 
