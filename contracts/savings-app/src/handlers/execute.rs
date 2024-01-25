@@ -267,6 +267,8 @@ fn swap_msg(
     Ok(trigger_swap_msg
         .messages
         .into_iter()
+        // filter out bank messages
+        .filter(|m| !matches!(m, CosmosMsg::Bank(_)))
         .map(|m| wrap_authz(m, sender.clone(), env))
         .collect())
 }

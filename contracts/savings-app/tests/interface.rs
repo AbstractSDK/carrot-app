@@ -21,7 +21,6 @@ use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::a
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::Grant;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrant;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::bank::v1beta1::MsgSend;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::gamm::v1beta1::MsgSwapExactAmountIn;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::ExecuteResponse;
@@ -326,23 +325,23 @@ fn give_authorizations(
         )?;
     }
     // TODO: keeping it separate since we may want to be more restrictive on this one
-    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-        MsgGrant {
-            granter: chain.sender().to_string(),
-            grantee: savings_app.addr_str().unwrap(),
-            grant: Some(Grant {
-                authorization: Some(
-                    GenericAuthorization {
-                        msg: MsgSend::TYPE_URL.to_string(),
-                    }
-                    .to_any(),
-                ),
-                expiration: None,
-            }),
-        },
-        MsgGrant::TYPE_URL,
-        chain.sender.as_ref(),
-    )?;
+    // let _: ExecuteResponse<MsgGrantResponse> = app.execute(
+    //     MsgGrant {
+    //         granter: chain.sender().to_string(),
+    //         grantee: savings_app.addr_str().unwrap(),
+    //         grant: Some(Grant {
+    //             authorization: Some(
+    //                 GenericAuthorization {
+    //                     msg: MsgSend::TYPE_URL.to_string(),
+    //                 }
+    //                 .to_any(),
+    //             ),
+    //             expiration: None,
+    //         }),
+    //     },
+    //     MsgGrant::TYPE_URL,
+    //     chain.sender.as_ref(),
+    // )?;
 
     Ok(())
 }
