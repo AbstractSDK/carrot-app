@@ -1,24 +1,29 @@
-use crate::contract::{App, AppResult};
-use crate::helpers::{get_user, wrap_authz};
-use crate::msg::{AppExecuteMsg, ExecuteMsg};
-use crate::replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID};
-use crate::state::{assert_contract, get_osmosis_position, CONFIG, POSITION};
 use abstract_core::objects::{AnsAsset, AssetEntry};
-use abstract_dex_adapter::msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse};
-use abstract_dex_adapter::DexInterface;
+use abstract_dex_adapter::{
+    msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
+    DexInterface,
+};
 use abstract_sdk::features::AbstractResponse;
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
     WasmMsg,
 };
-
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
-    MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
-    MsgWithdrawPosition,
+use osmosis_std::{
+    cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
+    types::osmosis::concentratedliquidity::v1beta1::{
+        MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
+        MsgWithdrawPosition,
+    },
 };
-use osmosis_std::{cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins};
 
 use super::query::query_price;
+use crate::{
+    contract::{App, AppResult},
+    helpers::{get_user, wrap_authz},
+    msg::{AppExecuteMsg, ExecuteMsg},
+    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
+    state::{assert_contract, get_osmosis_position, CONFIG, POSITION},
+};
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 pub fn execute_handler(
@@ -390,9 +395,8 @@ mod tests {
     use cosmwasm_std::{coin, coins, testing::mock_dependencies};
     use cw_asset::AssetInfo;
 
-    use crate::state::{Config, PoolConfig};
-
     use super::*;
+    use crate::state::{Config, PoolConfig};
     pub const DEPOSIT_TOKEN: &str = "USDC";
     pub const TOKEN0: &str = "USDT";
     pub const TOKEN1: &str = DEPOSIT_TOKEN;

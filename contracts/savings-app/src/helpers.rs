@@ -7,7 +7,6 @@ use osmosis_std::{
         cosmwasm::wasm::v1::MsgExecuteContract,
     },
 };
-
 use prost::Message;
 
 use crate::{

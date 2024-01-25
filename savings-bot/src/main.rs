@@ -1,20 +1,18 @@
 use abstract_app::abstract_core::app::{AppConfigResponse, BaseQueryMsg};
+use app::msg::{AppExecuteMsg, AppQueryMsg, AvailableRewardsResponse, ExecuteMsg, QueryMsg};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient, QueryContractsByCodeRequest,
 };
-use cw_orch::daemon::queriers::Authz;
-use cw_orch::prelude::*;
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMO_5, Daemon},
+    daemon::{networks::OSMO_5, queriers::Authz, Daemon},
     environment::TxHandler,
+    prelude::*,
     tokio::runtime::Runtime,
 };
 use dotenv::dotenv;
 use log::{log, Level};
 use tonic::transport::Channel;
-
-use app::msg::{AppExecuteMsg, AppQueryMsg, AvailableRewardsResponse, ExecuteMsg, QueryMsg};
 
 async fn fetch_contracts(channel: Channel, code_id: u64) -> anyhow::Result<Vec<String>> {
     let mut cw_querier = QueryClient::new(channel);

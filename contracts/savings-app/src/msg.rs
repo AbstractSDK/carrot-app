@@ -1,7 +1,8 @@
-use crate::{contract::App, state::Position};
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Uint128};
+
+use crate::{contract::App, state::Position};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);

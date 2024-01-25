@@ -1,7 +1,10 @@
-use crate::contract::{App, AppResult};
-use crate::msg::AppMigrateMsg;
 use abstract_sdk::AbstractResponse;
 use cosmwasm_std::{DepsMut, Env};
+
+use crate::{
+    contract::{App, AppResult},
+    msg::AppMigrateMsg,
+};
 
 /// Handle the app migrate msg
 /// The top-level Abstract app does version checking and dispatches to this handler

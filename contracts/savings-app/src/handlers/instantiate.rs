@@ -1,19 +1,19 @@
 use std::collections::HashSet;
 
 use abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
-use abstract_sdk::features::AbstractNameService;
-use abstract_sdk::AbstractResponse;
+use abstract_sdk::{features::AbstractNameService, AbstractResponse};
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
 use cw_asset::AssetInfo;
+use osmosis_std::types::osmosis::{
+    concentratedliquidity::v1beta1::Pool, poolmanager::v1beta1::PoolmanagerQuerier,
+};
 
-use crate::contract::{App, AppResult};
-use crate::error::AppError;
-use crate::msg::AppInstantiateMsg;
-use crate::state::PoolConfig;
-use crate::state::{Config, CONFIG};
-
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
-use osmosis_std::types::osmosis::poolmanager::v1beta1::PoolmanagerQuerier;
+use crate::{
+    contract::{App, AppResult},
+    error::AppError,
+    msg::AppInstantiateMsg,
+    state::{Config, PoolConfig, CONFIG},
+};
 
 pub fn instantiate_handler(
     deps: DepsMut,

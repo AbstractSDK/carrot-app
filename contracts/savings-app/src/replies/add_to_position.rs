@@ -1,13 +1,14 @@
 use abstract_sdk::AbstractResponse;
 use cosmwasm_std::{Binary, DepsMut, Env, Reply};
-use osmosis_std::types::cosmos::authz::v1beta1::MsgExecResponse;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgAddToPositionResponse;
+use osmosis_std::types::{
+    cosmos::authz::v1beta1::MsgExecResponse,
+    osmosis::concentratedliquidity::v1beta1::MsgAddToPositionResponse,
+};
 
-use crate::helpers::get_user;
-use crate::state::POSITION;
 use crate::{
     contract::{App, AppResult},
-    state::Position,
+    helpers::get_user,
+    state::{Position, POSITION},
 };
 
 pub fn add_to_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -> AppResult {

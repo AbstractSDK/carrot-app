@@ -1,11 +1,13 @@
-use crate::contract::{App, AppResult};
-
-use crate::msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, PositionResponse};
-use crate::state::{get_osmosis_position, Config, CONFIG, POSITION};
 use abstract_core::objects::AnsAsset;
 use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
 use osmosis_std::try_proto_to_cosmwasm_coins;
+
+use crate::{
+    contract::{App, AppResult},
+    msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, PositionResponse},
+    state::{get_osmosis_position, Config, CONFIG, POSITION},
+};
 
 pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {

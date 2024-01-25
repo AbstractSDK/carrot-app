@@ -1,55 +1,49 @@
-use abstract_client::Application;
-use abstract_client::Namespace;
-use abstract_core::adapter::AdapterBaseMsg;
-use abstract_core::adapter::BaseExecuteMsg;
-use abstract_core::objects::pool_id::PoolAddressBase;
-use abstract_core::objects::AccountId;
-use abstract_core::objects::AssetEntry;
-use abstract_core::objects::PoolMetadata;
-use abstract_core::objects::PoolType;
+use abstract_client::{AbstractClient, Application, Namespace};
+use abstract_core::{
+    adapter::{AdapterBaseMsg, BaseExecuteMsg},
+    objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
+};
 use abstract_dex_adapter::msg::ExecuteMsg;
-use abstract_interface::Abstract;
-use abstract_interface::AbstractAccount;
-use app::msg::AssetsBalanceResponse;
-use app::msg::AvailableRewardsResponse;
-use cosmwasm_std::coin;
-use cosmwasm_std::Decimal;
-use cosmwasm_std::Uint128;
+use abstract_interface::{Abstract, AbstractAccount};
+use app::msg::{
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
+    AvailableRewardsResponse,
+};
+use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_asset::AssetInfoUnchecked;
-use cw_orch::anyhow;
-use cw_orch::environment::BankQuerier;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::GenericAuthorization;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::Grant;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrant;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::gamm::v1beta1::MsgSwapExactAmountIn;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::ConcentratedLiquidity;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::ExecuteResponse;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::GovWithAppAccess;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::Module;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePosition;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::Pool;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolsRequest;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMint;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgMintResponse;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::Runner;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition;
-use cw_orch::prelude::*;
-use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::CreateConcentratedLiquidityPoolsProposal;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgAddToPosition;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCollectIncentives;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCollectSpreadRewards;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PoolRecord;
-use osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgCreateDenom;
-use osmosis_std::types::osmosis::tokenfactory::v1beta1::MsgCreateDenomResponse;
+use cw_orch::{
+    anyhow,
+    environment::BankQuerier,
+    osmosis_test_tube::osmosis_test_tube::{
+        osmosis_std::types::{
+            cosmos::{
+                authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
+                base::v1beta1,
+            },
+            osmosis::{
+                concentratedliquidity::v1beta1::{
+                    MsgCreatePosition, MsgWithdrawPosition, Pool, PoolsRequest,
+                },
+                gamm::v1beta1::MsgSwapExactAmountIn,
+                tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
+            },
+        },
+        ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
+    },
+    prelude::*,
+};
+use osmosis_std::types::{
+    cosmos::bank::v1beta1::SendAuthorization,
+    osmosis::{
+        concentratedliquidity::v1beta1::{
+            CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+            MsgCollectSpreadRewards, PoolRecord,
+        },
+        tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
+    },
+};
 use prost::Message;
 use prost_types::Any;
-use abstract_client::AbstractClient;
-use cosmwasm_std::coins;
-use app::msg::AppInstantiateMsg;
-use app::msg::{AppExecuteMsgFns, AppQueryMsgFns};
 
 fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
     let expected = expected.into().u128();
