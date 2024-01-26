@@ -62,16 +62,16 @@ fn daemon_with_savings_feegrant(daemon: &Daemon, contract_addr: &Addr) -> anyhow
     )?;
 
     // Check if authz is indeed given
-    let authz_granter = tlo.address;
     let authz_querier: Authz = daemon.query_client();
-    let grantee = contract_addr.to_string();
+    let granter = tlo.address;
+    let authz_grantee = contract_addr.to_string();
     let generic_authorizations: Vec<GenericAuthorization> = daemon
         .rt_handle
         .block_on(async {
             authz_querier
                 .grants(
-                    authz_granter.to_string(),
-                    grantee.clone(),
+                    granter.to_string(),
+                    authz_grantee.clone(),
                     GenericAuthorization::TYPE_URL.to_string(),
                     None,
                 )
@@ -99,8 +99,8 @@ fn daemon_with_savings_feegrant(daemon: &Daemon, contract_addr: &Addr) -> anyhow
         let send_authorizations = daemon.rt_handle.block_on(async {
             authz_querier
                 .grants(
-                    authz_granter.to_string(),
-                    grantee,
+                    granter.to_string(),
+                    authz_grantee,
                     SendAuthorization::TYPE_URL.to_string(),
                     None,
                 )
@@ -111,7 +111,16 @@ fn daemon_with_savings_feegrant(daemon: &Daemon, contract_addr: &Addr) -> anyhow
         }
     }
 
-    Ok(daemon.with_fee_granter(authz_granter))
+    // TODO: no feegrant on osmosis? XDDD
+    // let feegrant_querier: Feegrant = daemon.query_client();
+    // let feegrant_grantee = daemon.sender().to_string();
+    // let allowance = daemon.rt_handle.block_on(async {
+    //     feegrant_querier
+    //         .allowance(granter.to_string(), feegrant_grantee)
+    //         .await
+    // })?;
+    // Ok(daemon.with_fee_granter(granter))
+    Ok(daemon.clone())
 }
 
 fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
