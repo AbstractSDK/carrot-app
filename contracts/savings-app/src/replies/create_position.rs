@@ -1,4 +1,4 @@
-use abstract_sdk::AbstractResponse;
+use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{Binary, DepsMut, Env, Reply};
 use osmosis_std::types::{
     cosmos::authz::v1beta1::MsgExecResponse,

@@ -1,9 +1,9 @@
-use abstract_core::objects::{AnsAsset, AssetEntry};
+use abstract_app::abstract_core::objects::{AnsAsset, AssetEntry};
+use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_dex_adapter::{
     msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
     DexInterface,
 };
-use abstract_sdk::features::AbstractResponse;
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
     WasmMsg,

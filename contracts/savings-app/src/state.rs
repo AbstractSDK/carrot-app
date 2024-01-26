@@ -1,4 +1,4 @@
-use abstract_core::objects::AssetEntry;
+use abstract_app::abstract_core::objects::AssetEntry;
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Deps, Env, MessageInfo};

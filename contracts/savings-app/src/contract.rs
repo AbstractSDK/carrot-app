@@ -1,5 +1,5 @@
+use abstract_app::abstract_core::objects::dependency::StaticDependency;
 use abstract_app::AppContract;
-use abstract_core::objects::dependency::StaticDependency;
 use cosmwasm_std::Response;
 
 use crate::{
@@ -54,16 +54,16 @@ impl<Chain: cw_orch::environment::CwEnv> abstract_interface::DependencyCreation
     fn dependency_install_configs(
         _configuration: Self::DependenciesConfig,
     ) -> Result<
-        Vec<abstract_core::manager::ModuleInstallConfig>,
+        Vec<abstract_app::abstract_core::manager::ModuleInstallConfig>,
         abstract_interface::AbstractInterfaceError,
     > {
-        let dex_dependency_install_configs: Vec<abstract_core::manager::ModuleInstallConfig> =
+        let dex_dependency_install_configs: Vec<abstract_app::abstract_core::manager::ModuleInstallConfig> =
             <abstract_dex_adapter::interface::DexAdapter<Chain> as abstract_interface::DependencyCreation>::dependency_install_configs(
                 cosmwasm_std::Empty {},
             )?;
 
-        let adapter_install_config = abstract_core::manager::ModuleInstallConfig::new(
-            abstract_core::objects::module::ModuleInfo::from_id(
+        let adapter_install_config = abstract_app::abstract_core::manager::ModuleInstallConfig::new(
+            abstract_app::abstract_core::objects::module::ModuleInfo::from_id(
                 abstract_dex_adapter::DEX_ADAPTER_ID,
                 abstract_dex_adapter::contract::CONTRACT_VERSION.into(),
             )?,
