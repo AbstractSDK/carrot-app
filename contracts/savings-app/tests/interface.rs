@@ -2,9 +2,9 @@ use abstract_app::abstract_core::{
     adapter::{AdapterBaseMsg, BaseExecuteMsg},
     objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
 };
+use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use abstract_client::{AbstractClient, Application, Namespace};
 use abstract_dex_adapter::msg::ExecuteMsg;
-use abstract_interface::{Abstract, AbstractAccount};
 use app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
     AvailableRewardsResponse,

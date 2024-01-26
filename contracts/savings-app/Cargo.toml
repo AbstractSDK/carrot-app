@@ -31,7 +31,6 @@ export = []
 node-tests = ["interface"]
 interface = [
   "export",
-  "dep:abstract-interface",
   "dep:cw-orch",
   "abstract-app/interface-macro",
   "abstract-dex-adapter/interface",
@@ -54,7 +53,6 @@ abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch
   "osmosis",
 ] }
 
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
 cw-orch = { workspace = true, optional = true }
 
 

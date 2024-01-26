@@ -46,7 +46,7 @@ abstract_app::export_endpoints!(APP, App);
 abstract_app::cw_orch_interface!(APP, App, AppInterface);
 
 #[cfg(feature = "interface")]
-impl<Chain: cw_orch::environment::CwEnv> abstract_interface::DependencyCreation
+impl<Chain: cw_orch::environment::CwEnv> abstract_app::abstract_interface::DependencyCreation
     for crate::AppInterface<Chain>
 {
     type DependenciesConfig = cosmwasm_std::Empty;
@@ -55,10 +55,10 @@ impl<Chain: cw_orch::environment::CwEnv> abstract_interface::DependencyCreation
         _configuration: Self::DependenciesConfig,
     ) -> Result<
         Vec<abstract_app::abstract_core::manager::ModuleInstallConfig>,
-        abstract_interface::AbstractInterfaceError,
+        abstract_app::abstract_interface::AbstractInterfaceError,
     > {
         let dex_dependency_install_configs: Vec<abstract_app::abstract_core::manager::ModuleInstallConfig> =
-            <abstract_dex_adapter::interface::DexAdapter<Chain> as abstract_interface::DependencyCreation>::dependency_install_configs(
+            <abstract_dex_adapter::interface::DexAdapter<Chain> as abstract_app::abstract_interface::DependencyCreation>::dependency_install_configs(
                 cosmwasm_std::Empty {},
             )?;
 
