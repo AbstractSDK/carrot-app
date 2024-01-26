@@ -18,6 +18,7 @@ use cw_orch::{
         osmosis_std::types::{
             cosmos::{
                 authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
+                bank::v1beta1::SendAuthorization,
                 base::v1beta1,
             },
             osmosis::{
@@ -32,15 +33,12 @@ use cw_orch::{
     },
     prelude::*,
 };
-use osmosis_std::types::{
-    cosmos::bank::v1beta1::SendAuthorization,
-    osmosis::{
-        concentratedliquidity::v1beta1::{
-            CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-            MsgCollectSpreadRewards, PoolRecord,
-        },
-        tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
+use osmosis_std::types::osmosis::{
+    concentratedliquidity::v1beta1::{
+        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+        MsgCollectSpreadRewards, PoolRecord,
     },
+    tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
 };
 use prost::Message;
 use prost_types::Any;
@@ -333,11 +331,11 @@ fn give_authorizations(
                 authorization: Some(
                     SendAuthorization {
                         spend_limit: vec![
-                            osmosis_std::types::cosmos::base::v1beta1::Coin {
+                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
                                 denom: factory_denom(chain, USDC),
                                 amount: LOTS.to_string(),
                             },
-                            osmosis_std::types::cosmos::base::v1beta1::Coin {
+                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
                                 denom: factory_denom(chain, USDT),
                                 amount: LOTS.to_string(),
                             },
