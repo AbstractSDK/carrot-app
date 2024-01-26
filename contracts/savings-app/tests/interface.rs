@@ -1,5 +1,5 @@
 use abstract_client::{AbstractClient, Application, Namespace};
-use abstract_core::{
+use abstract_app::abstract_core::{
     adapter::{AdapterBaseMsg, BaseExecuteMsg},
     objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
 };
