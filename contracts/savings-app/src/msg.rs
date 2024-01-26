@@ -24,17 +24,16 @@ pub struct AppInstantiateMsg {
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
     /// Create the initial liquidity position
-    #[cfg_attr(feature = "interface", payable)]
     CreatePosition {
         lower_tick: i64,
         upper_tick: i64,
         // Funds to use to deposit on the account
         funds: Vec<Coin>,
         /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
+        /// The ordering of these doesn't matter.
         asset0: Coin,
         asset1: Coin,
     },
-
     /// Deposit funds onto the app
     Deposit { funds: Vec<Coin> },
     /// Partial withdraw of the funds available on the app

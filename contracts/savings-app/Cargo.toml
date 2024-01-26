@@ -47,7 +47,6 @@ thiserror = { version = "1.0.50" }
 schemars = "0.8"
 cw-asset = { version = "3.0" }
 
-abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
   "stargate",
@@ -60,7 +59,6 @@ abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch
 
 abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
 cw-orch = { workspace = true, optional = true }
-
 
 cw-vault-multi-standard = { git = "https://github.com/quasar-finance/cw-vault-standard", features = [
   "lockup",

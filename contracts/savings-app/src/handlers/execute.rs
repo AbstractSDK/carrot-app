@@ -1,4 +1,4 @@
-use abstract_core::objects::{AnsAsset, AssetEntry};
+use abstract_app::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::{
     msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
     DexInterface,
@@ -50,6 +50,7 @@ pub fn execute_handler(
     }
 }
 
+/// Creates a position on a uni v3 style pool on osmosis.
 #[allow(clippy::too_many_arguments)]
 fn create_position(
     deps: DepsMut,
@@ -67,7 +68,7 @@ fn create_position(
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    // First we do the swap
+    // First we swap tokens to ensure we provide liquidity in the right ratio.
     let price = query_price(deps.as_ref(), &funds, &app)?;
     let (offer_asset, ask_asset, resulting_assets) =
         tokens_to_swap(deps.as_ref(), funds, asset0, asset1, price)?;
@@ -100,7 +101,7 @@ fn create_position(
     // If we already have position open - withdraw all from it first
     if POSITION.exists(deps.storage) {
         let (withdraw_msg, withdraw_amount, total_amount) =
-            _inner_withdraw(deps, &env, None, &app)?;
+            _withdraw_position(deps, &env, None)?;
         response = response
             .add_message(withdraw_msg)
             .add_attribute("withdraw_amount", withdraw_amount)
@@ -124,6 +125,7 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
 
     // When depositing, we start by adapting the available funds to the expected pool funds ratio
     // We do so by computing the swap information
+    // EDIT: We can't use the price to convert the funds to the right ratio as the ratio is determined by the position's ticks AND the pool's price.
     let price = query_price(deps.as_ref(), &funds, &app)?;
 
     let (offer_asset, ask_asset, resulting_assets) =
@@ -160,7 +162,7 @@ fn withdraw(
     // Only the authorized addresses (admin ?) can withdraw
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    let (withdraw_msg, withdraw_amount, total_amount) = _inner_withdraw(deps, &env, amount, &app)?;
+    let (withdraw_msg, withdraw_amount, total_amount) = _withdraw_position(deps, &env, amount)?;
 
     Ok(app
         .response("withdraw")
@@ -228,6 +230,7 @@ fn autocompound(deps: DepsMut, env: Env, _info: MessageInfo, app: App) -> AppRes
         .add_message(msg_deposit))
 }
 
+// Generate the swap msgs that will be forwarded to the wallet.
 fn swap_msg(
     deps: Deps,
     env: &Env,
@@ -274,7 +277,7 @@ fn tokens_to_swap(
     amount_to_swap: Vec<Coin>,
     asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
     asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle,
-    price: Decimal, // Relative price (when swapping amount0 for amount1, equals amount0/amount1)
+    price: Decimal, // Relative price (when swapping amount0 for amount1, equals amount0/amount1) (EDIT: the price here does NOT reflect the price of the position, only of the swap)
 ) -> AppResult<(AnsAsset, AssetEntry, Vec<Coin>)> {
     let config = CONFIG.load(deps.storage)?;
 
@@ -361,11 +364,12 @@ fn tokens_to_swap(
     Ok((offer_asset, ask_asset, resulting_balance))
 }
 
-fn _inner_withdraw(
+/// Generates the message to withdraw from the position
+fn _withdraw_position(
     deps: DepsMut,
     env: &Env,
+    // The amount to withdraw, if None, withdraw everything
     amount: Option<Uint128>,
-    _app: &App,
 ) -> AppResult<(CosmosMsg, String, String)> {
     let position = get_osmosis_position(deps.as_ref())?.position.unwrap();
 
