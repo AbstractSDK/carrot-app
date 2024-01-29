@@ -54,7 +54,7 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectSpreadRewards::TYPE_URL,
 ];
 
-fn daemon_with_savings_feegrant(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<Daemon> {
+fn check_authz_grants(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<()> {
     // Get config of an app to get top level owner(granter)
     let tlo: TopLevelOwnerResponse = daemon.query(
         &QueryMsg::Base(BaseQueryMsg::TopLevelOwner {}),
@@ -111,16 +111,7 @@ fn daemon_with_savings_feegrant(daemon: &Daemon, contract_addr: &Addr) -> anyhow
         }
     }
 
-    // TODO: no feegrant on osmosis? XDDD
-    // let feegrant_querier: Feegrant = daemon.query_client();
-    // let feegrant_grantee = daemon.sender().to_string();
-    // let allowance = daemon.rt_handle.block_on(async {
-    //     feegrant_querier
-    //         .allowance(granter.to_string(), feegrant_grantee)
-    //         .await
-    // })?;
-    // Ok(daemon.with_fee_granter(granter))
-    Ok(daemon.clone())
+    Ok(())
 }
 
 fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
@@ -133,8 +124,8 @@ fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Res
         if !available_rewards.available_rewards.is_empty() {
             // Execute autocompound, if we have grant(s)
             // Just output error without crashing, to keep rolling
-            match daemon_with_savings_feegrant(daemon, &addr) {
-                Ok(daemon) => {
+            match check_authz_grants(daemon, &addr) {
+                Ok(()) => {
                     let res = daemon.execute(
                         &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
                         &[],
