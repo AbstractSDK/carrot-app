@@ -5,18 +5,56 @@ use osmosis_std::try_proto_to_cosmwasm_coins;
 
 use crate::{
     contract::{App, AppResult},
-    msg::{AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, PositionResponse},
+    helpers::get_user,
+    msg::{
+        AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatus,
+        CompoundStatusResponse, PositionResponse,
+    },
     state::{get_osmosis_position, Config, CONFIG, POSITION},
 };
 
-pub fn query_handler(deps: Deps, _env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
+pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
         AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         AppQueryMsg::Position {} => to_json_binary(&query_position(deps)?),
+        AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
     }
     .map_err(Into::into)
+}
+
+fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    let position = POSITION.may_load(deps.storage)?;
+    let status = match position {
+        Some(position) => {
+            let ready_on = position
+                .last_compound
+                .plus_seconds(config.autocompound_cooldown_seconds.u64());
+            if env.block.time >= ready_on {
+                CompoundStatus::Ready {}
+            } else {
+                CompoundStatus::Cooldown((env.block.time.seconds() - ready_on.seconds()).into())
+            }
+        }
+        None => CompoundStatus::NoPosition {},
+    };
+
+    let reward = Coin {
+        denom: config.autocompound_rewards_config.gas_denom,
+        amount: config.autocompound_rewards_config.reward,
+    };
+
+    let user = get_user(deps, app)?;
+    let user_balance = deps.querier.query_balance(user, reward.denom.clone())?;
+    let rewards_available = user_balance.amount >= reward.amount;
+
+    Ok(CompoundStatusResponse {
+        status,
+        reward,
+        rewards_available,
+    })
 }
 
 fn query_position(deps: Deps) -> AppResult<PositionResponse> {

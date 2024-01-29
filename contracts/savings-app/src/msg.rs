@@ -1,8 +1,11 @@
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Uint128};
+use cosmwasm_std::{Coin, Uint128, Uint64};
 
-use crate::{contract::App, state::Position};
+use crate::{
+    contract::App,
+    state::{AutocompoundRewardsConfig, Position},
+};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
@@ -16,6 +19,10 @@ pub struct AppInstantiateMsg {
     pub pool_id: u64,
     /// Dex that we are ok to swap on !
     pub exchanges: Vec<DexName>,
+    /// Cooldown of autocompound
+    pub autocompound_cooldown_seconds: Uint64,
+    /// Configuration of rewards to the address who helped to execute autocompound
+    pub autocompound_rewards_config: AutocompoundRewardsConfig,
 }
 
 /// App execute messages
@@ -59,6 +66,8 @@ pub enum AppQueryMsg {
     AvailableRewards {},
     #[returns(PositionResponse)]
     Position {},
+    #[returns(CompoundStatusResponse)]
+    CompoundStatus {},
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -82,4 +91,23 @@ pub struct AssetsBalanceResponse {
 #[cw_serde]
 pub struct PositionResponse {
     pub position: Option<Position>,
+}
+
+#[cw_serde]
+pub struct CompoundStatusResponse {
+    pub status: CompoundStatus,
+    pub reward: Coin,
+    // TODO: Contract can't query authz, should this check be done by bot instead?
+    pub rewards_available: bool,
+}
+
+#[cw_serde]
+/// Wether contract is ready for the compound
+pub enum CompoundStatus {
+    /// Contract is ready for the compound
+    Ready {},
+    /// How much seconds left for the next compound
+    Cooldown(Uint64),
+    /// No open position right now
+    NoPosition {},
 }

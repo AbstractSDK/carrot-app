@@ -1,6 +1,6 @@
 use abstract_app::abstract_core::{
     adapter::{AdapterBaseMsg, BaseExecuteMsg},
-    objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
+    objects::{pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType},
 };
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use abstract_client::{AbstractClient, Application, Namespace};
@@ -9,7 +9,7 @@ use app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
     AvailableRewardsResponse,
 };
-use cosmwasm_std::{coin, coins, Decimal, Uint128};
+use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::{
     anyhow,
@@ -18,7 +18,6 @@ use cw_orch::{
         osmosis_std::types::{
             cosmos::{
                 authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
-                bank::v1beta1::SendAuthorization,
                 base::v1beta1,
             },
             osmosis::{
@@ -33,12 +32,15 @@ use cw_orch::{
     },
     prelude::*,
 };
-use osmosis_std::types::osmosis::{
-    concentratedliquidity::v1beta1::{
-        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-        MsgCollectSpreadRewards, PoolRecord,
+use osmosis_std::types::{
+    cosmos::bank::v1beta1::MsgSend,
+    osmosis::{
+        concentratedliquidity::v1beta1::{
+            CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+            MsgCollectSpreadRewards, PoolRecord,
+        },
+        tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
     },
-    tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
 };
 use prost::Message;
 use prost_types::Any;
@@ -153,6 +155,14 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     deposit_denom: asset0,
                     exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
+                    // 5 mins
+                    autocompound_cooldown_seconds: Uint64::new(300),
+                    autocompound_rewards_config: app::state::AutocompoundRewardsConfig {
+                        gas_denom: "uosmo".to_owned(),
+                        reward: Uint128::new(1000),
+                        min_gas_balance: Uint128::new(2000),
+                        max_gas_balance: Uint128::new(10000),
+                    },
                 },
                 Empty {},
                 &[],
@@ -292,9 +302,6 @@ fn give_authorizations(
     savings_app: &Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
 ) -> Result<(), anyhow::Error> {
     let chain = savings_app.get_chain();
-    let abs = Abstract::load_from(chain.clone())?;
-    let dex_fee_account = AbstractAccount::new(&abs, AccountId::local(0));
-    let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
 
     let app = chain.app.borrow();
     let authorization_urls = [
@@ -304,6 +311,8 @@ fn give_authorizations(
         MsgWithdrawPosition::TYPE_URL,
         MsgCollectIncentives::TYPE_URL,
         MsgCollectSpreadRewards::TYPE_URL,
+        // Feegrant betrayal
+        MsgSend::TYPE_URL,
     ]
     .map(ToOwned::to_owned);
     let granter = chain.sender().to_string();
@@ -323,33 +332,36 @@ fn give_authorizations(
         )?;
     }
     // Dex fees
-    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-        MsgGrant {
-            granter: chain.sender().to_string(),
-            grantee: savings_app.addr_str().unwrap(),
-            grant: Some(Grant {
-                authorization: Some(
-                    SendAuthorization {
-                        spend_limit: vec![
-                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-                                denom: factory_denom(chain, USDC),
-                                amount: LOTS.to_string(),
-                            },
-                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-                                denom: factory_denom(chain, USDT),
-                                amount: LOTS.to_string(),
-                            },
-                        ],
-                        allow_list: vec![dex_fee_addr],
-                    }
-                    .to_any(),
-                ),
-                expiration: None,
-            }),
-        },
-        MsgGrant::TYPE_URL,
-        chain.sender.as_ref(),
-    )?;
+    // let abs = Abstract::load_from(chain.clone())?;
+    // let dex_fee_account = AbstractAccount::new(&abs, AccountId::local(0));
+    // let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
+    // let _: ExecuteResponse<MsgGrantResponse> = app.execute(
+    //     MsgGrant {
+    //         granter: chain.sender().to_string(),
+    //         grantee: savings_app.addr_str().unwrap(),
+    //         grant: Some(Grant {
+    //             authorization: Some(
+    //                 SendAuthorization {
+    //                     spend_limit: vec![
+    //                         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+    //                             denom: factory_denom(chain, USDC),
+    //                             amount: LOTS.to_string(),
+    //                         },
+    //                         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+    //                             denom: factory_denom(chain, USDT),
+    //                             amount: LOTS.to_string(),
+    //                         },
+    //                     ],
+    //                     allow_list: vec![dex_fee_addr],
+    //                 }
+    //                 .to_any(),
+    //             ),
+    //             expiration: None,
+    //         }),
+    //     },
+    //     MsgGrant::TYPE_URL,
+    //     chain.sender.as_ref(),
+    // )?;
 
     Ok(())
 }

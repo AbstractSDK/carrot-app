@@ -392,11 +392,11 @@ fn _inner_withdraw(
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::{coin, coins, testing::mock_dependencies};
+    use cosmwasm_std::{coin, coins, testing::mock_dependencies, Uint64};
     use cw_asset::AssetInfo;
 
     use super::*;
-    use crate::state::{Config, PoolConfig};
+    use crate::state::{AutocompoundRewardsConfig, Config, PoolConfig};
     pub const DEPOSIT_TOKEN: &str = "USDC";
     pub const TOKEN0: &str = "USDT";
     pub const TOKEN1: &str = DEPOSIT_TOKEN;
@@ -423,6 +423,13 @@ mod tests {
                     asset1: AssetEntry::new(TOKEN1),
                 },
                 exchange: "osmosis".to_string(),
+                autocompound_cooldown_seconds: Uint64::zero(),
+                autocompound_rewards_config: AutocompoundRewardsConfig {
+                    gas_denom: "foo".to_owned(),
+                    reward: Uint128::zero(),
+                    min_gas_balance: Uint128::zero(),
+                    max_gas_balance: Uint128::new(1),
+                },
             },
         )?;
         Ok(())

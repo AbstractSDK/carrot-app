@@ -55,6 +55,10 @@ pub fn instantiate_handler(
         .0;
     let dex_name = pair.dex();
 
+    let autocompound_rewards_config = msg.autocompound_rewards_config;
+    // Check validity of autocompound rewards
+    autocompound_rewards_config.check()?;
+
     let config: Config = Config {
         deposit_info: cw_asset::AssetInfoBase::Native(msg.deposit_denom),
         exchange: dex_name.to_string(),
@@ -65,6 +69,8 @@ pub fn instantiate_handler(
             asset0,
             asset1,
         },
+        autocompound_cooldown_seconds: msg.autocompound_cooldown_seconds,
+        autocompound_rewards_config,
     };
     CONFIG.save(deps.storage, &config)?;
 

@@ -49,4 +49,7 @@ pub enum AppError {
 
     #[error("No rewards for autocompound")]
     NoRewards {},
+
+    #[error("Reward configuration error: {0}")]
+    RewardConfigError(String),
 }
