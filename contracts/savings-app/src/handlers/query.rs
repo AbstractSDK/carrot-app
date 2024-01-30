@@ -7,10 +7,10 @@ use crate::{
     contract::{App, AppResult},
     helpers::get_user,
     msg::{
-        AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatus,
-        CompoundStatusResponse, PositionResponse,
+        AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
+        PositionResponse,
     },
-    state::{get_osmosis_position, Config, CONFIG, POSITION},
+    state::{get_osmosis_position, get_position_status, Config, CONFIG, POSITION},
 };
 
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -26,20 +26,11 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
 
 fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
-    let position = POSITION.may_load(deps.storage)?;
-    let status = match position {
-        Some(position) => {
-            let ready_on = position
-                .last_compound
-                .plus_seconds(config.autocompound_cooldown_seconds.u64());
-            if env.block.time >= ready_on {
-                CompoundStatus::Ready {}
-            } else {
-                CompoundStatus::Cooldown((env.block.time.seconds() - ready_on.seconds()).into())
-            }
-        }
-        None => CompoundStatus::NoPosition {},
-    };
+    let status = get_position_status(
+        deps.storage,
+        &env,
+        config.autocompound_cooldown_seconds.u64(),
+    )?;
 
     let reward = Coin {
         denom: config.autocompound_rewards_config.gas_denom,

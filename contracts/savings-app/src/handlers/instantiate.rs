@@ -57,7 +57,7 @@ pub fn instantiate_handler(
 
     let autocompound_rewards_config = msg.autocompound_rewards_config;
     // Check validity of autocompound rewards
-    autocompound_rewards_config.check()?;
+    autocompound_rewards_config.check(deps.as_ref(), dex_name, ans.host())?;
 
     let config: Config = Config {
         deposit_info: cw_asset::AssetInfoBase::Native(msg.deposit_denom),

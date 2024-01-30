@@ -1,10 +1,12 @@
-use abstract_app::abstract_core::AbstractError;
 use abstract_app::abstract_sdk::AbstractSdkError;
 use abstract_app::AppError as AbstractAppError;
+use abstract_app::{abstract_core::AbstractError, objects::ans_host::AnsHostError};
 use cosmwasm_std::{Coin, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
 use thiserror::Error;
+
+use crate::msg::CompoundStatus;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum AppError {
@@ -25,6 +27,9 @@ pub enum AppError {
 
     #[error("{0}")]
     DappError(#[from] AbstractAppError),
+
+    #[error("{0}")]
+    AnsHost(#[from] AnsHostError),
 
     #[error(transparent)]
     ProstDecodeError(#[from] prost::DecodeError),
@@ -52,4 +57,7 @@ pub enum AppError {
 
     #[error("Reward configuration error: {0}")]
     RewardConfigError(String),
+
+    #[error("Not ready to autocompound: {0:?}")]
+    AutocompoundNotReady(CompoundStatus),
 }

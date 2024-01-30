@@ -1,13 +1,15 @@
 use abstract_app::abstract_core::objects::{AnsAsset, AssetEntry};
 use abstract_app::abstract_sdk::features::AbstractResponse;
+use abstract_app::traits::{AbstractNameService, Resolve};
 use abstract_dex_adapter::{
     msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
     DexInterface,
 };
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
-    WasmMsg,
+    to_json_binary, BankMsg, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg,
+    Uint128, WasmMsg,
 };
+use cw_asset::AssetInfo;
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
@@ -17,6 +19,9 @@ use osmosis_std::{
 };
 
 use super::query::query_price;
+use crate::error::AppError;
+use crate::msg::CompoundStatus;
+use crate::state::{get_position, get_position_status};
 use crate::{
     contract::{App, AppResult},
     helpers::{get_user, wrap_authz},
@@ -169,11 +174,17 @@ fn withdraw(
         .add_message(withdraw_msg))
 }
 
-fn autocompound(deps: DepsMut, env: Env, _info: MessageInfo, app: App) -> AppResult {
-    // TODO: shouldn't we have some limit either:
-    // - config.cooldown
-    // - min rewards to autocompound
+fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
+    let config = CONFIG.load(deps.storage)?;
+    let status = get_position_status(
+        deps.storage,
+        &env,
+        config.autocompound_cooldown_seconds.u64(),
+    )?;
+    if !matches!(status, CompoundStatus::Ready {}) {
+        return Err(AppError::AutocompoundNotReady(status));
+    }
 
     let pool = get_osmosis_position(deps.as_ref())?;
     let position = pool.position.unwrap();
@@ -222,10 +233,18 @@ fn autocompound(deps: DepsMut, env: Env, _info: MessageInfo, app: App) -> AppRes
         funds: vec![],
     });
 
-    Ok(app
+    let mut response = app
         .response("auto-compound")
         .add_messages(collect_rewards_msgs)
-        .add_message(msg_deposit))
+        .add_message(msg_deposit);
+
+    // If called by non-admin - send rewards to the sender
+    if !app.admin.is_admin(deps.as_ref(), &info.sender)? {
+        let reward_messages =
+            autocompound_executor_rewards(deps.as_ref(), &env, info.sender.into_string(), &app)?;
+        response = response.add_messages(reward_messages)
+    }
+    Ok(response)
 }
 
 fn swap_msg(
@@ -390,6 +409,78 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, position.liquidity))
 }
 
+pub fn autocompound_executor_rewards(
+    deps: Deps,
+    env: &Env,
+    sender: String,
+    app: &App,
+) -> AppResult<Vec<CosmosMsg>> {
+    let config = CONFIG.load(deps.storage)?;
+    let rewards_config = config.autocompound_rewards_config;
+    let position = get_position(deps)?;
+    let user = position.owner;
+
+    let mut reward_messages = vec![];
+
+    // Get user balance of gas denom
+    let user_gas_balance = deps
+        .querier
+        .query_balance(user.clone(), rewards_config.gas_denom.clone())?;
+
+    // If not enough gas coins - swap for some amount
+    if user_gas_balance.amount < rewards_config.min_gas_balance {
+        // Get asset entries
+        let dex = app.dex(deps, config.exchange);
+        let ans_host = app.ans_host(deps)?;
+        let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
+            .resolve(&deps.querier, &ans_host)?;
+        let swap_asset =
+            AssetInfo::Native(rewards_config.swap_denom).resolve(&deps.querier, &ans_host)?;
+
+        // Do reverse swap to find approximate amount we need to swap
+        let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance.amount;
+        let simulate_swap_response = dex.simulate_swap(
+            AnsAsset::new(gas_asset.clone(), need_gas_coins),
+            swap_asset.clone(),
+        )?;
+
+        // Swap as much as available if not enough for max_gas_balance
+        let swap_amount = simulate_swap_response
+            .return_amount
+            .min(user_gas_balance.amount);
+
+        let msgs = swap_msg(
+            deps,
+            env,
+            AnsAsset::new(swap_asset, swap_amount),
+            gas_asset,
+            app,
+        )?;
+        reward_messages.extend(msgs)
+    }
+    let reward = Coin {
+        denom: rewards_config.gas_denom,
+        amount: rewards_config.reward,
+    };
+    // To avoid giving general `MsgSend` authorization we do 2 sends here
+    // 1) From user to the contract
+    // 2) From contract to the executor
+    let msg_send = BankMsg::Send {
+        to_address: env.contract.address.to_string(),
+        amount: vec![reward.clone()],
+    };
+    let reward_into_contract = wrap_authz(msg_send, user, env);
+    reward_messages.push(reward_into_contract);
+
+    let reward_into_executor = BankMsg::Send {
+        to_address: sender,
+        amount: vec![reward],
+    };
+    reward_messages.push(reward_into_executor.into());
+
+    Ok(reward_messages)
+}
+
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::{coin, coins, testing::mock_dependencies, Uint64};
@@ -426,6 +517,7 @@ mod tests {
                 autocompound_cooldown_seconds: Uint64::zero(),
                 autocompound_rewards_config: AutocompoundRewardsConfig {
                     gas_denom: "foo".to_owned(),
+                    swap_denom: "bar".to_owned(),
                     reward: Uint128::zero(),
                     min_gas_balance: Uint128::zero(),
                     max_gas_balance: Uint128::new(1),

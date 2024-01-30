@@ -152,13 +152,14 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             .account()
             .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
                 &AppInstantiateMsg {
-                    deposit_denom: asset0,
+                    deposit_denom: asset0.clone(),
                     exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
                     // 5 mins
                     autocompound_cooldown_seconds: Uint64::new(300),
                     autocompound_rewards_config: app::state::AutocompoundRewardsConfig {
                         gas_denom: "uosmo".to_owned(),
+                        swap_denom: asset0,
                         reward: Uint128::new(1000),
                         min_gas_balance: Uint128::new(2000),
                         max_gas_balance: Uint128::new(10000),
