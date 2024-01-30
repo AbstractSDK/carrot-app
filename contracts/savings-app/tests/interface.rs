@@ -28,19 +28,16 @@ use cw_orch::{
                 tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
-        ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
+        ConcentratedLiquidity, ExecuteResponse, Gamm, GovWithAppAccess, Module, Runner,
     },
     prelude::*,
 };
-use osmosis_std::types::{
-    cosmos::bank::v1beta1::MsgSend,
-    osmosis::{
-        concentratedliquidity::v1beta1::{
-            CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-            MsgCollectSpreadRewards, PoolRecord,
-        },
-        tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
+use osmosis_std::types::osmosis::{
+    concentratedliquidity::v1beta1::{
+        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+        MsgCollectSpreadRewards, PoolRecord,
     },
+    tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
 };
 use prost::Message;
 use prost_types::Any;
@@ -98,6 +95,7 @@ fn mint_lots_of_denom<Chain: CwEnv + Stargate>(
 
 pub const USDC: &str = "USDC";
 pub const USDT: &str = "USDT";
+pub const GAS_DENOM: &str = "uosmo";
 pub const DEX_NAME: &str = "osmosis";
 pub const VAULT_NAME: &str = "quasar_vault";
 pub const VAULT_SUBDENOM: &str = "vault-token";
@@ -112,6 +110,7 @@ pub const INITIAL_UPPER_TICK: i64 = 1000;
 pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
+    gas_pool_id: u64,
 ) -> anyhow::Result<Application<Chain, app::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
@@ -121,15 +120,29 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         .assets(vec![
             (USDC.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
             (USDT.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
+            (
+                "osmo".to_string(),
+                AssetInfoUnchecked::Native(GAS_DENOM.to_owned()),
+            ),
         ])
-        .pool(
-            PoolAddressBase::Id(pool_id),
-            PoolMetadata {
-                dex: DEX_NAME.to_owned(),
-                pool_type: PoolType::ConcentratedLiquidity,
-                assets: vec![AssetEntry::new(USDC), AssetEntry::new(USDT)],
-            },
-        )
+        .pools(vec![
+            (
+                PoolAddressBase::Id(gas_pool_id),
+                PoolMetadata {
+                    dex: DEX_NAME.to_owned(),
+                    pool_type: PoolType::ConcentratedLiquidity,
+                    assets: vec![AssetEntry::new(USDC), AssetEntry::new("osmo")],
+                },
+            ),
+            (
+                PoolAddressBase::Id(pool_id),
+                PoolMetadata {
+                    dex: DEX_NAME.to_owned(),
+                    pool_type: PoolType::ConcentratedLiquidity,
+                    assets: vec![AssetEntry::new(USDC), AssetEntry::new(USDT)],
+                },
+            ),
+        ])
         .build()?;
 
     // We deploy the app
@@ -158,7 +171,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     // 5 mins
                     autocompound_cooldown_seconds: Uint64::new(300),
                     autocompound_rewards_config: app::state::AutocompoundRewardsConfig {
-                        gas_denom: "uosmo".to_owned(),
+                        gas_denom: GAS_DENOM.to_owned(),
                         swap_denom: asset0,
                         reward: Uint128::new(1000),
                         min_gas_balance: Uint128::new(2000),
@@ -207,7 +220,7 @@ fn create_position<Chain: CwEnv>(
     Ok(())
 }
 
-fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
+fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
     // We create two tokenfactory denoms
     create_denom(chain.clone(), USDC.to_string())?;
     create_denom(chain.clone(), USDT.to_string())?;
@@ -264,7 +277,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
                 upper_tick: INITIAL_UPPER_TICK,
                 tokens_provided: vec![
                     v1beta1::Coin {
-                        denom: asset0,
+                        denom: asset0.clone(),
                         amount: "1_000_000".to_owned(),
                     },
                     v1beta1::Coin {
@@ -279,7 +292,16 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
         )?
         .data;
 
-    Ok(pool.id)
+    let gamm = Gamm::new(&*test_tube);
+    let gas_pool_response = gamm.create_basic_pool(
+        &[
+            Coin::new(1_000_000_000, asset0),
+            Coin::new(2_000_000_000, GAS_DENOM),
+        ],
+        &chain.sender,
+    )?;
+
+    Ok((pool.id, gas_pool_response.data.pool_id))
 }
 
 fn setup_test_tube() -> anyhow::Result<(
@@ -288,11 +310,11 @@ fn setup_test_tube() -> anyhow::Result<(
 )> {
     dotenv::dotenv()?;
     let _ = env_logger::builder().is_test(true).try_init();
-    let chain = OsmosisTestTube::new(coins(LOTS, "uosmo"));
+    let chain = OsmosisTestTube::new(coins(LOTS, GAS_DENOM));
     // We create a usdt-usdc pool
-    let pool_id = create_pool(chain.clone())?;
+    let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let savings_app = deploy(chain, pool_id)?;
+    let savings_app = deploy(chain, pool_id, gas_pool_id)?;
 
     // Give authorizations
     give_authorizations(&savings_app)?;
@@ -312,8 +334,6 @@ fn give_authorizations(
         MsgWithdrawPosition::TYPE_URL,
         MsgCollectIncentives::TYPE_URL,
         MsgCollectSpreadRewards::TYPE_URL,
-        // Feegrant betrayal
-        MsgSend::TYPE_URL,
     ]
     .map(ToOwned::to_owned);
     let granter = chain.sender().to_string();
@@ -332,28 +352,63 @@ fn give_authorizations(
             chain.sender.as_ref(),
         )?;
     }
+
     // Dex fees
-    // let abs = Abstract::load_from(chain.clone())?;
-    // let dex_fee_account = AbstractAccount::new(&abs, AccountId::local(0));
-    // let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
+    let abs = Abstract::load_from(chain.clone())?;
+    let dex_fee_account = AbstractAccount::new(&abs, abstract_app::objects::AccountId::local(0));
+    let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
+    let savings_app_addr = savings_app.addr_str().unwrap();
+    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
+        MsgGrant {
+            granter: chain.sender().to_string(),
+            grantee: savings_app_addr.clone(),
+            grant: Some(Grant {
+                authorization: Some(
+                    osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization {
+                        spend_limit: vec![
+                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+                                denom: factory_denom(chain, USDC),
+                                amount: LOTS.to_string(),
+                            },
+                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+                                denom: factory_denom(chain, USDT),
+                                amount: LOTS.to_string(),
+                            },
+                            // TODO: Hope it's moveable to authorization below
+                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+                                denom: GAS_DENOM.to_owned(),
+                                amount: LOTS.to_string(),
+                            }
+                        ],
+                        allow_list: vec![dex_fee_addr,
+                        // TODO: Hope it's moveable to authorization below
+                        savings_app_addr
+                        ],
+                    }
+                    .to_any(),
+                ),
+                expiration: None,
+            }),
+        },
+        MsgGrant::TYPE_URL,
+        chain.sender.as_ref(),
+    )?;
+    // Rewards
+    // TODO: this overrides authorization above, but we want to have those 2 separately
     // let _: ExecuteResponse<MsgGrantResponse> = app.execute(
     //     MsgGrant {
     //         granter: chain.sender().to_string(),
-    //         grantee: savings_app.addr_str().unwrap(),
+    //         grantee: savings_app_addr.clone(),
     //         grant: Some(Grant {
     //             authorization: Some(
-    //                 SendAuthorization {
+    //                 osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization {
     //                     spend_limit: vec![
     //                         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-    //                             denom: factory_denom(chain, USDC),
-    //                             amount: LOTS.to_string(),
-    //                         },
-    //                         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-    //                             denom: factory_denom(chain, USDT),
+    //                             denom: GAS_DENOM.to_owned(),
     //                             amount: LOTS.to_string(),
     //                         },
     //                     ],
-    //                     allow_list: vec![dex_fee_addr],
+    //                     allow_list: vec![savings_app_addr],
     //                 }
     //                 .to_any(),
     //             ),
@@ -587,6 +642,7 @@ fn check_autocompound() -> anyhow::Result<()> {
         .unwrap();
 
     // Autocompound
+    chain.wait_seconds(300)?;
     savings_app.autocompound()?;
 
     // Save new balances
