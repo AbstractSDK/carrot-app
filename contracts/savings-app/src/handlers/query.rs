@@ -39,6 +39,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
 
     let user = get_user(deps, app)?;
     let user_balance = deps.querier.query_balance(user, reward.denom.clone())?;
+    // TODO: check if can swap
     let rewards_available = user_balance.amount >= reward.amount;
 
     Ok(CompoundStatusResponse {

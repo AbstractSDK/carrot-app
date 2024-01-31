@@ -28,7 +28,7 @@ use cw_orch::{
                 tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
-        ConcentratedLiquidity, ExecuteResponse, Gamm, GovWithAppAccess, Module, Runner,
+        Account, ConcentratedLiquidity, ExecuteResponse, Gamm, GovWithAppAccess, Module, Runner,
     },
     prelude::*,
 };
@@ -47,7 +47,7 @@ fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
     let result = result.u128();
 
     if expected < result - 1 || expected > result + 1 {
-        panic!("Results are not close enough")
+        panic!("Results are not close enough, expected: {expected}, result: {result}")
     }
 }
 
@@ -95,10 +95,9 @@ fn mint_lots_of_denom<Chain: CwEnv + Stargate>(
 
 pub const USDC: &str = "USDC";
 pub const USDT: &str = "USDT";
+pub const REWARD_DENOM: &str = "reward";
 pub const GAS_DENOM: &str = "uosmo";
 pub const DEX_NAME: &str = "osmosis";
-pub const VAULT_NAME: &str = "quasar_vault";
-pub const VAULT_SUBDENOM: &str = "vault-token";
 
 pub const TICK_SPACING: u64 = 100;
 pub const SPREAD_FACTOR: u64 = 1;
@@ -121,8 +120,8 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             (USDC.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
             (USDT.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
             (
-                "osmo".to_string(),
-                AssetInfoUnchecked::Native(GAS_DENOM.to_owned()),
+                "rew".to_string(),
+                AssetInfoUnchecked::Native(REWARD_DENOM.to_owned()),
             ),
         ])
         .pools(vec![
@@ -131,7 +130,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 PoolMetadata {
                     dex: DEX_NAME.to_owned(),
                     pool_type: PoolType::ConcentratedLiquidity,
-                    assets: vec![AssetEntry::new(USDC), AssetEntry::new("osmo")],
+                    assets: vec![AssetEntry::new(USDC), AssetEntry::new("rew")],
                 },
             ),
             (
@@ -171,7 +170,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     // 5 mins
                     autocompound_cooldown_seconds: Uint64::new(300),
                     autocompound_rewards_config: app::state::AutocompoundRewardsConfig {
-                        gas_denom: GAS_DENOM.to_owned(),
+                        gas_denom: REWARD_DENOM.to_owned(),
                         swap_denom: asset0,
                         reward: Uint128::new(1000),
                         min_gas_balance: Uint128::new(2000),
@@ -293,12 +292,18 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
         .data;
 
     let gamm = Gamm::new(&*test_tube);
+    let rewards_pool_provider = test_tube.init_account(&[
+        Coin::new(1_000_000_000, asset0.clone()),
+        Coin::new(2_000_000_000, REWARD_DENOM),
+        Coin::new(LOTS, GAS_DENOM),
+    ])?;
+
     let gas_pool_response = gamm.create_basic_pool(
         &[
             Coin::new(1_000_000_000, asset0),
-            Coin::new(2_000_000_000, GAS_DENOM),
+            Coin::new(2_000_000_000, REWARD_DENOM),
         ],
-        &chain.sender,
+        &rewards_pool_provider,
     )?;
 
     Ok((pool.id, gas_pool_response.data.pool_id))
@@ -310,7 +315,11 @@ fn setup_test_tube() -> anyhow::Result<(
 )> {
     dotenv::dotenv()?;
     let _ = env_logger::builder().is_test(true).try_init();
-    let chain = OsmosisTestTube::new(coins(LOTS, GAS_DENOM));
+    let chain = OsmosisTestTube::new(vec![
+        coin(LOTS, GAS_DENOM),
+        // All of it will get sent to the rewards pool
+        // coin(2_000_000_000, REWARD_DENOM),
+    ]);
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
@@ -376,7 +385,7 @@ fn give_authorizations(
                             },
                             // TODO: Hope it's moveable to authorization below
                             cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-                                denom: GAS_DENOM.to_owned(),
+                                denom: REWARD_DENOM.to_owned(),
                                 amount: LOTS.to_string(),
                             }
                         ],
@@ -404,7 +413,7 @@ fn give_authorizations(
     //                 osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization {
     //                     spend_limit: vec![
     //                         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-    //                             denom: GAS_DENOM.to_owned(),
+    //                             denom: REWARD_DENOM.to_owned(),
     //                             amount: LOTS.to_string(),
     //                         },
     //                     ],
@@ -672,5 +681,67 @@ fn check_autocompound() -> anyhow::Result<()> {
     let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
     assert!(rewards.available_rewards.is_empty());
 
+    Ok(())
+}
+
+#[test]
+fn stranger_autocompound() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube()?;
+
+    let mut chain = savings_app.get_chain().clone();
+    let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
+
+    // Create position
+    create_position(
+        &savings_app,
+        coins(100_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDC)),
+        coin(1_000_000, factory_denom(&chain, USDT)),
+    )?;
+
+    // Do some swaps
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
+    let abs = Abstract::load_from(chain.clone())?;
+    let account_id = savings_app.account().id()?;
+    let account = AbstractAccount::new(&abs, account_id);
+    chain.bank_send(
+        account.proxy.addr_str()?,
+        vec![
+            coin(200_000, factory_denom(&chain, USDC)),
+            coin(200_000, factory_denom(&chain, USDT)),
+        ],
+    )?;
+    for _ in 0..10 {
+        dex.swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+    }
+
+    // Check autocompound adds liquidity from the rewards, user balance remain unchanged
+    // and rewards gets passed to the "stranger"
+
+    // Check it has some rewards to autocompound first
+    let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
+    assert!(!rewards.available_rewards.is_empty());
+
+    // Save balances
+    let balance_before_autocompound: AssetsBalanceResponse = savings_app.balance()?;
+
+    // Autocompound by stranger
+    chain.wait_seconds(300)?;
+    savings_app.call_as(&stranger).autocompound()?;
+
+    // Save new balances
+    let balance_after_autocompound: AssetsBalanceResponse = savings_app.balance()?;
+
+    // Liquidity added
+    assert!(balance_after_autocompound.liquidity > balance_before_autocompound.liquidity);
+
+    // Check it used all of the rewards
+    let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
+    assert!(rewards.available_rewards.is_empty());
+
+    // Check stranger gets rewarded
+    let stranger_reward_balance = chain.query_balance(stranger.address().as_str(), REWARD_DENOM)?;
+    assert_eq!(stranger_reward_balance, Uint128::new(1000));
     Ok(())
 }

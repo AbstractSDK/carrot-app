@@ -2,7 +2,7 @@ use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{ensure, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
+use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
 use cw_asset::AssetInfo;
 use cw_storage_plus::Item;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
@@ -91,6 +91,7 @@ pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
 
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const POSITION: Item<Position> = Item::new("position");
+pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
 
 #[cw_serde]
 pub struct Position {
