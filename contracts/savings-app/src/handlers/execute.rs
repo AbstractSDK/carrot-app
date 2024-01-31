@@ -6,8 +6,8 @@ use abstract_dex_adapter::{
     DexInterface,
 };
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
-    WasmMsg,
+    to_json_binary, BankMsg, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg,
+    Uint128, WasmMsg,
 };
 use cw_asset::AssetInfo;
 use osmosis_std::{
@@ -21,8 +21,7 @@ use osmosis_std::{
 use super::query::query_price;
 use crate::error::AppError;
 use crate::msg::CompoundStatus;
-use crate::replies::PROXY_REWARDS;
-use crate::state::{get_position, get_position_status, CURRENT_EXECUTOR};
+use crate::state::{get_position, get_position_status};
 use crate::{
     contract::{App, AppResult},
     helpers::{get_user, wrap_authz},
@@ -225,10 +224,6 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         return Err(crate::error::AppError::NoRewards {});
     }
 
-    let mut response = app
-        .response("auto-compound")
-        .add_messages(collect_rewards_msgs);
-
     // Finally we ask for a full deposit from the wallet to the position
     let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
@@ -238,18 +233,21 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         funds: vec![],
     });
 
+    let mut response = app
+        .response("auto-compound")
+        .add_messages(collect_rewards_msgs)
+        .add_message(msg_deposit);
+
     // If called by non-admin - send rewards to the sender
     if !app.admin.is_admin(deps.as_ref(), &info.sender)? {
-        let executor_reward_messages =
-            refill_autocompound_executor_rewards(deps.as_ref(), &env, &app)?;
+        let executor_reward_messages = refill_autocompound_executor_rewards(
+            deps.as_ref(),
+            &env,
+            info.sender.into_string(),
+            &app,
+        )?;
 
-        CURRENT_EXECUTOR.save(deps.storage, &info.sender)?;
-        response = response
-            .add_messages(executor_reward_messages)
-            // Authz checks balances before execution, so need to finish swap first
-            .add_submessage(SubMsg::reply_on_success(msg_deposit, PROXY_REWARDS));
-    } else {
-        response = response.add_message(msg_deposit);
+        response = response.add_messages(executor_reward_messages);
     }
 
     Ok(response)
@@ -420,6 +418,7 @@ fn _inner_withdraw(
 pub fn refill_autocompound_executor_rewards(
     deps: Deps,
     env: &Env,
+    executor: String,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     let config = CONFIG.load(deps.storage)?;
@@ -431,6 +430,8 @@ pub fn refill_autocompound_executor_rewards(
     let user_gas_balance = deps
         .querier
         .query_balance(user.clone(), rewards_config.gas_denom.clone())?;
+
+    let mut rewards_messages = vec![];
 
     // If not enough gas coins - swap for some amount
     if user_gas_balance.amount < rewards_config.min_gas_balance {
@@ -466,10 +467,30 @@ pub fn refill_autocompound_executor_rewards(
             gas_asset,
             app,
         )?;
-        Ok(msgs)
-    } else {
-        Ok(vec![])
+        rewards_messages.extend(msgs);
     }
+
+    let reward = Coin {
+        denom: rewards_config.gas_denom,
+        amount: rewards_config.reward,
+    };
+    // To avoid giving general `MsgSend` authorization we do 2 sends here
+    // 1) From user to the contract
+    // 2) From contract to the executor
+    let msg_send = BankMsg::Send {
+        to_address: env.contract.address.to_string(),
+        amount: vec![reward.clone()],
+    };
+    let reward_into_contract = wrap_authz(msg_send, user, env);
+    rewards_messages.push(reward_into_contract);
+
+    let reward_into_executor = BankMsg::Send {
+        to_address: executor,
+        amount: vec![reward],
+    };
+    rewards_messages.push(reward_into_executor.into());
+
+    Ok(rewards_messages)
 }
 
 #[cfg(test)]
