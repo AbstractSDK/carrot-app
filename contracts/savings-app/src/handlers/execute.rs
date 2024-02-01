@@ -20,7 +20,6 @@ use osmosis_std::{
 
 use super::query::query_price;
 use crate::error::AppError;
-use crate::msg::CompoundStatus;
 use crate::state::{get_position, get_position_status};
 use crate::{
     contract::{App, AppResult},

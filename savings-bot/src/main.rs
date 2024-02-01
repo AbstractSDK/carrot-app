@@ -1,8 +1,5 @@
 use abstract_app::abstract_core::app::{AppConfigResponse, BaseQueryMsg};
-use app::msg::{
-    AppExecuteMsg, AppQueryMsg, AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse,
-    ExecuteMsg, QueryMsg,
-};
+use app::msg::{AppExecuteMsg, AppQueryMsg, CompoundStatusResponse, ExecuteMsg, QueryMsg};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient, QueryContractsByCodeRequest,
 };
