@@ -55,8 +55,7 @@ fn create_position(
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    let (swap_msgs, create_msg) =
-        _inner_create_position(deps.as_ref(), &env, &app, create_position_msg)?;
+    let (swap_msgs, create_msg) = _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
 
     let mut response = app
         .response("create_position")
@@ -357,7 +356,7 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, position.liquidity))
 }
 
-pub(crate) fn _inner_create_position(
+pub(crate) fn _create_position(
     deps: Deps,
     env: &Env,
     app: &App,

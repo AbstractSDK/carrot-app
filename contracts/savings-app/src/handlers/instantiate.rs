@@ -15,7 +15,7 @@ use crate::{
     state::{Config, PoolConfig, CONFIG},
 };
 
-use super::execute::_inner_create_position;
+use super::execute::_create_position;
 
 pub fn instantiate_handler(
     deps: DepsMut,
@@ -75,7 +75,7 @@ pub fn instantiate_handler(
     // If provided - create position
     if let Some(create_position_msg) = msg.create_position {
         let (swap_msgs, create_msg) =
-            _inner_create_position(deps.as_ref(), &env, &app, create_position_msg)?;
+            _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
         response = response.add_messages(swap_msgs).add_submessage(create_msg);
     }
     Ok(response)
