@@ -17,6 +17,7 @@ use osmosis_std::{
 };
 
 use super::query::query_price;
+use crate::msg::CreatePositionMessage;
 use crate::{
     contract::{App, AppResult},
     helpers::{get_user, wrap_authz},
@@ -34,15 +35,9 @@ pub fn execute_handler(
     msg: AppExecuteMsg,
 ) -> AppResult {
     match msg {
-        AppExecuteMsg::CreatePosition {
-            lower_tick,
-            upper_tick,
-            funds,
-            asset0,
-            asset1,
-        } => create_position(
-            deps, env, info, app, funds, lower_tick, upper_tick, asset0, asset1,
-        ),
+        AppExecuteMsg::CreatePosition(create_position_msg) => {
+            create_position(deps, env, info, app, create_position_msg)
+        }
         AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
@@ -50,52 +45,24 @@ pub fn execute_handler(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn create_position(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
     app: App,
-    funds: Vec<Coin>,
-    lower_tick: i64,
-    upper_tick: i64,
-    asset0: Coin,
-    asset1: Coin,
+    create_position_msg: CreatePositionMessage,
 ) -> AppResult {
-    let config = CONFIG.load(deps.storage)?;
-
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    // First we do the swap
-    let price = query_price(deps.as_ref(), &funds, &app)?;
-    let (offer_asset, ask_asset, resulting_assets) =
-        tokens_to_swap(deps.as_ref(), funds, asset0, asset1, price)?;
-
-    let swap_msgs = swap_msg(deps.as_ref(), &env, offer_asset, ask_asset, &app)?;
-
-    let sender = get_user(deps.as_ref(), &app)?;
-
-    // Then we create the position
-    let create_msg = wrap_authz(
-        MsgCreatePosition {
-            pool_id: config.pool_config.pool_id,
-            sender: sender.clone(),
-            lower_tick,
-            upper_tick,
-            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
-            token_min_amount0: "0".to_string(), // No min amount here
-            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
-        },
-        sender,
-        &env,
-    );
+    let (swap_msgs, create_msg) =
+        _inner_create_position(deps.as_ref(), &env, &app, create_position_msg)?;
 
     let mut response = app
         .response("create_position")
+        .add_messages(swap_msgs)
         // We need to get the ID for this position in the reply
-        .add_submessage(SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID))
-        .add_messages(swap_msgs);
+        .add_submessage(create_msg);
 
     // If we already have position open - withdraw all from it first
     if POSITION.exists(deps.storage) {
@@ -388,6 +355,52 @@ fn _inner_withdraw(
     );
 
     Ok((msg, liquidity_amount, position.liquidity))
+}
+
+pub(crate) fn _inner_create_position(
+    deps: Deps,
+    env: &Env,
+    app: &App,
+    create_position_msg: CreatePositionMessage,
+) -> AppResult<(Vec<CosmosMsg>, SubMsg)> {
+    let config = CONFIG.load(deps.storage)?;
+
+    let CreatePositionMessage {
+        lower_tick,
+        upper_tick,
+        funds,
+        asset0,
+        asset1,
+    } = create_position_msg;
+
+    // First we do the swap
+    let price = query_price(deps, &funds, app)?;
+    let (offer_asset, ask_asset, resulting_assets) =
+        tokens_to_swap(deps, funds, asset0, asset1, price)?;
+
+    let swap_msgs = swap_msg(deps, env, offer_asset, ask_asset, app)?;
+
+    let sender = get_user(deps, app)?;
+
+    // Then we create the position
+    let create_msg = wrap_authz(
+        MsgCreatePosition {
+            pool_id: config.pool_config.pool_id,
+            sender: sender.clone(),
+            lower_tick,
+            upper_tick,
+            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
+            token_min_amount0: "0".to_string(), // No min amount here
+            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
+        },
+        sender,
+        env,
+    );
+
+    Ok((
+        swap_msgs,
+        SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
+    ))
 }
 
 #[cfg(test)]

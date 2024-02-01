@@ -7,7 +7,7 @@ use abstract_client::{AbstractClient, Application, Namespace};
 use abstract_dex_adapter::msg::ExecuteMsg;
 use app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse,
+    AvailableRewardsResponse, CreatePositionMessage, PositionResponse,
 };
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_asset::AssetInfoUnchecked;
@@ -29,7 +29,7 @@ use cw_orch::{
                 tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
-        ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
+        Account, ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
     },
     prelude::*,
 };
@@ -43,13 +43,16 @@ use osmosis_std::types::osmosis::{
 use prost::Message;
 use prost_types::Any;
 
-fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
+fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
     let expected = expected.into().u128();
     let result = result.u128();
 
-    if expected < result - 1 || expected > result + 1 {
-        panic!("Results are not close enough")
+    if !(expected - 2..=expected + 2).contains(&result) {
+        return Err(anyhow::anyhow!(
+            "Results are not close enough, expected: {expected}, result: {result}"
+        ));
     }
+    Ok(())
 }
 
 fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
@@ -110,6 +113,7 @@ pub const INITIAL_UPPER_TICK: i64 = 1000;
 pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
+    create_position: Option<CreatePositionMessage>,
 ) -> anyhow::Result<Application<Chain, app::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
@@ -153,6 +157,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     deposit_denom: asset0,
                     exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
+                    create_position,
                 },
                 Empty {},
                 &[],
@@ -183,13 +188,13 @@ fn create_position<Chain: CwEnv>(
 ) -> anyhow::Result<()> {
     app.account()
         .execute_on_module::<app::AppInterface<Chain>>(
-            &app::msg::AppExecuteMsg::CreatePosition {
+            &app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
                 lower_tick: INITIAL_LOWER_TICK,
                 upper_tick: INITIAL_UPPER_TICK,
                 funds,
                 asset0,
                 asset1,
-            }
+            })
             .into(),
             &[],
         )?;
@@ -271,7 +276,9 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     Ok(pool.id)
 }
 
-fn setup_test_tube() -> anyhow::Result<(
+fn setup_test_tube(
+    create_position: bool,
+) -> anyhow::Result<(
     u64,
     Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
 )> {
@@ -281,7 +288,16 @@ fn setup_test_tube() -> anyhow::Result<(
     // We create a usdt-usdc pool
     let pool_id = create_pool(chain.clone())?;
 
-    let savings_app = deploy(chain, pool_id)?;
+    let create_position = create_position.then(||
+        // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
+        CreatePositionMessage {
+        lower_tick: INITIAL_LOWER_TICK,
+        upper_tick: INITIAL_UPPER_TICK,
+        funds: coins(100_000, factory_denom(&chain, USDC)),
+        asset0: coin(1_000_000, factory_denom(&chain, USDC)),
+        asset1: coin(1_000_000, factory_denom(&chain, USDT)),
+    });
+    let savings_app = deploy(chain, pool_id, create_position)?;
 
     // Give authorizations
     give_authorizations(&savings_app)?;
@@ -356,7 +372,7 @@ fn give_authorizations(
 
 #[test]
 fn deposit_lands() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -401,7 +417,7 @@ fn deposit_lands() -> anyhow::Result<()> {
 
 #[test]
 fn withdraw_position() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -458,7 +474,7 @@ fn withdraw_position() -> anyhow::Result<()> {
 
 #[test]
 fn create_multiple_positions() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -505,7 +521,7 @@ fn create_multiple_positions() -> anyhow::Result<()> {
 
 #[test]
 fn deposit_both_assets() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -527,7 +543,7 @@ fn deposit_both_assets() -> anyhow::Result<()> {
 
 #[test]
 fn check_autocompound() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -593,15 +609,27 @@ fn check_autocompound() -> anyhow::Result<()> {
     assert_is_around(
         balance_usdc_after_autocompound.amount,
         balance_usdc_before_autocompound.amount,
-    );
+    )
+    .unwrap();
     assert_is_around(
         balance_usdt_after_autocompound.amount,
         balance_usdt_before_autocompound.amount,
-    );
+    )
+    .unwrap();
 
     // Check it used all of the rewards
     let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
     assert!(rewards.available_rewards.is_empty());
 
+    Ok(())
+}
+
+#[test]
+#[ignore = "Need instantiate2 on cw-orch"]
+fn create_position_on_instantiation() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube(true)?;
+
+    let position: PositionResponse = savings_app.position()?;
+    assert!(position.position.is_some());
     Ok(())
 }
