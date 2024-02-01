@@ -239,7 +239,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 
     // If called by non-admin - send rewards to the sender
     if !app.admin.is_admin(deps.as_ref(), &info.sender)? {
-        let executor_reward_messages = refill_autocompound_executor_rewards(
+        let executor_reward_messages = autocompound_executor_rewards(
             deps.as_ref(),
             &env,
             info.sender.into_string(),
@@ -414,7 +414,9 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, position.liquidity))
 }
 
-pub fn refill_autocompound_executor_rewards(
+/// Sends autocompound rewards to the executor.
+/// In case user have not enough rewards it will also do a swap
+pub fn autocompound_executor_rewards(
     deps: Deps,
     env: &Env,
     executor: String,
