@@ -29,7 +29,7 @@ use cw_orch::{
                 tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
-        Account, ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
+        ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
     },
     prelude::*,
 };
