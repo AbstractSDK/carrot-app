@@ -61,10 +61,9 @@ fn daemon_with_savings_authz(daemon: &Daemon, contract_addr: &Addr) -> anyhow::R
 fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
     for contract in contract_addrs {
         let addr = Addr::unchecked(contract);
-        // TODO: Should look into different query to see the cooldown
         let compound_status: CompoundStatusResponse =
             daemon.query(&QueryMsg::from(AppQueryMsg::CompoundStatus {}), &addr)?;
-        // If not empty - autocompound
+        // TODO: check if rewards enough to cover gas expenses
         if compound_status.rewards_available && compound_status.status.is_ready() {
             // Execute autocompound, if we have grant(s)
             if let Ok(daemon) = daemon_with_savings_authz(daemon, &addr) {
@@ -77,8 +76,6 @@ fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Res
         }
     }
 
-    // We can try to batch it, but it could be PIAS to not gas overflow
-    // daemon.daemon.sender.commit_tx(msgs, memo)
     Ok(())
 }
 
