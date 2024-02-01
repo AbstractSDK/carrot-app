@@ -1,5 +1,8 @@
 use abstract_app::abstract_core::app::{AppConfigResponse, BaseQueryMsg};
-use app::msg::{AppExecuteMsg, AppQueryMsg, AvailableRewardsResponse, ExecuteMsg, QueryMsg};
+use app::msg::{
+    AppExecuteMsg, AppQueryMsg, AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse,
+    ExecuteMsg, QueryMsg,
+};
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
     query_client::QueryClient, QueryContractsByCodeRequest,
 };
@@ -62,10 +65,10 @@ fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Res
     for contract in contract_addrs {
         let addr = Addr::unchecked(contract);
         // TODO: Should look into different query to see the cooldown
-        let available_rewards: AvailableRewardsResponse =
-            daemon.query(&QueryMsg::from(AppQueryMsg::AvailableRewards {}), &addr)?;
+        let compound_status: CompoundStatusResponse =
+            daemon.query(&QueryMsg::from(AppQueryMsg::CompoundStatus {}), &addr)?;
         // If not empty - autocompound
-        if !available_rewards.available_rewards.is_empty() {
+        if compound_status.rewards_available && compound_status.status.is_ready() {
             // Execute autocompound, if we have grant(s)
             if let Ok(daemon) = daemon_with_savings_authz(daemon, &addr) {
                 daemon.execute(

@@ -111,3 +111,9 @@ pub enum CompoundStatus {
     /// No open position right now
     NoPosition {},
 }
+
+impl CompoundStatus {
+    pub fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready {})
+    }
+}

@@ -182,7 +182,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         &env,
         config.autocompound_cooldown_seconds.u64(),
     )?;
-    if !matches!(status, CompoundStatus::Ready {}) {
+    if !status.is_ready() {
         return Err(AppError::AutocompoundNotReady(status));
     }
 
