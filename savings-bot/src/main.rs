@@ -1,7 +1,10 @@
-use abstract_app::abstract_core::app::{AppConfigResponse, BaseQueryMsg};
+use abstract_app::{
+    abstract_core::app::BaseQueryMsg, objects::nested_admin::TopLevelOwnerResponse,
+};
 use app::msg::{AppExecuteMsg, AppQueryMsg, CompoundStatusResponse, ExecuteMsg, QueryMsg};
-use cosmos_sdk_proto::cosmwasm::wasm::v1::{
-    query_client::QueryClient, QueryContractsByCodeRequest,
+use cosmos_sdk_proto::{
+    cosmwasm::wasm::v1::{query_client::QueryClient, QueryContractsByCodeRequest},
+    traits::Message,
 };
 use cw_orch::{
     anyhow,
@@ -12,6 +15,19 @@ use cw_orch::{
 };
 use dotenv::dotenv;
 use log::{log, Level};
+use osmosis_std::types::{
+    cosmos::{
+        authz::v1beta1::GenericAuthorization,
+        bank::v1beta1::{MsgSend, SendAuthorization},
+    },
+    osmosis::{
+        concentratedliquidity::v1beta1::{
+            MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
+            MsgWithdrawPosition,
+        },
+        gamm::v1beta1::MsgSwapExactAmountIn,
+    },
+};
 use tonic::transport::Channel;
 
 async fn fetch_contracts(channel: Channel, code_id: u64) -> anyhow::Result<Vec<String>> {
@@ -29,33 +45,73 @@ async fn fetch_contracts(channel: Channel, code_id: u64) -> anyhow::Result<Vec<S
     anyhow::Ok(contract_addrs)
 }
 
-// TODO: are we using wasm execute grant here?
-const MSG_TYPE_URL: &str = "";
+const AUTHORIZATION_URLS: &[&str] = &[
+    MsgCreatePosition::TYPE_URL,
+    MsgSwapExactAmountIn::TYPE_URL,
+    MsgAddToPosition::TYPE_URL,
+    MsgWithdrawPosition::TYPE_URL,
+    MsgCollectIncentives::TYPE_URL,
+    MsgCollectSpreadRewards::TYPE_URL,
+];
 
-fn daemon_with_savings_authz(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<Daemon> {
-    // Get config of an app to get proxy address(granter)
-    let app_config: AppConfigResponse =
-        daemon.query(&QueryMsg::Base(BaseQueryMsg::BaseConfig {}), contract_addr)?;
+fn check_authz_grants(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<()> {
+    // Get config of an app to get top level owner(granter)
+    let tlo: TopLevelOwnerResponse = daemon.query(
+        &QueryMsg::Base(BaseQueryMsg::TopLevelOwner {}),
+        contract_addr,
+    )?;
 
-    // Check if grant is indeed given
-    let authz_granter = app_config.proxy_address;
+    // Check if authz is indeed given
     let authz_querier: Authz = daemon.query_client();
-    let grantee = daemon.sender().to_string();
-    let grants = daemon.rt_handle.block_on(async {
-        authz_querier
-            .grants(
-                authz_granter.to_string(),
-                grantee,
-                MSG_TYPE_URL.to_string(),
-                None,
-            )
-            .await
-    })?;
-    if grants.grants.is_empty() {
-        return Err(anyhow::anyhow!("Missing required grant"));
+    let granter = tlo.address;
+    let authz_grantee = contract_addr.to_string();
+    let generic_authorizations: Vec<GenericAuthorization> = daemon
+        .rt_handle
+        .block_on(async {
+            authz_querier
+                .grants(
+                    granter.to_string(),
+                    authz_grantee.clone(),
+                    GenericAuthorization::TYPE_URL.to_string(),
+                    None,
+                )
+                .await
+        })?
+        .grants
+        .into_iter()
+        .map(|grant| GenericAuthorization::decode(&*grant.authorization.unwrap().value))
+        .collect::<Result<_, _>>()?;
+    // Check all generic authorizations are in place
+    for &authorization_url in AUTHORIZATION_URLS {
+        if !generic_authorizations.contains(&GenericAuthorization {
+            msg: authorization_url.to_owned(),
+        }) {
+            return Err(anyhow::anyhow!(
+                "Missing authorization: {authorization_url}"
+            ));
+        }
     }
 
-    Ok(daemon.with_authz_granter(authz_granter))
+    // Check any of send authorization is in place
+    if !generic_authorizations.contains(&GenericAuthorization {
+        msg: MsgSend::TYPE_URL.to_owned(),
+    }) {
+        let send_authorizations = daemon.rt_handle.block_on(async {
+            authz_querier
+                .grants(
+                    granter.to_string(),
+                    authz_grantee,
+                    SendAuthorization::TYPE_URL.to_string(),
+                    None,
+                )
+                .await
+        })?;
+        if send_authorizations.grants.is_empty() {
+            return Err(anyhow::anyhow!("Missing send authorization"));
+        }
+    }
+
+    Ok(())
 }
 
 fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Result<()> {
@@ -66,12 +122,21 @@ fn autocompound(daemon: &mut Daemon, contract_addrs: Vec<String>) -> anyhow::Res
         // TODO: check if rewards enough to cover gas expenses
         if compound_status.rewards_available && compound_status.status.is_ready() {
             // Execute autocompound, if we have grant(s)
-            if let Ok(daemon) = daemon_with_savings_authz(daemon, &addr) {
-                daemon.execute(
-                    &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
-                    &[],
-                    &addr,
-                )?;
+            // Just output error without crashing, to keep rolling
+            match check_authz_grants(daemon, &addr) {
+                Ok(()) => {
+                    let res = daemon.execute(
+                        &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
+                        &[],
+                        &addr,
+                    );
+                    if let Err(e) = res {
+                        eprintln!("Execution of autocompound failed: {e:?}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Authz error for {addr}: {e:?}");
+                }
             }
         }
     }
