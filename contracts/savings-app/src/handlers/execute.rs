@@ -514,7 +514,6 @@ mod tests {
         CONFIG.save(
             deps.storage,
             &Config {
-                deposit_info: AssetInfo::Native(DEPOSIT_TOKEN.to_string()),
                 pool_config: PoolConfig {
                     pool_id: 45,
                     token0: TOKEN0.to_string(),

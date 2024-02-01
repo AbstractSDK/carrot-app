@@ -60,7 +60,6 @@ pub fn instantiate_handler(
     autocompound_rewards_config.check(deps.as_ref(), dex_name, ans.host())?;
 
     let config: Config = Config {
-        deposit_info: cw_asset::AssetInfoBase::Native(msg.deposit_denom),
         exchange: dex_name.to_string(),
         pool_config: PoolConfig {
             pool_id: msg.pool_id,

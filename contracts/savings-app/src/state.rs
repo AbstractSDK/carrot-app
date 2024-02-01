@@ -13,20 +13,10 @@ use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
 #[cw_serde]
 pub struct Config {
-    pub deposit_info: AssetInfo,
     pub pool_config: PoolConfig,
     pub exchange: DexName,
     pub autocompound_cooldown_seconds: Uint64,
     pub autocompound_rewards_config: AutocompoundRewardsConfig,
-}
-
-impl Config {
-    pub fn deposit_denom(&self) -> AppResult<String> {
-        match &self.deposit_info {
-            AssetInfo::Native(denom) => Ok(denom.clone()),
-            _ => Err(AppError::WrongAssetInfo {}),
-        }
-    }
 }
 
 /// Configuration on how rewards should be distributed
@@ -124,12 +114,12 @@ pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
 pub fn get_position_status(
     storage: &dyn Storage,
     env: &Env,
-    cooldown_secods: u64,
+    cooldown_seconds: u64,
 ) -> AppResult<CompoundStatus> {
     let position = POSITION.may_load(storage)?;
     let status = match position {
         Some(position) => {
-            let ready_on = position.last_compound.plus_seconds(cooldown_secods);
+            let ready_on = position.last_compound.plus_seconds(cooldown_seconds);
             if env.block.time >= ready_on {
                 CompoundStatus::Ready {}
             } else {

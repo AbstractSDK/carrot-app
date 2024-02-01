@@ -164,7 +164,6 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             .account()
             .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
                 &AppInstantiateMsg {
-                    deposit_denom: asset0.clone(),
                     exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
                     // 5 mins

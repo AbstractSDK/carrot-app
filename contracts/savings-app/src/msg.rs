@@ -13,8 +13,6 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
-    /// Deposit denomination to accept deposits
-    pub deposit_denom: String,
     /// Id of the pool used to get rewards
     pub pool_id: u64,
     /// Dex that we are ok to swap on !
