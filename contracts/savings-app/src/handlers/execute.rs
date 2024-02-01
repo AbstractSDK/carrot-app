@@ -239,12 +239,8 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 
     // If called by non-admin - send rewards to the sender
     if !app.admin.is_admin(deps.as_ref(), &info.sender)? {
-        let executor_reward_messages = autocompound_executor_rewards(
-            deps.as_ref(),
-            &env,
-            info.sender.into_string(),
-            &app,
-        )?;
+        let executor_reward_messages =
+            autocompound_executor_rewards(deps.as_ref(), &env, info.sender.into_string(), &app)?;
 
         response = response.add_messages(executor_reward_messages);
     }
