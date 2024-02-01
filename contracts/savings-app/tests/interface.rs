@@ -312,16 +312,16 @@ fn setup_test_tube() -> anyhow::Result<(
     u64,
     Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
 )> {
-    dotenv::dotenv()?;
     let _ = env_logger::builder().is_test(true).try_init();
     let chain = OsmosisTestTube::new(vec![
         coin(LOTS, GAS_DENOM),
         // All of it will get sent to the rewards pool
         // coin(2_000_000_000, REWARD_DENOM),
     ]);
+
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
-
+    
     let savings_app = deploy(chain, pool_id, gas_pool_id)?;
 
     // Give authorizations
@@ -582,7 +582,6 @@ fn create_multiple_positions() -> anyhow::Result<()> {
 #[test]
 fn deposit_both_assets() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube()?;
-
     let chain = savings_app.get_chain().clone();
 
     // Create position
