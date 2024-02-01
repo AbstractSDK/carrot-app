@@ -1,6 +1,10 @@
-use abstract_app::abstract_core::objects::AnsAsset;
+use abstract_app::{
+    abstract_core::objects::AnsAsset,
+    traits::{AbstractNameService, Resolve},
+};
 use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
+use cw_asset::AssetInfo;
 use osmosis_std::try_proto_to_cosmwasm_coins;
 
 use crate::{
@@ -33,14 +37,45 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
     )?;
 
     let reward = Coin {
-        denom: config.autocompound_rewards_config.gas_denom,
+        denom: config.autocompound_rewards_config.gas_denom.clone(),
         amount: config.autocompound_rewards_config.reward,
     };
 
     let user = get_user(deps, app)?;
-    let user_balance = deps.querier.query_balance(user, reward.denom.clone())?;
-    // TODO: check if can swap
-    let rewards_available = user_balance.amount >= reward.amount;
+    let user_gas_balance = deps
+        .querier
+        .query_balance(user.clone(), reward.denom.clone())?;
+    let rewards_available = if user_gas_balance.amount >= reward.amount {
+        true
+    } else {
+        // check if can swap
+        let rewards_config = config.autocompound_rewards_config;
+        let dex = app.dex(deps, config.exchange);
+        let ans_host = app.ans_host(deps)?;
+
+        let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
+            .resolve(&deps.querier, &ans_host)?;
+        let swap_asset = AssetInfo::Native(rewards_config.swap_denom.clone())
+            .resolve(&deps.querier, &ans_host)?;
+
+        // Reverse swap to see how many swap coins needed
+        let required_gas_coins = reward.amount - user_gas_balance.amount;
+        let response = dex.simulate_swap(
+            AnsAsset {
+                name: gas_asset,
+                amount: required_gas_coins,
+            },
+            swap_asset.clone(),
+        )?;
+
+        // Check if user has enough of swap coins
+        let user_swap_balance = deps
+            .querier
+            .query_balance(user, rewards_config.swap_denom)?;
+        let required_swap_amount = response.return_amount;
+
+        user_swap_balance.amount > required_swap_amount
+    };
 
     Ok(CompoundStatusResponse {
         status,

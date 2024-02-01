@@ -7,7 +7,7 @@ use abstract_client::{AbstractClient, Application, Namespace};
 use abstract_dex_adapter::msg::ExecuteMsg;
 use app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse,
+    AvailableRewardsResponse, CompoundStatusResponse,
 };
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
@@ -728,6 +728,16 @@ fn stranger_autocompound() -> anyhow::Result<()> {
 
     // Autocompound by stranger
     chain.wait_seconds(300)?;
+    // Check query is able to compute rewards, when swap is required
+    let compound_status: CompoundStatusResponse = savings_app.compound_status()?;
+    assert_eq!(
+        compound_status,
+        CompoundStatusResponse {
+            status: app::msg::CompoundStatus::Ready {},
+            reward: Coin::new(1000, REWARD_DENOM),
+            rewards_available: true
+        }
+    );
     savings_app.call_as(&stranger).autocompound()?;
 
     // Save new balances
