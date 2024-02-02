@@ -1,12 +1,13 @@
 use super::swap_helpers::swap_to_enter_position;
 use crate::{
     contract::{App, AppResult},
-    helpers::{get_user, wrap_authz},
+    helpers::get_user,
     msg::{AppExecuteMsg, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{assert_contract, get_osmosis_position, CONFIG, POSITION},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
+use abstract_app::abstract_sdk::AuthZInterface;
 use abstract_app::AppError;
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
@@ -51,7 +52,7 @@ fn create_position(
     env: Env,
     info: MessageInfo,
     app: App,
-    mut funds: Vec<Coin>,
+    funds: Vec<Coin>,
     lower_tick: i64,
     upper_tick: i64,
     asset0: Coin,
@@ -91,19 +92,17 @@ fn create_position(
 
     let sender = get_user(deps.as_ref(), &app)?;
 
-    // Then we create the position
-    let create_msg = wrap_authz(
+    let create_msg = app.auth_z(deps.as_ref(), Some(sender.clone()))?.execute(
+        &env.contract.address,
         MsgCreatePosition {
             pool_id: config.pool_config.pool_id,
-            sender: sender.clone(),
+            sender: sender.to_string(),
             lower_tick,
             upper_tick,
             tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
             token_min_amount0: "0".to_string(), // No min amount here
             token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
         },
-        sender,
-        &env,
     );
 
     response = response
@@ -132,17 +131,18 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
     let (swap_msgs, resulting_assets) =
         swap_to_enter_position(deps.as_ref(), &env, funds, &app, asset0, asset1)?;
 
-    let deposit_msg = wrap_authz(
+    let user = get_user(deps.as_ref(), &app)?;
+
+    let deposit_msg = app.auth_z(deps.as_ref(), Some(user.clone()))?.execute(
+        &env.contract.address,
         MsgAddToPosition {
             position_id: position.position_id,
-            sender: position.address.clone(),
+            sender: user.to_string(),
             amount0: resulting_assets[0].amount.to_string(),
             amount1: resulting_assets[1].amount.to_string(),
             token_min_amount0: "0".to_string(), // No min, this always works
             token_min_amount1: "0".to_string(), // No min, this always works
         },
-        position.address,
-        &env,
     );
 
     Ok(app
@@ -177,37 +177,37 @@ fn autocompound(deps: DepsMut, env: Env, _info: MessageInfo, app: App) -> AppRes
     // - min rewards to autocompound
     // Everyone can autocompound
 
-    let pool = get_osmosis_position(deps.as_ref())?;
-    let position = pool.position.unwrap();
+    let position = get_osmosis_position(deps.as_ref())?;
+    let position_details = position.position.unwrap();
 
     let mut rewards = cosmwasm_std::Coins::default();
     let mut collect_rewards_msgs = vec![];
 
-    if !pool.claimable_incentives.is_empty() {
-        for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
+    let user = get_user(deps.as_ref(), &app)?;
+    let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
+    if !position.claimable_incentives.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
             rewards.add(coin)?;
         }
-        collect_rewards_msgs.push(wrap_authz(
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
             MsgCollectIncentives {
-                position_ids: vec![position.position_id],
-                sender: position.address.clone(),
+                position_ids: vec![position_details.position_id],
+                sender: user.to_string(),
             },
-            position.address.clone(),
-            &env,
         ));
     }
 
-    if !pool.claimable_spread_rewards.is_empty() {
-        for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
+    if !position.claimable_spread_rewards.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
             rewards.add(coin)?;
         }
-        collect_rewards_msgs.push(wrap_authz(
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
             MsgCollectSpreadRewards {
-                position_ids: vec![position.position_id],
-                sender: position.address.clone(),
+                position_ids: vec![position_details.position_id],
+                sender: position_details.address.clone(),
             },
-            position.address.clone(),
-            &env,
         ))
     }
 
@@ -234,7 +234,7 @@ fn _inner_withdraw(
     deps: Deps,
     env: &Env,
     amount: Option<Uint128>,
-    _app: &App,
+    app: &App,
 ) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
     let position = get_osmosis_position(deps)?;
     let position_details = position.position.unwrap();
@@ -247,16 +247,16 @@ fn _inner_withdraw(
         // TODO: it's decimals inside contracts
         total_liquidity.clone()
     };
+    let user = get_user(deps, app)?;
 
     // We need to execute withdraw on the user's behalf
-    let msg = wrap_authz(
+    let msg = app.auth_z(deps, Some(user.clone()))?.execute(
+        &env.contract.address,
         MsgWithdrawPosition {
             position_id: position_details.position_id,
-            sender: position_details.address.clone(),
+            sender: user.to_string(),
             liquidity_amount: liquidity_amount.clone(),
         },
-        position_details.address,
-        env,
     );
 
     let withdrawn_funds = vec![

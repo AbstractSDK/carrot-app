@@ -3,12 +3,13 @@ use abstract_dex_adapter::{
     msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
     DexInterface,
 };
+use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 use crate::{
     contract::{App, AppResult},
-    helpers::{get_user, wrap_authz},
+    helpers::get_user,
     state::CONFIG,
 };
 
@@ -39,7 +40,7 @@ fn swap_msg(
                 belief_price: None,
             },
         },
-        sender: sender.clone(),
+        sender: sender.to_string(),
     };
     let trigger_swap_msg: GenerateMessagesResponse =
         dex.query(query_msg.clone()).map_err(|_| {
@@ -47,11 +48,12 @@ fn swap_msg(
                 "Failed to query generate message, query_msg: {query_msg:?}"
             ))
         })?;
+    let authz = app.auth_z(deps, Some(sender))?;
 
     Ok(trigger_swap_msg
         .messages
         .into_iter()
-        .map(|m| wrap_authz(m, sender.clone(), env))
+        .map(|m| authz.execute(&env.contract.address, m))
         .collect())
 }
 
