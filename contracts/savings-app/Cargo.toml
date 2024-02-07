@@ -47,28 +47,23 @@ thiserror = { version = "1.0.50" }
 schemars = "0.8"
 cw-asset = { version = "3.0" }
 
-abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
   "stargate",
 ] }
 
 # Dependencies for interface
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
   "osmosis",
 ] }
 
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", optional = true }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", optional = true }
 cw-orch = { workspace = true, optional = true }
-
-cw-vault-multi-standard = { git = "https://github.com/quasar-finance/cw-vault-standard", features = [
-  "lockup",
-  "force-unlock",
-] }
 osmosis-std = { version = "0.21.0" }
 prost = { version = "0.12.3" }
 
 [dev-dependencies]
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
 
   "daemon",
 ] }
@@ -77,9 +72,9 @@ prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
 app = { path = ".", features = ["interface"] }
-abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch", features = [
+abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
   "test-utils",
 ] }
 speculoos = "0.11.0"

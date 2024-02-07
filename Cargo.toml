@@ -4,33 +4,13 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-cw-orch = "0.19.1"
+cw-orch = "0.20.0"
 
 [patch.crates-io]
-abstract-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
-
-# abstract-adapter = { path = "../abstract/framework/packages/abstract-adapter" }
-# abstract-adapter-utils = { path = "../abstract/framework/packages/standards/utils" }
-# abstract-interface = { path = "../abstract/framework/packages/abstract-interface" }
-# abstract-core = { path = "../abstract/framework/packages/abstract-core" }
-# abstract-dex-standard = { path = "../abstract/framework/packages/standards/dex" }
-# abstract-staking-standard = { path = "../abstract/framework/packages/standards/staking" }
-# abstract-sdk = { path = "../abstract/framework/packages/abstract-sdk" }
-
-cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "fix/savings-app-fixes" }
-
-# [patch."https://github.com/abstractsdk/abstract"]
-# abstract-adapter = { path = "../abstract/framework/packages/abstract-adapter" }
-# abstract-client = { path = "../abstract/framework/packages/abstract-client" }
-# abstract-adapter-utils = { path = "../abstract/framework/packages/standards/utils" }
-# abstract-interface = { path = "../abstract/framework/packages/abstract-interface" }
-# abstract-core = { path = "../abstract/framework/packages/abstract-core" }
-# abstract-dex-standard = { path = "../abstract/framework/packages/standards/dex" }
-# abstract-staking-standard = { path = "../abstract/framework/packages/standards/staking" }
-# abstract-sdk = { path = "../abstract/framework/packages/abstract-sdk" }
+abstract-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
