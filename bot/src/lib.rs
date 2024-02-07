@@ -1,16 +1,6 @@
-use std::collections::HashSet;
-
-use abstract_app::{
-    abstract_core::{
-        app::{AppConfigResponse, BaseQueryMsg},
-        MANAGER,
-    },
-    abstract_interface::{Abstract, AbstractAccount, Manager, ManagerQueryFns},
-};
-use abstract_client::Account;
+use abstract_client::{AbstractClient, AccountSource, Environment};
 use app::{
-    contract::App,
-    msg::{AppExecuteMsg, AppQueryMsg, AvailableRewardsResponse, ExecuteMsg, QueryMsg},
+    msg::{AppExecuteMsg, ExecuteMsg},
     AppInterface,
 };
 use cosmos_sdk_proto::cosmwasm::wasm::v1::{
@@ -23,9 +13,72 @@ use cw_orch::{
     prelude::*,
     tokio::runtime::Runtime,
 };
-use dotenv::dotenv;
 use log::{log, Level};
+use std::collections::HashSet;
 use tonic::transport::Channel;
+
+use abstract_app::{
+    abstract_core::version_control::ModuleFilter,
+    abstract_interface::VCQueryFns,
+    objects::{
+        module::{ModuleId, ModuleStatus},
+        namespace::ABSTRACT_NAMESPACE,
+    },
+};
+use app::contract::APP_ID;
+
+use std::iter::Extend;
+
+/// entrypoint for the bot
+pub fn cron_main() -> anyhow::Result<()> {
+    let rt = Runtime::new()?;
+    let mut daemon = Daemon::builder()
+        .handle(rt.handle())
+        .chain(OSMO_5)
+        .build()?;
+
+    let abstr = AbstractClient::new(daemon.clone())?;
+    let _module_id = ModuleId::try_from(APP_ID)?;
+
+    let saving_modules = abstr.version_control().module_list(
+        Some(ModuleFilter {
+            namespace: Some(ABSTRACT_NAMESPACE.to_string()),
+            name: Some("savings-app".to_string()),
+            version: None,
+            status: Some(ModuleStatus::Registered),
+        }),
+        None,
+        None,
+    )?;
+
+    let mut contract_instances_to_check: HashSet<(String, Addr)> = HashSet::new();
+
+    for app_info in saving_modules.modules {
+        let code_id = app_info.module.reference.unwrap_app()?;
+        let mut contract_addrs = rt
+            .handle()
+            .block_on(fetch_instances(daemon.channel(), code_id))?;
+
+        // Only keep the contract addresses that have the required permissions
+        contract_addrs.retain(|address| {
+            has_authz_permission(&abstr, address)
+                .ok()
+                // Don't include if queries fail.
+                .unwrap_or_default()
+        });
+
+        // Add all the entries to the `contract_instances_to_check`
+        contract_instances_to_check.extend(
+            contract_addrs
+                .into_iter()
+                .map(|addr| (app_info.module.info.to_string(), Addr::unchecked(addr))),
+        );
+    }
+
+    // Run long-running autocompound job.
+    autocompound(&mut daemon, &mut contract_instances_to_check)?;
+    Ok(())
+}
 
 /// Get the contract instances of a given code_id
 pub async fn fetch_instances(channel: Channel, code_id: u64) -> anyhow::Result<Vec<String>> {
@@ -46,51 +99,21 @@ pub async fn fetch_instances(channel: Channel, code_id: u64) -> anyhow::Result<V
 // TODO: are we using wasm execute grant here?
 const MSG_TYPE_URL: &str = "";
 
-pub fn daemon_with_savings_authz(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<Daemon> {
-    // Get config of an app to get proxy address(granter)
-    let app_config: AppConfigResponse =
-        daemon.query(&QueryMsg::Base(BaseQueryMsg::BaseConfig {}), contract_addr)?;
+/// Finds the account owner and checks if the contract has authz permissions on it.
+pub fn has_authz_permission(
+    abstr: &AbstractClient<Daemon>,
+    contract_addr: &String,
+) -> anyhow::Result<bool> {
+    let daemon = abstr.environment();
 
+    let account = abstr.account_from(AccountSource::App(Addr::unchecked(contract_addr)))?;
     // Check if grant is indeed given
-    let authz_granter = app_config.proxy_address;
-    let authz_querier: Authz = daemon.query_client();
+    let authz_granter = account.owner()?;
+    let authz_querier: Authz = daemon.querier();
     let grantee = daemon.sender().to_string();
     let grants = daemon.rt_handle.block_on(async {
         authz_querier
-            .grants(
-                authz_granter.to_string(),
-                grantee,
-                MSG_TYPE_URL.to_string(),
-                None,
-            )
-            .await
-    })?;
-    if grants.grants.is_empty() {
-        return Err(anyhow::anyhow!("Missing required grant"));
-    }
-
-    Ok(daemon.with_authz_granter(authz_granter))
-}
-
-pub fn has_authz_permission(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<bool> {
-    // Get config of an app to get proxy address(granter)
-    let app_config: AppConfigResponse =
-        daemon.query(&QueryMsg::Base(BaseQueryMsg::BaseConfig {}), contract_addr)?;
-
-    let manager = Manager::new(MANAGER, daemon.clone());
-    manager.set_address(&app_config.manager_address);
-    let acc_config = manager.config()?;
-
-    let account = AbstractAccount::new(&Abstract::new(daemon.clone()), acc_config.account_id);
-    Account::new(account,false);
-
-    // Check if grant is indeed given
-    let authz_granter = app_config.proxy_address;
-    let authz_querier: Authz = daemon.query_client();
-    let grantee = daemon.sender().to_string();
-    let grants = daemon.rt_handle.block_on(async {
-        authz_querier
-            .grants(
+            ._grants(
                 authz_granter.to_string(),
                 grantee,
                 MSG_TYPE_URL.to_string(),
@@ -105,30 +128,23 @@ pub fn autocompound(
     daemon: &mut Daemon,
     instances_to_check: &mut HashSet<(String, Addr)>,
 ) -> anyhow::Result<()> {
-    let mut stale_apps = vec![];
-
     for (id, address) in instances_to_check.iter() {
         let app = AppInterface::new(id, daemon.clone());
         app.set_address(address);
         use app::AppQueryMsgFns;
         let resp = app.available_rewards()?;
 
+        // TODO: ensure rewards > tx fee
+
         if !resp.available_rewards.is_empty() {
-            // Execute autocompound, if we have grant(s)
-            if let Ok(daemon) = daemon_with_savings_authz(daemon, &address) {
-                daemon.execute(
-                    &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
-                    &[],
-                    &address,
-                )?;
-            } else {
-                // Remove app from the list, as we don't have grant
-                stale_apps.push((id.clone(), address.clone()));
-            }
+            // Execute autocompound
+            let daemon = daemon.rebuild().authz_granter(address).build()?;
+            daemon.execute(
+                &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
+                &[],
+                &address,
+            )?;
         }
     }
-
-    // We can try to batch it, but it could be PIAS to not gas overflow
-    // daemon.daemon.sender.commit_tx(msgs, memo)
     Ok(())
 }

@@ -431,12 +431,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     savings_app.withdraw(half_of_liquidity)?;
 
     let balance_usdc_after_half_withdraw = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_after_half_withdraw = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();
@@ -447,12 +447,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Withdraw rest of liquidity
     savings_app.withdraw_all()?;
     let balance_usdc_after_full_withdraw = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_after_full_withdraw = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();
@@ -477,12 +477,12 @@ fn create_multiple_positions() -> anyhow::Result<()> {
     )?;
 
     let balance_usdc_first_position = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_first_position = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();
@@ -495,12 +495,12 @@ fn create_multiple_positions() -> anyhow::Result<()> {
     )?;
 
     let balance_usdc_second_position = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_second_position = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();
@@ -589,12 +589,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Save new balances
     let balance_after_autocompound: AssetsBalanceResponse = savings_app.balance()?;
     let balance_usdc_after_autocompound = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_after_autocompound = chain
-    .bank_querier()
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();
