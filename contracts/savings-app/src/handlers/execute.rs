@@ -100,8 +100,7 @@ fn create_position(
 
     // If we already have position open - withdraw all from it first
     if POSITION.exists(deps.storage) {
-        let (withdraw_msg, withdraw_amount, total_amount) =
-            _withdraw_position(deps, &env, None)?;
+        let (withdraw_msg, withdraw_amount, total_amount) = _withdraw_position(deps, &env, None)?;
         response = response
             .add_message(withdraw_msg)
             .add_attribute("withdraw_amount", withdraw_amount)

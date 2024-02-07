@@ -2,16 +2,25 @@
 name = "savings-bot"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "shuttle"
+path = "src/bin/shuttle.rs"
+
+[[bin]]
+name = "local"
+path = "src/bin/local.rs"
 
 [dependencies]
 cw-orch = { workspace = true, features = ["daemon"] }
 abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
 env_logger = "0.10.0"
 log = "0.4.20"
 tonic = "0.10.0"
-app = { path = "../contracts/savings-app" }
+app = { path = "../contracts/savings-app", features = ["interface"] }
+shuttle-runtime = "0.38.0"

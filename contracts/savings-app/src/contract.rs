@@ -1,5 +1,5 @@
-use abstract_app::AppContract;
 use abstract_app::objects::dependency::StaticDependency;
+use abstract_app::AppContract;
 use cosmwasm_std::Response;
 
 use crate::{
