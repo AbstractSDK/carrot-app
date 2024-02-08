@@ -40,7 +40,7 @@ fn swap_msg(
                 belief_price: None,
             },
         },
-        sender: sender.to_string(),
+        addr_as_sender: sender.to_string(),
     };
     let trigger_swap_msg: GenerateMessagesResponse =
         dex.query(query_msg.clone()).map_err(|_| {

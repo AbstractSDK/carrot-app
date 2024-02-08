@@ -3,9 +3,9 @@ use app::{
     msg::{AppExecuteMsg, ExecuteMsg},
     AppInterface,
 };
-use cosmos_sdk_proto::cosmwasm::wasm::v1::{
+use cosmos_sdk_proto::{cosmwasm::wasm::v1::{
     query_client::QueryClient, QueryContractsByCodeRequest,
-};
+}, traits::Message as _};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMO_5, queriers::Authz, Daemon},
@@ -14,6 +14,7 @@ use cw_orch::{
     tokio::runtime::Runtime,
 };
 use log::{log, Level};
+use osmosis_std::types::{cosmos::{authz::v1beta1::GenericAuthorization, bank::v1beta1::{MsgSend, SendAuthorization}}, osmosis::{concentratedliquidity::v1beta1::{MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition, MsgWithdrawPosition}, gamm::v1beta1::MsgSwapExactAmountIn}};
 use std::collections::HashSet;
 use tonic::transport::Channel;
 
@@ -105,9 +106,6 @@ pub async fn fetch_instances(channel: Channel, code_id: u64) -> anyhow::Result<V
     anyhow::Ok(contract_addrs)
 }
 
-// TODO: are we using wasm execute grant here?
-const MSG_TYPE_URL: &str = "";
-
 /// Finds the account owner and checks if the contract has authz permissions on it.
 pub fn has_authz_permission(
     abstr: &AbstractClient<Daemon>,
@@ -116,17 +114,16 @@ pub fn has_authz_permission(
     let daemon = abstr.environment();
 
     let account = abstr.account_from(AccountSource::App(Addr::unchecked(contract_addr)))?;
-    // Check if grant is indeed given
-    let authz_granter = account.owner()?;
+    let granter = account.owner()?;
+
    // Check if authz is indeed given
-   let authz_querier: Authz = daemon.query_client();
-   let granter = tlo.address;
+   let authz_querier: Authz = daemon.querier();
    let authz_grantee = contract_addr.to_string();
    let generic_authorizations: Vec<GenericAuthorization> = daemon
        .rt_handle
        .block_on(async {
            authz_querier
-               .grants(
+               ._grants(
                    granter.to_string(),
                    authz_grantee.clone(),
                    GenericAuthorization::TYPE_URL.to_string(),
@@ -143,7 +140,7 @@ pub fn has_authz_permission(
        if !generic_authorizations.contains(&GenericAuthorization {
            msg: authorization_url.to_owned(),
        }) {
-           false
+           return Ok(false)
        }
    }
 
@@ -153,7 +150,7 @@ pub fn has_authz_permission(
    }) {
        let send_authorizations = daemon.rt_handle.block_on(async {
            authz_querier
-               .grants(
+               ._grants(
                    granter.to_string(),
                    authz_grantee,
                    SendAuthorization::TYPE_URL.to_string(),
@@ -162,7 +159,7 @@ pub fn has_authz_permission(
                .await
        })?;
        if send_authorizations.grants.is_empty() {
-           return false;
+           return Ok(false)
        }
    }
     Ok(true)
