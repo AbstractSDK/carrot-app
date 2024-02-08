@@ -29,6 +29,15 @@ use app::contract::APP_ID;
 
 use std::iter::Extend;
 
+const AUTHORIZATION_URLS: &[&str] = &[
+    MsgCreatePosition::TYPE_URL,
+    MsgSwapExactAmountIn::TYPE_URL,
+    MsgAddToPosition::TYPE_URL,
+    MsgWithdrawPosition::TYPE_URL,
+    MsgCollectIncentives::TYPE_URL,
+    MsgCollectSpreadRewards::TYPE_URL,
+];
+
 /// entrypoint for the bot
 pub fn cron_main() -> anyhow::Result<()> {
     let rt = Runtime::new()?;
@@ -109,19 +118,54 @@ pub fn has_authz_permission(
     let account = abstr.account_from(AccountSource::App(Addr::unchecked(contract_addr)))?;
     // Check if grant is indeed given
     let authz_granter = account.owner()?;
-    let authz_querier: Authz = daemon.querier();
-    let grantee = daemon.sender().to_string();
-    let grants = daemon.rt_handle.block_on(async {
-        authz_querier
-            ._grants(
-                authz_granter.to_string(),
-                grantee,
-                MSG_TYPE_URL.to_string(),
-                None,
-            )
-            .await
-    })?;
-    Ok(!grants.grants.is_empty())
+   // Check if authz is indeed given
+   let authz_querier: Authz = daemon.query_client();
+   let granter = tlo.address;
+   let authz_grantee = contract_addr.to_string();
+   let generic_authorizations: Vec<GenericAuthorization> = daemon
+       .rt_handle
+       .block_on(async {
+           authz_querier
+               .grants(
+                   granter.to_string(),
+                   authz_grantee.clone(),
+                   GenericAuthorization::TYPE_URL.to_string(),
+                   None,
+               )
+               .await
+       })?
+       .grants
+       .into_iter()
+       .map(|grant| GenericAuthorization::decode(&*grant.authorization.unwrap().value))
+       .collect::<Result<_, _>>()?;
+   // Check all generic authorizations are in place
+   for &authorization_url in AUTHORIZATION_URLS {
+       if !generic_authorizations.contains(&GenericAuthorization {
+           msg: authorization_url.to_owned(),
+       }) {
+           false
+       }
+   }
+
+   // Check any of send authorization is in place
+   if !generic_authorizations.contains(&GenericAuthorization {
+       msg: MsgSend::TYPE_URL.to_owned(),
+   }) {
+       let send_authorizations = daemon.rt_handle.block_on(async {
+           authz_querier
+               .grants(
+                   granter.to_string(),
+                   authz_grantee,
+                   SendAuthorization::TYPE_URL.to_string(),
+                   None,
+               )
+               .await
+       })?;
+       if send_authorizations.grants.is_empty() {
+           return false;
+       }
+   }
+    Ok(true)
 }
 
 pub fn autocompound(
