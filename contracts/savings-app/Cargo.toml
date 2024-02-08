@@ -31,7 +31,6 @@ export = []
 node-tests = ["interface"]
 interface = [
   "export",
-  "dep:abstract-interface",
   "dep:cw-orch",
   "abstract-app/interface-macro",
   "abstract-dex-adapter/interface",

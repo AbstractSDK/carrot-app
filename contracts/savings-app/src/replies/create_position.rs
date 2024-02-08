@@ -1,4 +1,4 @@
-use abstract_sdk::AbstractResponse;
+use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{Binary, DepsMut, Env, Reply};
 use osmosis_std::types::{
     cosmos::authz::v1beta1::MsgExecResponse,
@@ -24,7 +24,7 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
 
     // We save the position
     let position = Position {
-        owner: recipient.clone(),
+        owner: recipient.to_string(),
         position_id: response.position_id,
     };
 

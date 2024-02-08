@@ -1,10 +1,10 @@
 // // TODO: Do we REALLY need to use authz for this one tho?
 // // TODO: Can we add Contract Grant to abstract
 //
-// use abstract_sdk::features::AccountIdentification;
-// use abstract_sdk::AbstractResponse;
-// use abstract_sdk::AccountAction;
-// use abstract_sdk::Execution;
+// use abstract_app::abstract_sdk::features::AccountIdentification;
+// use abstract_app::abstract_sdk::AbstractResponse;
+// use abstract_app::abstract_sdk::AccountAction;
+// use abstract_app::abstract_sdk::Execution;
 // use cosmwasm_std::to_json_binary;
 // use cosmwasm_std::CosmosMsg;
 // use cosmwasm_std::{DepsMut, Env, MessageInfo};

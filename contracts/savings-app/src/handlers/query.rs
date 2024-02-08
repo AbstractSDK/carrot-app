@@ -1,4 +1,4 @@
-use abstract_app::objects::AnsAsset;
+use abstract_app::abstract_core::objects::AnsAsset;
 use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
 use osmosis_std::try_proto_to_cosmwasm_coins;

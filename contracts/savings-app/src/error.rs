@@ -1,5 +1,6 @@
+use abstract_app::abstract_core::AbstractError;
+use abstract_app::abstract_sdk::AbstractSdkError;
 use abstract_app::AppError as AbstractAppError;
-use abstract_sdk::{core::AbstractError, AbstractSdkError};
 use cosmwasm_std::{Coin, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
@@ -27,6 +28,9 @@ pub enum AppError {
 
     #[error(transparent)]
     ProstDecodeError(#[from] prost::DecodeError),
+
+    #[error(transparent)]
+    CoinsError(#[from] cosmwasm_std::CoinsError),
 
     #[error("Unauthorized")]
     Unauthorized {},
