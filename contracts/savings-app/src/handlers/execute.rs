@@ -292,11 +292,15 @@ fn _inner_withdraw(
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::{coin, coins, testing::mock_dependencies};
+    use abstract_app::objects::{AnsAsset, AssetEntry};
+    use cosmwasm_std::{coin, coins, testing::mock_dependencies, Decimal};
     use cw_asset::AssetInfo;
 
     use super::*;
-    use crate::state::{Config, PoolConfig};
+    use crate::{
+        handlers::swap_helpers::tokens_to_swap,
+        state::{Config, PoolConfig},
+    };
     pub const DEPOSIT_TOKEN: &str = "USDC";
     pub const TOKEN0: &str = "USDT";
     pub const TOKEN1: &str = DEPOSIT_TOKEN;

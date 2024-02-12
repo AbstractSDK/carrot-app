@@ -4,11 +4,7 @@ use abstract_app::abstract_core::{
 };
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use abstract_client::{AbstractClient, Application, Namespace};
-use abstract_dex_adapter::msg::ExecuteMsg;
-use app::msg::{
-    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse,
-};
+use abstract_dex_adapter::{msg::ExecuteMsg, DEX_ADAPTER_ID};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::{
@@ -42,6 +38,10 @@ use osmosis_std::types::osmosis::{
 };
 use prost::Message;
 use prost_types::Any;
+use savings_app::msg::{
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
+    AvailableRewardsResponse,
+};
 
 fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
     let expected = expected.into().u128();
@@ -110,7 +110,7 @@ pub const INITIAL_UPPER_TICK: i64 = 1000;
 pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
-) -> anyhow::Result<Application<Chain, app::AppInterface<Chain>>> {
+) -> anyhow::Result<Application<Chain, savings_app::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
     // We register the pool inside the Abstract ANS
@@ -142,13 +142,13 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         },
     )?;
     // The savings app
-    publisher.publish_app::<app::contract::interface::AppInterface<Chain>>()?;
+    publisher.publish_app::<savings_app::AppInterface<Chain>>()?;
 
     // We deploy the savings-app
-    let savings_app: Application<Chain, app::AppInterface<Chain>> =
+    let savings_app: Application<Chain, savings_app::AppInterface<Chain>> =
         publisher
             .account()
-            .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
+            .install_app_with_dependencies::<savings_app::AppInterface<Chain>>(
                 &AppInstantiateMsg {
                     deposit_denom: asset0,
                     exchanges: vec![DEX_NAME.to_string()],
@@ -159,40 +159,33 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             )?;
 
     // We update authorized addresses on the adapter for the app
-    savings_app
-        .account()
-        .execute_on_module::<abstract_dex_adapter::interface::DexAdapter<Chain>>(
-            &ExecuteMsg::Base(BaseExecuteMsg {
-                proxy_address: Some(savings_app.account().proxy()?.to_string()),
-                msg: AdapterBaseMsg::UpdateAuthorizedAddresses {
-                    to_add: vec![savings_app.addr_str()?],
-                    to_remove: vec![],
-                },
-            }),
-            &[],
-        )?;
+    savings_app.account().as_ref().manager.execute_on_module(
+        DEX_ADAPTER_ID,
+        &ExecuteMsg::Base(BaseExecuteMsg {
+            proxy_address: Some(savings_app.account().proxy()?.to_string()),
+            msg: AdapterBaseMsg::UpdateAuthorizedAddresses {
+                to_add: vec![savings_app.addr_str()?],
+                to_remove: vec![],
+            },
+        }),
+    )?;
 
     Ok(savings_app)
 }
 
 fn create_position<Chain: CwEnv>(
-    app: &Application<Chain, app::AppInterface<Chain>>,
+    app: &Application<Chain, savings_app::AppInterface<Chain>>,
     funds: Vec<Coin>,
     asset0: Coin,
     asset1: Coin,
 ) -> anyhow::Result<()> {
-    app.account()
-        .execute_on_module::<app::AppInterface<Chain>>(
-            &app::msg::AppExecuteMsg::CreatePosition {
-                lower_tick: INITIAL_LOWER_TICK,
-                upper_tick: INITIAL_UPPER_TICK,
-                funds,
-                asset0,
-                asset1,
-            }
-            .into(),
-            &[],
-        )?;
+    app.create_position(
+        asset0,
+        asset1,
+        funds,
+        INITIAL_LOWER_TICK,
+        INITIAL_UPPER_TICK,
+    )?;
     Ok(())
 }
 
@@ -273,7 +266,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
 
 fn setup_test_tube() -> anyhow::Result<(
     u64,
-    Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
+    Application<OsmosisTestTube, savings_app::AppInterface<OsmosisTestTube>>,
 )> {
     dotenv::dotenv()?;
     let _ = env_logger::builder().is_test(true).try_init();
@@ -289,7 +282,7 @@ fn setup_test_tube() -> anyhow::Result<(
 }
 
 fn give_authorizations(
-    savings_app: &Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
+    savings_app: &Application<OsmosisTestTube, savings_app::AppInterface<OsmosisTestTube>>,
 ) -> Result<(), anyhow::Error> {
     let chain = savings_app.get_chain();
     let abs = Abstract::load_from(chain.clone())?;
@@ -415,10 +408,12 @@ fn withdraw_position() -> anyhow::Result<()> {
 
     let balance: AssetsBalanceResponse = savings_app.balance()?;
     let balance_usdc_before_withdraw = chain
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_before_withdraw = chain
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();
@@ -573,10 +568,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = savings_app.balance()?;
     let balance_usdc_before_autocompound = chain
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
         .pop()
         .unwrap();
     let balance_usdt_before_autocompound = chain
+        .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
         .pop()
         .unwrap();

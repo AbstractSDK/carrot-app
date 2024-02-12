@@ -22,5 +22,5 @@ dotenv = "0.15.0"
 env_logger = "0.10.0"
 log = "0.4.20"
 tonic = "0.10.0"
-app = { path = "../contracts/savings-app", features = ["interface"] }
+savings-app = { path = "../contracts/savings-app", features = ["interface"] }
 shuttle-runtime = "0.38.0"

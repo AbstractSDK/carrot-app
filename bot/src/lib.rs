@@ -1,11 +1,8 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
-use app::{
-    msg::{AppExecuteMsg, ExecuteMsg},
-    AppInterface,
+use cosmos_sdk_proto::{
+    cosmwasm::wasm::v1::{query_client::QueryClient, QueryContractsByCodeRequest},
+    traits::Message as _,
 };
-use cosmos_sdk_proto::{cosmwasm::wasm::v1::{
-    query_client::QueryClient, QueryContractsByCodeRequest,
-}, traits::Message as _};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMO_5, queriers::Authz, Daemon},
@@ -14,7 +11,23 @@ use cw_orch::{
     tokio::runtime::Runtime,
 };
 use log::{log, Level};
-use osmosis_std::types::{cosmos::{authz::v1beta1::GenericAuthorization, bank::v1beta1::{MsgSend, SendAuthorization}}, osmosis::{concentratedliquidity::v1beta1::{MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition, MsgWithdrawPosition}, gamm::v1beta1::MsgSwapExactAmountIn}};
+use osmosis_std::types::{
+    cosmos::{
+        authz::v1beta1::GenericAuthorization,
+        bank::v1beta1::{MsgSend, SendAuthorization},
+    },
+    osmosis::{
+        concentratedliquidity::v1beta1::{
+            MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
+            MsgWithdrawPosition,
+        },
+        gamm::v1beta1::MsgSwapExactAmountIn,
+    },
+};
+use savings_app::{
+    msg::{AppExecuteMsg, ExecuteMsg},
+    AppInterface,
+};
 use std::collections::HashSet;
 use tonic::transport::Channel;
 
@@ -26,7 +39,7 @@ use abstract_app::{
         namespace::ABSTRACT_NAMESPACE,
     },
 };
-use app::contract::APP_ID;
+use savings_app::contract::APP_ID;
 
 use std::iter::Extend;
 
@@ -116,52 +129,52 @@ pub fn has_authz_permission(
     let account = abstr.account_from(AccountSource::App(Addr::unchecked(contract_addr)))?;
     let granter = account.owner()?;
 
-   // Check if authz is indeed given
-   let authz_querier: Authz = daemon.querier();
-   let authz_grantee = contract_addr.to_string();
-   let generic_authorizations: Vec<GenericAuthorization> = daemon
-       .rt_handle
-       .block_on(async {
-           authz_querier
-               ._grants(
-                   granter.to_string(),
-                   authz_grantee.clone(),
-                   GenericAuthorization::TYPE_URL.to_string(),
-                   None,
-               )
-               .await
-       })?
-       .grants
-       .into_iter()
-       .map(|grant| GenericAuthorization::decode(&*grant.authorization.unwrap().value))
-       .collect::<Result<_, _>>()?;
-   // Check all generic authorizations are in place
-   for &authorization_url in AUTHORIZATION_URLS {
-       if !generic_authorizations.contains(&GenericAuthorization {
-           msg: authorization_url.to_owned(),
-       }) {
-           return Ok(false)
-       }
-   }
+    // Check if authz is indeed given
+    let authz_querier: Authz = daemon.querier();
+    let authz_grantee = contract_addr.to_string();
+    let generic_authorizations: Vec<GenericAuthorization> = daemon
+        .rt_handle
+        .block_on(async {
+            authz_querier
+                ._grants(
+                    granter.to_string(),
+                    authz_grantee.clone(),
+                    GenericAuthorization::TYPE_URL.to_string(),
+                    None,
+                )
+                .await
+        })?
+        .grants
+        .into_iter()
+        .map(|grant| GenericAuthorization::decode(&*grant.authorization.unwrap().value))
+        .collect::<Result<_, _>>()?;
+    // Check all generic authorizations are in place
+    for &authorization_url in AUTHORIZATION_URLS {
+        if !generic_authorizations.contains(&GenericAuthorization {
+            msg: authorization_url.to_owned(),
+        }) {
+            return Ok(false);
+        }
+    }
 
-   // Check any of send authorization is in place
-   if !generic_authorizations.contains(&GenericAuthorization {
-       msg: MsgSend::TYPE_URL.to_owned(),
-   }) {
-       let send_authorizations = daemon.rt_handle.block_on(async {
-           authz_querier
-               ._grants(
-                   granter.to_string(),
-                   authz_grantee,
-                   SendAuthorization::TYPE_URL.to_string(),
-                   None,
-               )
-               .await
-       })?;
-       if send_authorizations.grants.is_empty() {
-           return Ok(false)
-       }
-   }
+    // Check any of send authorization is in place
+    if !generic_authorizations.contains(&GenericAuthorization {
+        msg: MsgSend::TYPE_URL.to_owned(),
+    }) {
+        let send_authorizations = daemon.rt_handle.block_on(async {
+            authz_querier
+                ._grants(
+                    granter.to_string(),
+                    authz_grantee,
+                    SendAuthorization::TYPE_URL.to_string(),
+                    None,
+                )
+                .await
+        })?;
+        if send_authorizations.grants.is_empty() {
+            return Ok(false);
+        }
+    }
     Ok(true)
 }
 
@@ -172,7 +185,7 @@ pub fn autocompound(
     for (id, address) in instances_to_check.iter() {
         let app = AppInterface::new(id, daemon.clone());
         app.set_address(address);
-        use app::AppQueryMsgFns;
+        use savings_app::AppQueryMsgFns;
         let resp = app.available_rewards()?;
 
         // TODO: ensure rewards > tx fee

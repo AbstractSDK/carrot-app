@@ -15,7 +15,7 @@ use crate::{
 
 use super::query::query_price;
 
-fn swap_msg(
+pub(crate) fn swap_msg(
     deps: Deps,
     env: &Env,
     offer_asset: AnsAsset,
@@ -57,7 +57,7 @@ fn swap_msg(
         .collect())
 }
 
-fn tokens_to_swap(
+pub(crate) fn tokens_to_swap(
     deps: Deps,
     amount_to_swap: Vec<Coin>,
     asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
