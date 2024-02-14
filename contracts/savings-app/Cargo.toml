@@ -47,7 +47,9 @@ schemars = "0.8"
 cw-asset = { version = "3.0" }
 
 abstract-app = { workspace = true }
-
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32", features = [
+  "stargate",
+] }
 # Dependencies for interface
 abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
 
