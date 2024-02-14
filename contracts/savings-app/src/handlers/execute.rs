@@ -206,7 +206,7 @@ fn swap_msg(
         return Ok(vec![]);
     }
     let config = CONFIG.load(deps.storage)?;
-    let sender = get_user(deps, app)?;
+    let user = get_user(deps, app)?;
 
     let dex = app.dex(deps, config.exchange.clone());
     let query_msg = DexQueryMsg::GenerateMessages {
@@ -219,7 +219,7 @@ fn swap_msg(
                 belief_price: None,
             },
         },
-        sender: sender.clone(),
+        addr_as_sender: user.clone(),
     };
     let trigger_swap_msg: GenerateMessagesResponse =
         dex.query(query_msg.clone()).map_err(|_| {
@@ -231,7 +231,7 @@ fn swap_msg(
     Ok(trigger_swap_msg
         .messages
         .into_iter()
-        .map(|m| wrap_authz(m, sender.clone(), env))
+        .map(|m| wrap_authz(m, user.clone(), env))
         .collect())
 }
 

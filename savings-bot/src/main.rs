@@ -8,7 +8,7 @@ use cosmos_sdk_proto::{
 };
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMO_5, queriers::Authz, Daemon},
+    daemon::{networks::OSMO_5, Daemon},
     environment::TxHandler,
     prelude::*,
     tokio::runtime::Runtime,
