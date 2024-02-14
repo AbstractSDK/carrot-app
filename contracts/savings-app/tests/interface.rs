@@ -3,14 +3,12 @@ use std::iter;
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use abstract_app::objects::salt::generate_instantiate_salt;
 use abstract_app::{
-    abstract_core::{
-        adapter::{AdapterBaseMsg, BaseExecuteMsg},
-        objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
+    abstract_core::objects::{
+        pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType,
     },
     objects::module::ModuleVersion,
 };
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
-use abstract_dex_adapter::msg::{DexQueryMsg, ExecuteMsg};
 use abstract_interface::AccountFactoryQueryFns;
 use app::contract::APP_ID;
 use app::msg::{
@@ -37,7 +35,7 @@ use cw_orch::{
                 tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
-        ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
+        ConcentratedLiquidity, GovWithAppAccess, Module,
     },
     prelude::*,
 };
@@ -338,72 +336,6 @@ fn setup_test_tube(
     }
     Ok((pool_id, savings_app))
 }
-
-// fn give_authorizations(
-//     savings_app: &Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
-// ) -> Result<(), anyhow::Error> {
-//     let chain = savings_app.get_chain();
-//     let abs = Abstract::load_from(chain.clone())?;
-//     let dex_fee_account = AbstractAccount::new(&abs, AccountId::local(0));
-//     let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
-
-//     let app = chain.app.borrow();
-//     let authorization_urls = [
-//         MsgCreatePosition::TYPE_URL,
-//         MsgSwapExactAmountIn::TYPE_URL,
-//         MsgAddToPosition::TYPE_URL,
-//         MsgWithdrawPosition::TYPE_URL,
-//         MsgCollectIncentives::TYPE_URL,
-//         MsgCollectSpreadRewards::TYPE_URL,
-//     ]
-//     .map(ToOwned::to_owned);
-//     let granter = chain.sender().to_string();
-//     let grantee = savings_app.addr_str().unwrap();
-//     for msg in authorization_urls {
-//         let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-//             MsgGrant {
-//                 granter: granter.clone(),
-//                 grantee: grantee.clone(),
-//                 grant: Some(Grant {
-//                     authorization: Some(GenericAuthorization { msg }.to_any()),
-//                     expiration: None,
-//                 }),
-//             },
-//             MsgGrant::TYPE_URL,
-//             chain.sender.as_ref(),
-//         )?;
-//     }
-//     // Dex fees
-//     let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-//         MsgGrant {
-//             granter: chain.sender().to_string(),
-//             grantee: savings_app.addr_str().unwrap(),
-//             grant: Some(Grant {
-//                 authorization: Some(
-//                     SendAuthorization {
-//                         spend_limit: vec![
-//                             cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-//                                 denom: factory_denom(chain, USDC),
-//                                 amount: LOTS.to_string(),
-//                             },
-//                             cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-//                                 denom: factory_denom(chain, USDT),
-//                                 amount: LOTS.to_string(),
-//                             },
-//                         ],
-//                         allow_list: vec![dex_fee_addr],
-//                     }
-//                     .to_any(),
-//                 ),
-//                 expiration: None,
-//             }),
-//         },
-//         MsgGrant::TYPE_URL,
-//         chain.sender.as_ref(),
-//     )?;
-
-//     Ok(())
-// }
 
 fn give_authorizations<Chain: CwEnv + Stargate>(
     client: &AbstractClient<Chain>,
@@ -746,8 +678,7 @@ fn check_autocompound() -> anyhow::Result<()> {
 #[test]
 fn create_position_on_instantiation() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube(true)?;
-    let sender = savings_app.account().environment().sender();
-    let savings_app_addr = savings_app.address()?;
+
     let position: PositionResponse = savings_app.position()?;
     assert!(position.position.is_some());
     Ok(())
