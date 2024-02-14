@@ -164,13 +164,17 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // If we create position on instantiate - give auth
     if create_position.is_some() {
         // TODO: We can't get account factory or module factory objects from the client.
-        // Get salt for the module
+        // get Account id of the upcoming sub-account
         let abs = Abstract::load_from(chain.clone())?;
-        let module_factory_addr = abs.module_factory.address()?;
-        let salt = generate_instantiate_salt(&publisher.account().id()?);
+        let account_factory_config = abs.account_factory.config()?;
+        let next_local_account_id = AccountId::local(account_factory_config.local_account_sequence);
+
+        // Get salt for the module
+        let salt = generate_instantiate_salt(&next_local_account_id);
 
         let wasm_querier = chain.wasm_querier();
 
+        let module_factory_addr = abs.module_factory.address()?;
         let savings_app_addr = wasm_querier
             .instantiate2_addr(app_code, module_factory_addr, salt)
             .unwrap();
@@ -744,9 +748,6 @@ fn create_position_on_instantiation() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube(true)?;
     let sender = savings_app.account().environment().sender();
     let savings_app_addr = savings_app.address()?;
-    println!("sender: {sender}, savings_app_addr: {savings_app_addr}");
-    // let dex_module: abstract_dex_adapter::interface::DexAdapter<_> = savings_app.module()?;
-    // dex_module.query(DexQueryMsg::GenerateMessages { message: (), addr_as_sender: () })
     let position: PositionResponse = savings_app.position()?;
     assert!(position.position.is_some());
     Ok(())
