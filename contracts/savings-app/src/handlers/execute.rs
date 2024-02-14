@@ -10,7 +10,7 @@ use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_app::abstract_sdk::AuthZInterface;
 use abstract_app::AppError;
 use cosmwasm_std::{
-    to_json_binary, Attribute, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
 };
 use cosmwasm_std::{Coins, Deps};
 use osmosis_std::{
@@ -45,19 +45,40 @@ fn create_position(
     env: Env,
     info: MessageInfo,
     app: App,
-    create_position_msg: CreatePositionMessage,
+    mut create_position_msg: CreatePositionMessage,
 ) -> AppResult {
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
-    let (messages, create_position_msg, attribute_msgs) =
-        _create_position(deps, &env, &app, create_position_msg)?;
+    let mut response = app.response("create_position");
+    // We start by checking if there is already a position
+    let funds = create_position_msg.funds;
+    let funds_to_deposit = if POSITION.exists(deps.storage) {
+        let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
+            _inner_withdraw(deps.as_ref(), &env, None, &app)?;
 
-    let response = app
-        .response("create_position")
-        .add_messages(messages)
-        .add_submessage(create_position_msg);
+        response = response
+            .add_message(withdraw_msg)
+            .add_attribute("withdraw_amount", withdraw_amount)
+            .add_attribute("total_amount", total_amount);
 
-    Ok(response)
+        // We add the withdrawn funds to the input funds
+        let mut coins: Coins = funds.try_into()?;
+        for fund in withdrawn_funds {
+            coins.add(fund)?;
+        }
+        POSITION.remove(deps.storage);
+        coins.to_vec()
+    } else {
+        funds
+    };
+
+    create_position_msg.funds = funds_to_deposit;
+    let (swap_messages, create_position_msg) =
+        _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
+
+    Ok(response
+        .add_messages(swap_messages)
+        .add_submessage(create_position_msg))
 }
 
 fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
@@ -236,11 +257,11 @@ fn _inner_withdraw(
 }
 
 pub(crate) fn _create_position(
-    deps: DepsMut,
+    deps: Deps,
     env: &Env,
     app: &App,
     create_position_msg: CreatePositionMessage,
-) -> AppResult<(Vec<CosmosMsg>, SubMsg, Vec<Attribute>)> {
+) -> AppResult<(Vec<CosmosMsg>, SubMsg)> {
     let config = CONFIG.load(deps.storage)?;
 
     let CreatePositionMessage {
@@ -251,38 +272,14 @@ pub(crate) fn _create_position(
         asset1,
     } = create_position_msg;
 
-    let mut msgs = vec![];
-    let mut attributes = vec![];
-
-    // We start by checking if there is already a position
-    let funds_to_deposit = if POSITION.exists(deps.storage) {
-        let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
-            _inner_withdraw(deps.as_ref(), &env, None, &app)?;
-
-        msgs.push(withdraw_msg);
-        attributes.push(Attribute::new("withdraw_amount", withdraw_amount));
-        attributes.push(Attribute::new("total_amount", total_amount));
-
-        // We add the withdrawn funds to the input funds
-        let mut coins: Coins = funds.try_into()?;
-        for fund in withdrawn_funds {
-            coins.add(fund)?;
-        }
-        POSITION.remove(deps.storage);
-        coins.to_vec()
-    } else {
-        funds
-    };
-
     // With the current funds, we need to be able to create a position that makes sense
     // Therefore we swap the incoming funds to fit inside the future position
     let (swap_msgs, resulting_assets) =
-        swap_to_enter_position(deps.as_ref(), &env, funds_to_deposit, &app, asset0, asset1)?;
+        swap_to_enter_position(deps, &env, funds, &app, asset0, asset1)?;
 
-    msgs.extend(swap_msgs);
-    let sender = get_user(deps.as_ref(), &app)?;
+    let sender = get_user(deps, &app)?;
 
-    let create_msg = app.auth_z(deps.as_ref(), Some(sender.clone()))?.execute(
+    let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
             pool_id: config.pool_config.pool_id,
@@ -298,7 +295,6 @@ pub(crate) fn _create_position(
     Ok((
         swap_msgs,
         SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
-        attributes,
     ))
 }
 
