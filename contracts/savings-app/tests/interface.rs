@@ -529,16 +529,7 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balance_usdc_first_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
-        .pop()
-        .unwrap();
-    let balance_usdt_first_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
-        .pop()
-        .unwrap();
+    let balances_first_position: AssetsBalanceResponse = savings_app.balance()?;
     // Create position second time, user decided to close first one
     create_position(
         &savings_app,
@@ -547,23 +538,23 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balance_usdc_second_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
-        .pop()
-        .unwrap();
-    let balance_usdt_second_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
-        .pop()
-        .unwrap();
+    let balances_second_position: AssetsBalanceResponse = savings_app.balance()?;
 
-    // Should have more usd in total because we did withdraw before creating new position
-    // TODO: how this should work after SAVE-6?
-    let _total_usd_after =
-        balance_usdc_second_position.amount + balance_usdt_second_position.amount;
-    let _total_usd_before = balance_usdc_first_position.amount + balance_usdt_first_position.amount;
-    // assert!(total_usd_after > total_usd_before);
+    // Should have more usd in total because it adds up
+    let total_usd_first: Uint128 = balances_first_position
+        .balances
+        .into_iter()
+        .map(|c| c.amount)
+        .sum();
+    let total_usd_second: Uint128 = balances_second_position
+        .balances
+        .into_iter()
+        .map(|c| c.amount)
+        .sum();
+    assert!(total_usd_second > total_usd_first);
+
+    // Should be at least (10_000 + 5_000) -2% with all fees
+    assert!(total_usd_second > Uint128::new(15_000).mul_floor(Decimal::percent(98)));
     Ok(())
 }
 
