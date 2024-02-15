@@ -31,7 +31,7 @@ abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "
 # abstract-staking-standard = { path = "../abstract/framework/packages/standards/staking" }
 # abstract-sdk = { path = "../abstract/framework/packages/abstract-sdk" }
 
-cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "fix/checksum-should-not-be-string" }
+cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "main" }
 
 # [patch."https://github.com/abstractsdk/abstract"]
 # abstract-adapter = { path = "../abstract/framework/packages/abstract-adapter" }
