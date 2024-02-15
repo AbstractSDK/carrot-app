@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 cw-orch = { workspace = true, features = ["daemon"] }
-abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "cw-orch-authz/patch" }
+abstract-app = { workspace = true }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
