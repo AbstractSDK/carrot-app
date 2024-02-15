@@ -8,7 +8,7 @@ use cosmos_sdk_proto::{
 };
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMO_5, Daemon},
+    daemon::{networks::OSMO_5, queriers::Authz, Daemon},
     environment::TxHandler,
     prelude::*,
     tokio::runtime::Runtime,
@@ -62,14 +62,14 @@ fn check_authz_grants(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<(
     )?;
 
     // Check if authz is indeed given
-    let authz_querier: Authz = daemon.query_client();
+    let authz_querier: Authz = Authz::new(daemon);
     let granter = tlo.address;
     let authz_grantee = contract_addr.to_string();
     let generic_authorizations: Vec<GenericAuthorization> = daemon
         .rt_handle
         .block_on(async {
             authz_querier
-                .grants(
+                ._grants(
                     granter.to_string(),
                     authz_grantee.clone(),
                     GenericAuthorization::TYPE_URL.to_string(),
@@ -98,7 +98,7 @@ fn check_authz_grants(daemon: &Daemon, contract_addr: &Addr) -> anyhow::Result<(
     }) {
         let send_authorizations = daemon.rt_handle.block_on(async {
             authz_querier
-                .grants(
+                ._grants(
                     granter.to_string(),
                     authz_grantee,
                     SendAuthorization::TYPE_URL.to_string(),
