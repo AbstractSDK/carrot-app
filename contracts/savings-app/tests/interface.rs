@@ -10,11 +10,6 @@ use abstract_app::{
 };
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_interface::AccountFactoryQueryFns;
-use app::contract::APP_ID;
-use app::msg::{
-    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse, CreatePositionMessage, PositionResponse,
-};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::{
@@ -48,6 +43,11 @@ use osmosis_std::types::osmosis::{
 };
 use prost::Message;
 use prost_types::Any;
+use savings_app::contract::APP_ID;
+use savings_app::msg::{
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
+    AvailableRewardsResponse, CreatePositionMessage, PositionResponse,
+};
 
 fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
     let expected = expected.into().u128();
@@ -120,7 +120,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
     create_position: Option<CreatePositionMessage>,
-) -> anyhow::Result<Application<Chain, app::AppInterface<Chain>>> {
+) -> anyhow::Result<Application<Chain, savings_app::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
     // We register the pool inside the Abstract ANS
@@ -140,7 +140,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         )
         .build()?;
 
-    // We deploy the app
+    // We deploy the savings_app
     let publisher = client
         .publisher_builder(Namespace::new("abstract")?)
         .build()?;
@@ -153,7 +153,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             },
         )?;
     // The savings app
-    publisher.publish_app::<app::contract::interface::AppInterface<Chain>>()?;
+    publisher.publish_app::<savings_app::contract::interface::AppInterface<Chain>>()?;
 
     let app_code = client
         .version_control()
@@ -180,10 +180,10 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     }
 
     // We deploy the savings-app
-    let savings_app: Application<Chain, app::AppInterface<Chain>> =
+    let savings_app: Application<Chain, savings_app::AppInterface<Chain>> =
         publisher
             .account()
-            .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
+            .install_app_with_dependencies::<savings_app::contract::interface::AppInterface<Chain>>(
                 &AppInstantiateMsg {
                     deposit_denom: asset0,
                     exchanges: vec![DEX_NAME.to_string()],
@@ -212,13 +212,13 @@ pub fn deploy<Chain: CwEnv + Stargate>(
 }
 
 fn create_position<Chain: CwEnv>(
-    app: &Application<Chain, app::AppInterface<Chain>>,
+    app: &Application<Chain, savings_app::AppInterface<Chain>>,
     funds: Vec<Coin>,
     asset0: Coin,
     asset1: Coin,
 ) -> anyhow::Result<()> {
     app.execute(
-        &app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
+        &savings_app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
             funds,
@@ -310,7 +310,7 @@ fn setup_test_tube(
     create_position: bool,
 ) -> anyhow::Result<(
     u64,
-    Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
+    Application<OsmosisTestTube, savings_app::AppInterface<OsmosisTestTube>>,
 )> {
     dotenv::dotenv()?;
     let _ = env_logger::builder().is_test(true).try_init();
