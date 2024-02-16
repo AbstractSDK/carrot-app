@@ -24,7 +24,7 @@ pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
 
     // We save the position
     let position = Position {
-        owner: recipient.clone(),
+        owner: recipient.to_string(),
         position_id: response.position_id,
         last_compound: env.block.time,
     };

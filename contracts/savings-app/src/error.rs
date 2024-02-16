@@ -34,6 +34,9 @@ pub enum AppError {
     #[error(transparent)]
     ProstDecodeError(#[from] prost::DecodeError),
 
+    #[error(transparent)]
+    CoinsError(#[from] cosmwasm_std::CoinsError),
+
     #[error("Unauthorized")]
     Unauthorized {},
 
