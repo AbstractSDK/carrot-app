@@ -40,6 +40,10 @@ pub fn execute_handler(
     }
 }
 
+/// In this function, we want to create a new position for the user.
+/// This operation happens in multiple steps :
+/// 1. Withdraw a potential existing position and add the funds to the current position being created
+/// 2. Create a new position using the existing funds (if any) + the funds that the user wishes to deposit additionally
 fn create_position(
     deps: DepsMut,
     env: Env,
@@ -256,6 +260,22 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
 }
 
+/// This function creates a position for the user,
+/// 1. Swap the indicated funds to match the asset0/asset1 ratio and deposit as much as possible in the pool for the given parameters
+/// 2. Create a new position
+/// 3. This create a reply that stores the created position id inside the contract storage
+/// Description.
+///
+/// * `lower_tick` - Concentrated liquidity pool parameter
+/// * `upper_tick` - Concentrated liquidity pool parameter
+/// * `funds` -  Funds that will be deposited from the user wallet directly into the pool. DO NOT SEND FUNDS TO THIS ENDPOINT
+/// * `asset0` - The target amount of asset0.denom that the user will deposit inside the pool
+/// * `asset1` - The target amount of asset1.denom that the user will deposit inside the pool
+///
+/// asset0 and asset1 are only used in a ratio to each other. They are there to make sure that the deposited funds will ALL land inside the pool.
+/// We don't use an asset ratio because either one of the amounts can be zero
+/// See https://docs.osmosis.zone/osmosis-core/modules/concentrated-liquidity for more details
+///
 pub(crate) fn _create_position(
     deps: Deps,
     env: &Env,
@@ -272,13 +292,13 @@ pub(crate) fn _create_position(
         asset1,
     } = create_position_msg;
 
-    // With the current funds, we need to be able to create a position that makes sense
-    // Therefore we swap the incoming funds to fit inside the future position
+    // 1. Swap the assets
     let (swap_msgs, resulting_assets) =
         swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
 
     let sender = get_user(deps, app)?;
 
+    // 2. Create a position
     let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
@@ -294,6 +314,7 @@ pub(crate) fn _create_position(
 
     Ok((
         swap_msgs,
+        // 3. Use a reply to get the stored position id
         SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
     ))
 }
