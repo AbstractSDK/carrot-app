@@ -5,7 +5,8 @@ use crate::{
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
-        assert_contract, get_osmosis_position, get_position, get_position_status, CONFIG, POSITION,
+        assert_contract, get_osmosis_position, get_position, get_position_status, Config, CONFIG,
+        POSITION,
     },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
@@ -146,7 +147,6 @@ fn withdraw(
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
-    let config = CONFIG.load(deps.storage)?;
 
     let position = get_osmosis_position(deps.as_ref())?;
     let position_details = position.position.unwrap();
@@ -201,6 +201,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_message(msg_deposit);
 
     // If called by non-admin and savings app ready to give rewards to the sender - send rewards to the sender
+    let config = CONFIG.load(deps.storage)?;
     if !app.admin.is_admin(deps.as_ref(), &info.sender)?
         && get_position_status(
             deps.storage,
@@ -209,8 +210,13 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         )?
         .is_ready()
     {
-        let executor_reward_messages =
-            autocompound_executor_rewards(deps.as_ref(), &env, info.sender.into_string(), &app)?;
+        let executor_reward_messages = autocompound_executor_rewards(
+            deps.as_ref(),
+            &env,
+            info.sender.into_string(),
+            &app,
+            config,
+        )?;
 
         response = response.add_messages(executor_reward_messages);
     }
@@ -325,8 +331,8 @@ pub fn autocompound_executor_rewards(
     env: &Env,
     executor: String,
     app: &App,
+    config: Config,
 ) -> AppResult<Vec<CosmosMsg>> {
-    let config = CONFIG.load(deps.storage)?;
     let rewards_config = config.autocompound_rewards_config;
     let position = get_position(deps)?;
     let user = position.owner;
