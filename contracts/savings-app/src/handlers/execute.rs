@@ -2,7 +2,7 @@ use super::swap_helpers::swap_to_enter_position;
 use crate::{
     contract::{App, AppResult},
     helpers::get_user,
-    msg::{AppExecuteMsg, ExecuteMsg},
+    msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{assert_contract, get_osmosis_position, CONFIG, POSITION},
 };
@@ -30,15 +30,9 @@ pub fn execute_handler(
     msg: AppExecuteMsg,
 ) -> AppResult {
     match msg {
-        AppExecuteMsg::CreatePosition {
-            lower_tick,
-            upper_tick,
-            funds,
-            asset0,
-            asset1,
-        } => create_position(
-            deps, env, info, app, funds, lower_tick, upper_tick, asset0, asset1,
-        ),
+        AppExecuteMsg::CreatePosition(create_position_msg) => {
+            create_position(deps, env, info, app, create_position_msg)
+        }
         AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
@@ -46,26 +40,18 @@ pub fn execute_handler(
     }
 }
 
-/// Creates a position on a uni v3 style pool on osmosis.
-#[allow(clippy::too_many_arguments)]
 fn create_position(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
     app: App,
-    funds: Vec<Coin>,
-    lower_tick: i64,
-    upper_tick: i64,
-    asset0: Coin,
-    asset1: Coin,
+    mut create_position_msg: CreatePositionMessage,
 ) -> AppResult {
-    let config = CONFIG.load(deps.storage)?;
-
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
     let mut response = app.response("create_position");
-
     // We start by checking if there is already a position
+    let funds = create_position_msg.funds;
     let funds_to_deposit = if POSITION.exists(deps.storage) {
         let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
             _inner_withdraw(deps.as_ref(), &env, None, &app)?;
@@ -86,32 +72,13 @@ fn create_position(
         funds
     };
 
-    // With the current funds, we need to be able to create a position that makes sense
-    // Therefore we swap the incoming funds to fit inside the future position
-    let (swap_msgs, resulting_assets) =
-        swap_to_enter_position(deps.as_ref(), &env, funds_to_deposit, &app, asset0, asset1)?;
+    create_position_msg.funds = funds_to_deposit;
+    let (swap_messages, create_position_msg) =
+        _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
 
-    let sender = get_user(deps.as_ref(), &app)?;
-
-    let create_msg = app.auth_z(deps.as_ref(), Some(sender.clone()))?.execute(
-        &env.contract.address,
-        MsgCreatePosition {
-            pool_id: config.pool_config.pool_id,
-            sender: sender.to_string(),
-            lower_tick,
-            upper_tick,
-            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
-            token_min_amount0: "0".to_string(), // No min amount here
-            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
-        },
-    );
-
-    response = response
-        // We need to get the ID for this position in the reply
-        .add_submessage(SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID))
-        .add_messages(swap_msgs);
-
-    Ok(response)
+    Ok(response
+        .add_messages(swap_messages)
+        .add_submessage(create_position_msg))
 }
 
 fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
@@ -234,7 +201,6 @@ fn autocompound(deps: DepsMut, env: Env, _info: MessageInfo, app: App) -> AppRes
 fn _inner_withdraw(
     deps: Deps,
     env: &Env,
-    // The amount to withdraw, if None, withdraw everything
     amount: Option<Uint128>,
     app: &App,
 ) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
@@ -290,186 +256,44 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
 }
 
-#[cfg(test)]
-mod tests {
-    use abstract_app::objects::{AnsAsset, AssetEntry};
-    use cosmwasm_std::{coin, coins, testing::mock_dependencies, Decimal};
-    use cw_asset::AssetInfo;
+pub(crate) fn _create_position(
+    deps: Deps,
+    env: &Env,
+    app: &App,
+    create_position_msg: CreatePositionMessage,
+) -> AppResult<(Vec<CosmosMsg>, SubMsg)> {
+    let config = CONFIG.load(deps.storage)?;
 
-    use super::*;
-    use crate::{
-        handlers::swap_helpers::tokens_to_swap,
-        state::{Config, PoolConfig},
-    };
-    pub const DEPOSIT_TOKEN: &str = "USDC";
-    pub const TOKEN0: &str = "USDT";
-    pub const TOKEN1: &str = DEPOSIT_TOKEN;
+    let CreatePositionMessage {
+        lower_tick,
+        upper_tick,
+        funds,
+        asset0,
+        asset1,
+    } = create_position_msg;
 
-    fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
-        let expected = expected.into().u128();
-        let result = result.u128();
+    // With the current funds, we need to be able to create a position that makes sense
+    // Therefore we swap the incoming funds to fit inside the future position
+    let (swap_msgs, resulting_assets) =
+        swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
 
-        if expected < result - 1 || expected > result + 1 {
-            panic!("Results are not close enough")
-        }
-    }
+    let sender = get_user(deps, app)?;
 
-    fn setup_config(deps: DepsMut) -> cw_orch::anyhow::Result<()> {
-        CONFIG.save(
-            deps.storage,
-            &Config {
-                deposit_info: AssetInfo::Native(DEPOSIT_TOKEN.to_string()),
-                pool_config: PoolConfig {
-                    pool_id: 45,
-                    token0: TOKEN0.to_string(),
-                    token1: TOKEN1.to_string(),
-                    asset0: AssetEntry::new(TOKEN0),
-                    asset1: AssetEntry::new(TOKEN1),
-                },
-                exchange: "osmosis".to_string(),
-            },
-        )?;
-        Ok(())
-    }
+    let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
+        &env.contract.address,
+        MsgCreatePosition {
+            pool_id: config.pool_config.pool_id,
+            sender: sender.to_string(),
+            lower_tick,
+            upper_tick,
+            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
+            token_min_amount0: "0".to_string(), // No min amount here
+            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
+        },
+    );
 
-    // TODO: more tests on tokens_to_swap
-    #[test]
-    fn swap_for_ratio_one_to_one() {
-        let mut deps = mock_dependencies();
-        setup_config(deps.as_mut()).unwrap();
-        let (swap, ask_asset, _final_asset) = tokens_to_swap(
-            deps.as_ref(),
-            coins(5_000, DEPOSIT_TOKEN),
-            coin(100_000_000, TOKEN0),
-            coin(100_000_000, TOKEN1),
-            Decimal::one(),
-        )
-        .unwrap();
-
-        assert_eq!(
-            swap,
-            AnsAsset {
-                name: AssetEntry::new("usdc"),
-                amount: Uint128::new(2500)
-            }
-        );
-        assert_eq!(ask_asset, AssetEntry::new("usdt"));
-    }
-
-    #[test]
-    fn swap_for_ratio_close_to_one() {
-        let mut deps = mock_dependencies();
-        setup_config(deps.as_mut()).unwrap();
-        let amount0 = 110_000_000;
-        let amount1 = 100_000_000;
-
-        let (swap, ask_asset, _final_asset) = tokens_to_swap(
-            deps.as_ref(),
-            coins(5_000, DEPOSIT_TOKEN),
-            coin(amount0, TOKEN0),
-            coin(amount1, TOKEN1),
-            Decimal::one(),
-        )
-        .unwrap();
-
-        assert_is_around(swap.amount, 5_000 - 5_000 * amount1 / (amount1 + amount0));
-        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
-    }
-
-    #[test]
-    fn swap_for_ratio_far_from_one() {
-        let mut deps = mock_dependencies();
-        setup_config(deps.as_mut()).unwrap();
-        let amount0 = 90_000_000;
-        let amount1 = 10_000_000;
-        let (swap, ask_asset, _final_asset) = tokens_to_swap(
-            deps.as_ref(),
-            coins(5_000, DEPOSIT_TOKEN),
-            coin(amount0, TOKEN0),
-            coin(amount1, TOKEN1),
-            Decimal::one(),
-        )
-        .unwrap();
-
-        assert_eq!(
-            swap,
-            AnsAsset {
-                name: AssetEntry::new(DEPOSIT_TOKEN),
-                amount: Uint128::new(5_000 - 5_000 * amount1 / (amount1 + amount0))
-            }
-        );
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
-    }
-
-    #[test]
-    fn swap_for_ratio_far_from_one_inverse() {
-        let mut deps = mock_dependencies();
-        setup_config(deps.as_mut()).unwrap();
-        let amount0 = 10_000_000;
-        let amount1 = 90_000_000;
-        let (swap, ask_asset, _final_asset) = tokens_to_swap(
-            deps.as_ref(),
-            coins(5_000, DEPOSIT_TOKEN),
-            coin(amount0, TOKEN0),
-            coin(amount1, TOKEN1),
-            Decimal::one(),
-        )
-        .unwrap();
-
-        assert_is_around(swap.amount, 5_000 - 5_000 * amount1 / (amount1 + amount0));
-        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
-    }
-
-    #[test]
-    fn swap_for_non_unit_price() {
-        let mut deps = mock_dependencies();
-        setup_config(deps.as_mut()).unwrap();
-        let amount0 = 10_000_000;
-        let amount1 = 90_000_000;
-        let price = Decimal::percent(150);
-        let (swap, ask_asset, _final_asset) = tokens_to_swap(
-            deps.as_ref(),
-            coins(5_000, DEPOSIT_TOKEN),
-            coin(amount0, TOKEN0),
-            coin(amount1, TOKEN1),
-            price,
-        )
-        .unwrap();
-
-        assert_is_around(
-            swap.amount,
-            5_000
-                - 5_000 * amount1
-                    / (amount1
-                        + (Decimal::from_ratio(amount0, 1u128) / price * Uint128::one()).u128()),
-        );
-        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
-    }
-
-    #[test]
-    fn swap_multiple_tokens_for_non_unit_price() {
-        let mut deps = mock_dependencies();
-        setup_config(deps.as_mut()).unwrap();
-        let amount0 = 10_000_000;
-        let amount1 = 10_000_000;
-        let price = Decimal::percent(150);
-        let (swap, ask_asset, _final_asset) = tokens_to_swap(
-            deps.as_ref(),
-            vec![coin(10_000, TOKEN0), coin(4_000, TOKEN1)],
-            coin(amount0, TOKEN0),
-            coin(amount1, TOKEN1),
-            price,
-        )
-        .unwrap();
-
-        assert_eq!(swap.name, AssetEntry::new(TOKEN0));
-        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
-        assert_eq!(
-            10_000 - swap.amount.u128(),
-            4_000 + (Decimal::from_ratio(swap.amount, 1u128) / price * Uint128::one()).u128()
-        );
-    }
+    Ok((
+        swap_msgs,
+        SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
+    ))
 }

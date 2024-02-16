@@ -16,6 +16,20 @@ pub struct AppInstantiateMsg {
     pub pool_id: u64,
     /// Dex that we are ok to swap on !
     pub exchanges: Vec<DexName>,
+    /// Create position with instantiation.
+    /// Will not create position if omitted
+    pub create_position: Option<CreatePositionMessage>,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct CreatePositionMessage {
+    pub lower_tick: i64,
+    pub upper_tick: i64,
+    // Funds to use to deposit on the account
+    pub funds: Vec<Coin>,
+    /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
+    pub asset0: Coin,
+    pub asset1: Coin,
 }
 
 /// App execute messages
@@ -24,16 +38,9 @@ pub struct AppInstantiateMsg {
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
     /// Create the initial liquidity position
-    CreatePosition {
-        lower_tick: i64,
-        upper_tick: i64,
-        // Funds to use to deposit on the account
-        funds: Vec<Coin>,
-        /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
-        /// The ordering of these doesn't matter.
-        asset0: Coin,
-        asset1: Coin,
-    },
+    #[cfg_attr(feature = "interface", payable)]
+    CreatePosition(CreatePositionMessage),
+
     /// Deposit funds onto the app
     Deposit { funds: Vec<Coin> },
     /// Partial withdraw of the funds available on the app

@@ -1,15 +1,25 @@
-use abstract_app::abstract_core::{
-    adapter::{AdapterBaseMsg, BaseExecuteMsg},
-    objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
-};
+use std::iter;
+
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
-use abstract_client::{AbstractClient, Application, Namespace};
-use abstract_dex_adapter::{msg::ExecuteMsg, DEX_ADAPTER_ID};
+use abstract_app::objects::salt::generate_instantiate_salt;
+use abstract_app::{
+    abstract_core::objects::{
+        pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType,
+    },
+    objects::module::ModuleVersion,
+};
+use abstract_client::{AbstractClient, Application, Environment, Namespace};
+use abstract_interface::AccountFactoryQueryFns;
+use app::contract::APP_ID;
+use app::msg::{
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
+    AvailableRewardsResponse, CreatePositionMessage, PositionResponse,
+};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::{
     anyhow,
-    environment::BankQuerier,
+    environment::WasmQuerier,
     osmosis_test_tube::osmosis_test_tube::{
         osmosis_std::types::{
             cosmos::{
@@ -25,7 +35,7 @@ use cw_orch::{
                 tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
-        ConcentratedLiquidity, ExecuteResponse, GovWithAppAccess, Module, Runner,
+        ConcentratedLiquidity, GovWithAppAccess, Module,
     },
     prelude::*,
 };
@@ -38,18 +48,17 @@ use osmosis_std::types::osmosis::{
 };
 use prost::Message;
 use prost_types::Any;
-use savings_app::msg::{
-    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse,
-};
 
-fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
+fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
     let expected = expected.into().u128();
     let result = result.u128();
 
-    if expected < result - 1 || expected > result + 1 {
-        panic!("Results are not close enough")
+    if !(expected - 2..=expected + 2).contains(&result) {
+        return Err(anyhow::anyhow!(
+            "Results are not close enough, expected: {expected}, result: {result}"
+        ));
     }
+    Ok(())
 }
 
 fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
@@ -110,7 +119,8 @@ pub const INITIAL_UPPER_TICK: i64 = 1000;
 pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
-) -> anyhow::Result<Application<Chain, savings_app::AppInterface<Chain>>> {
+    create_position: Option<CreatePositionMessage>,
+) -> anyhow::Result<Application<Chain, app::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
     // We register the pool inside the Abstract ANS
@@ -135,56 +145,88 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         .publisher_builder(Namespace::new("abstract")?)
         .build()?;
     // The dex adapter
-    publisher.publish_adapter::<_, abstract_dex_adapter::interface::DexAdapter<Chain>>(
-        abstract_dex_adapter::msg::DexInstantiateMsg {
-            swap_fee: Decimal::percent(1),
-            recipient_account: 0,
-        },
-    )?;
+    let dex_adapter = publisher
+        .publish_adapter::<_, abstract_dex_adapter::interface::DexAdapter<Chain>>(
+            abstract_dex_adapter::msg::DexInstantiateMsg {
+                swap_fee: Decimal::percent(1),
+                recipient_account: 0,
+            },
+        )?;
     // The savings app
-    publisher.publish_app::<savings_app::AppInterface<Chain>>()?;
+    publisher.publish_app::<app::contract::interface::AppInterface<Chain>>()?;
+
+    let app_code = client
+        .version_control()
+        .get_app_code(APP_ID, ModuleVersion::Latest)?;
+
+    // If we create position on instantiate - give auth
+    if create_position.is_some() {
+        // TODO: We can't get account factory or module factory objects from the client.
+        // get Account id of the upcoming sub-account
+        let abs = Abstract::load_from(chain.clone())?;
+        let account_factory_config = abs.account_factory.config()?;
+        let next_local_account_id = AccountId::local(account_factory_config.local_account_sequence);
+
+        // Get salt for the module
+        let salt = generate_instantiate_salt(&next_local_account_id);
+
+        let wasm_querier = chain.wasm_querier();
+
+        let module_factory_addr = abs.module_factory.address()?;
+        let savings_app_addr = wasm_querier
+            .instantiate2_addr(app_code, module_factory_addr, salt)
+            .unwrap();
+        give_authorizations(&client, savings_app_addr)?;
+    }
 
     // We deploy the savings-app
-    let savings_app: Application<Chain, savings_app::AppInterface<Chain>> =
+    let savings_app: Application<Chain, app::AppInterface<Chain>> =
         publisher
             .account()
-            .install_app_with_dependencies::<savings_app::AppInterface<Chain>>(
+            .install_app_with_dependencies::<app::contract::interface::AppInterface<Chain>>(
                 &AppInstantiateMsg {
                     deposit_denom: asset0,
                     exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
+                    create_position,
                 },
                 Empty {},
                 &[],
             )?;
 
     // We update authorized addresses on the adapter for the app
-    savings_app.account().as_ref().manager.execute_on_module(
-        DEX_ADAPTER_ID,
-        &ExecuteMsg::Base(BaseExecuteMsg {
-            proxy_address: Some(savings_app.account().proxy()?.to_string()),
-            msg: AdapterBaseMsg::UpdateAuthorizedAddresses {
-                to_add: vec![savings_app.addr_str()?],
-                to_remove: vec![],
+    dex_adapter.execute(
+        &abstract_dex_adapter::msg::ExecuteMsg::Base(
+            abstract_app::abstract_core::adapter::BaseExecuteMsg {
+                proxy_address: Some(savings_app.account().proxy()?.to_string()),
+                msg: abstract_app::abstract_core::adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
+                    to_add: vec![savings_app.addr_str()?],
+                    to_remove: vec![],
+                },
             },
-        }),
+        ),
+        None,
     )?;
 
     Ok(savings_app)
 }
 
 fn create_position<Chain: CwEnv>(
-    app: &Application<Chain, savings_app::AppInterface<Chain>>,
+    app: &Application<Chain, app::AppInterface<Chain>>,
     funds: Vec<Coin>,
     asset0: Coin,
     asset1: Coin,
 ) -> anyhow::Result<()> {
-    app.create_position(
-        asset0,
-        asset1,
-        funds,
-        INITIAL_LOWER_TICK,
-        INITIAL_UPPER_TICK,
+    app.execute(
+        &app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
+            lower_tick: INITIAL_LOWER_TICK,
+            upper_tick: INITIAL_UPPER_TICK,
+            funds,
+            asset0,
+            asset1,
+        })
+        .into(),
+        None,
     )?;
     Ok(())
 }
@@ -264,9 +306,11 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     Ok(pool.id)
 }
 
-fn setup_test_tube() -> anyhow::Result<(
+fn setup_test_tube(
+    create_position: bool,
+) -> anyhow::Result<(
     u64,
-    Application<OsmosisTestTube, savings_app::AppInterface<OsmosisTestTube>>,
+    Application<OsmosisTestTube, app::AppInterface<OsmosisTestTube>>,
 )> {
     dotenv::dotenv()?;
     let _ = env_logger::builder().is_test(true).try_init();
@@ -274,22 +318,33 @@ fn setup_test_tube() -> anyhow::Result<(
     // We create a usdt-usdc pool
     let pool_id = create_pool(chain.clone())?;
 
-    let savings_app = deploy(chain, pool_id)?;
+    let create_position_msg = create_position.then(||
+        // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
+        CreatePositionMessage {
+        lower_tick: INITIAL_LOWER_TICK,
+        upper_tick: INITIAL_UPPER_TICK,
+        funds: coins(100_000, factory_denom(&chain, USDC)),
+        asset0: coin(1_000_000, factory_denom(&chain, USDC)),
+        asset1: coin(1_000_000, factory_denom(&chain, USDT)),
+    });
+    let savings_app = deploy(chain.clone(), pool_id, create_position_msg)?;
 
-    // Give authorizations
-    give_authorizations(&savings_app)?;
+    // Give authorizations if not given already
+    if !create_position {
+        let client = AbstractClient::new(chain)?;
+        give_authorizations(&client, savings_app.addr_str()?)?;
+    }
     Ok((pool_id, savings_app))
 }
 
-fn give_authorizations(
-    savings_app: &Application<OsmosisTestTube, savings_app::AppInterface<OsmosisTestTube>>,
+fn give_authorizations<Chain: CwEnv + Stargate>(
+    client: &AbstractClient<Chain>,
+    savings_app_addr: String,
 ) -> Result<(), anyhow::Error> {
-    let chain = savings_app.get_chain();
-    let abs = Abstract::load_from(chain.clone())?;
-    let dex_fee_account = AbstractAccount::new(&abs, AccountId::local(0));
-    let dex_fee_addr = dex_fee_account.proxy.addr_str()?;
+    let dex_fee_account = client.account_from(AccountId::local(0))?;
+    let dex_fee_addr = dex_fee_account.proxy()?.to_string();
+    let chain = client.environment().clone();
 
-    let app = chain.app.borrow();
     let authorization_urls = [
         MsgCreatePosition::TYPE_URL,
         MsgSwapExactAmountIn::TYPE_URL,
@@ -300,56 +355,61 @@ fn give_authorizations(
     ]
     .map(ToOwned::to_owned);
     let granter = chain.sender().to_string();
-    let grantee = savings_app.addr_str().unwrap();
-    for msg in authorization_urls {
-        let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-            MsgGrant {
-                granter: granter.clone(),
-                grantee: grantee.clone(),
-                grant: Some(Grant {
-                    authorization: Some(GenericAuthorization { msg }.to_any()),
-                    expiration: None,
-                }),
-            },
-            MsgGrant::TYPE_URL,
-            chain.sender.as_ref(),
-        )?;
-    }
-    // Dex fees
-    let _: ExecuteResponse<MsgGrantResponse> = app.execute(
-        MsgGrant {
+    let grantee = savings_app_addr;
+
+    let dex_spend_limit = vec![
+        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+            denom: factory_denom(&chain, USDC),
+            amount: LOTS.to_string(),
+        },
+        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+            denom: factory_denom(&chain, USDT),
+            amount: LOTS.to_string(),
+        }];
+    let dex_fee_authorization = Any {
+        value: MsgGrant {
             granter: chain.sender().to_string(),
-            grantee: savings_app.addr_str().unwrap(),
+            grantee: grantee.clone(),
             grant: Some(Grant {
                 authorization: Some(
                     SendAuthorization {
-                        spend_limit: vec![
-                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-                                denom: factory_denom(chain, USDC),
-                                amount: LOTS.to_string(),
-                            },
-                            cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-                                denom: factory_denom(chain, USDT),
-                                amount: LOTS.to_string(),
-                            },
-                        ],
+                        spend_limit: dex_spend_limit,
                         allow_list: vec![dex_fee_addr],
                     }
                     .to_any(),
                 ),
                 expiration: None,
             }),
-        },
-        MsgGrant::TYPE_URL,
-        chain.sender.as_ref(),
-    )?;
+        }
+        .encode_to_vec(),
+        type_url: MsgGrant::TYPE_URL.to_owned(),
+    };
 
+    chain.commit_any::<MsgGrantResponse>(
+        authorization_urls
+            .into_iter()
+            .map(|msg| Any {
+                value: MsgGrant {
+                    granter: granter.clone(),
+                    grantee: grantee.clone(),
+                    grant: Some(Grant {
+                        authorization: Some(GenericAuthorization { msg }.to_any()),
+                        expiration: None,
+                    }),
+                }
+                .encode_to_vec(),
+                type_url: MsgGrant::TYPE_URL.to_owned(),
+            })
+            .chain(iter::once(dex_fee_authorization))
+            .collect(),
+        None,
+    )?;
     Ok(())
 }
 
 #[test]
 fn deposit_lands() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -394,7 +454,7 @@ fn deposit_lands() -> anyhow::Result<()> {
 
 #[test]
 fn withdraw_position() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -457,7 +517,7 @@ fn withdraw_position() -> anyhow::Result<()> {
 
 #[test]
 fn create_multiple_positions() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -469,16 +529,7 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balance_usdc_first_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
-        .pop()
-        .unwrap();
-    let balance_usdt_first_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
-        .pop()
-        .unwrap();
+    let balances_first_position: AssetsBalanceResponse = savings_app.balance()?;
     // Create position second time, user decided to close first one
     create_position(
         &savings_app,
@@ -487,28 +538,29 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balance_usdc_second_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
-        .pop()
-        .unwrap();
-    let balance_usdt_second_position = chain
-        .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
-        .pop()
-        .unwrap();
+    let balances_second_position: AssetsBalanceResponse = savings_app.balance()?;
 
-    // Should have more usd in total because we did withdraw before creating new position
-    assert!(
-        balance_usdc_second_position.amount + balance_usdt_second_position.amount
-            > balance_usdc_first_position.amount + balance_usdt_first_position.amount
-    );
+    // Should have more usd in total because it adds up
+    let total_usd_first: Uint128 = balances_first_position
+        .balances
+        .into_iter()
+        .map(|c| c.amount)
+        .sum();
+    let total_usd_second: Uint128 = balances_second_position
+        .balances
+        .into_iter()
+        .map(|c| c.amount)
+        .sum();
+    assert!(total_usd_second > total_usd_first);
+
+    // Should be at least (10_000 + 5_000) -2% with all fees
+    assert!(total_usd_second > Uint128::new(15_000).mul_floor(Decimal::percent(98)));
     Ok(())
 }
 
 #[test]
 fn deposit_both_assets() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -530,7 +582,7 @@ fn deposit_both_assets() -> anyhow::Result<()> {
 
 #[test]
 fn check_autocompound() -> anyhow::Result<()> {
-    let (_, savings_app) = setup_test_tube()?;
+    let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
@@ -600,15 +652,26 @@ fn check_autocompound() -> anyhow::Result<()> {
     assert_is_around(
         balance_usdc_after_autocompound.amount,
         balance_usdc_before_autocompound.amount,
-    );
+    )
+    .unwrap();
     assert_is_around(
         balance_usdt_after_autocompound.amount,
         balance_usdt_before_autocompound.amount,
-    );
+    )
+    .unwrap();
 
     // Check it used all of the rewards
     let rewards: AvailableRewardsResponse = savings_app.available_rewards()?;
     assert!(rewards.available_rewards.is_empty());
 
+    Ok(())
+}
+
+#[test]
+fn create_position_on_instantiation() -> anyhow::Result<()> {
+    let (_, savings_app) = setup_test_tube(true)?;
+
+    let position: PositionResponse = savings_app.position()?;
+    assert!(position.position.is_some());
     Ok(())
 }

@@ -15,7 +15,7 @@ use crate::{
 
 use super::query::query_price;
 
-pub(crate) fn swap_msg(
+fn swap_msg(
     deps: Deps,
     env: &Env,
     offer_asset: AnsAsset,
@@ -165,4 +165,184 @@ pub fn swap_to_enter_position(
         swap_msg(deps, env, offer_asset, ask_asset, app)?,
         resulting_assets,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::state::{Config, PoolConfig};
+    use cosmwasm_std::{coin, coins, testing::mock_dependencies, DepsMut};
+    use cw_asset::AssetInfo;
+    pub const DEPOSIT_TOKEN: &str = "USDC";
+    pub const TOKEN0: &str = "USDT";
+    pub const TOKEN1: &str = DEPOSIT_TOKEN;
+
+    fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) {
+        let expected = expected.into().u128();
+        let result = result.u128();
+
+        if expected < result - 1 || expected > result + 1 {
+            panic!("Results are not close enough")
+        }
+    }
+
+    fn setup_config(deps: DepsMut) -> cw_orch::anyhow::Result<()> {
+        CONFIG.save(
+            deps.storage,
+            &Config {
+                deposit_info: AssetInfo::Native(DEPOSIT_TOKEN.to_string()),
+                pool_config: PoolConfig {
+                    pool_id: 45,
+                    token0: TOKEN0.to_string(),
+                    token1: TOKEN1.to_string(),
+                    asset0: AssetEntry::new(TOKEN0),
+                    asset1: AssetEntry::new(TOKEN1),
+                },
+                exchange: "osmosis".to_string(),
+            },
+        )?;
+        Ok(())
+    }
+
+    // TODO: more tests on tokens_to_swap
+    #[test]
+    fn swap_for_ratio_one_to_one() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(100_000_000, TOKEN0),
+            coin(100_000_000, TOKEN1),
+            Decimal::one(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            swap,
+            AnsAsset {
+                name: AssetEntry::new("usdc"),
+                amount: Uint128::new(2500)
+            }
+        );
+        assert_eq!(ask_asset, AssetEntry::new("usdt"));
+    }
+
+    #[test]
+    fn swap_for_ratio_close_to_one() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 110_000_000;
+        let amount1 = 100_000_000;
+
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            Decimal::one(),
+        )
+        .unwrap();
+
+        assert_is_around(swap.amount, 5_000 - 5_000 * amount1 / (amount1 + amount0));
+        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
+    }
+
+    #[test]
+    fn swap_for_ratio_far_from_one() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 90_000_000;
+        let amount1 = 10_000_000;
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            Decimal::one(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            swap,
+            AnsAsset {
+                name: AssetEntry::new(DEPOSIT_TOKEN),
+                amount: Uint128::new(5_000 - 5_000 * amount1 / (amount1 + amount0))
+            }
+        );
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
+    }
+
+    #[test]
+    fn swap_for_ratio_far_from_one_inverse() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 10_000_000;
+        let amount1 = 90_000_000;
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            Decimal::one(),
+        )
+        .unwrap();
+
+        assert_is_around(swap.amount, 5_000 - 5_000 * amount1 / (amount1 + amount0));
+        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
+    }
+
+    #[test]
+    fn swap_for_non_unit_price() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 10_000_000;
+        let amount1 = 90_000_000;
+        let price = Decimal::percent(150);
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            coins(5_000, DEPOSIT_TOKEN),
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            price,
+        )
+        .unwrap();
+
+        assert_is_around(
+            swap.amount,
+            5_000
+                - 5_000 * amount1
+                    / (amount1
+                        + (Decimal::from_ratio(amount0, 1u128) / price * Uint128::one()).u128()),
+        );
+        assert_eq!(swap.name, AssetEntry::new(TOKEN1));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
+    }
+
+    #[test]
+    fn swap_multiple_tokens_for_non_unit_price() {
+        let mut deps = mock_dependencies();
+        setup_config(deps.as_mut()).unwrap();
+        let amount0 = 10_000_000;
+        let amount1 = 10_000_000;
+        let price = Decimal::percent(150);
+        let (swap, ask_asset, _final_asset) = tokens_to_swap(
+            deps.as_ref(),
+            vec![coin(10_000, TOKEN0), coin(4_000, TOKEN1)],
+            coin(amount0, TOKEN0),
+            coin(amount1, TOKEN1),
+            price,
+        )
+        .unwrap();
+
+        assert_eq!(swap.name, AssetEntry::new(TOKEN0));
+        assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
+        assert_eq!(
+            10_000 - swap.amount.u128(),
+            4_000 + (Decimal::from_ratio(swap.amount, 1u128) / price * Uint128::one()).u128()
+        );
+    }
 }

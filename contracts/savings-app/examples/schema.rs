@@ -1,6 +1,6 @@
 use std::{env::current_dir, fs::create_dir_all};
 
-use savings_app::contract::App;
+use app::contract::App;
 use cosmwasm_schema::remove_schemas;
 
 fn main() {

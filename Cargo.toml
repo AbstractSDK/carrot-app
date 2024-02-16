@@ -4,13 +4,21 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-cw-orch = "0.20.0"
+cw-orch = "0.20.1"
+abstract-app = { version = "0.20.0" }
+abstract-interface = { version = "0.20.0" }
+abstract-client = { version = "0.20.0"}
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
 
 [patch.crates-io]
-abstract-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-core = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32" }
+abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-core = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "bump/cw-orch-bech32" }
+
+# cw-orch = { git = "https://github.com/abstractsdk/cw-orchestrator", branch = "main" }

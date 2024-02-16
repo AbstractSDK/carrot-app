@@ -41,38 +41,33 @@ schema = ["abstract-app/schema"]
 cosmwasm-std = { version = "1.2" }
 cosmwasm-schema = { version = "1.2" }
 cw-controllers = { version = "1.0.1" }
-cw-storage-plus = "1.1.0"
+cw-storage-plus = "1.2.0"
 thiserror = { version = "1.0.50" }
 schemars = "0.8"
 cw-asset = { version = "3.0" }
 
-abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
+abstract-app = { workspace = true }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32", features = [
   "stargate",
 ] }
-
 # Dependencies for interface
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
-  "osmosis",
-] }
+abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
 
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", optional = true }
 cw-orch = { workspace = true, optional = true }
+
 osmosis-std = { version = "0.21.0" }
 prost = { version = "0.12.3" }
 
 [dev-dependencies]
-abstract-interface = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
-  "daemon",
-] }
+abstract-interface = { workspace = true, features = ["daemon"] }
 
 prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
 savings-app = { path = ".", features = ["interface"] }
-abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch", features = [
+abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32" }
+abstract-client = { workspace = true , branch = "bump/cw-orch-bech32" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32", features = [
   "test-utils",
 ] }
 speculoos = "0.11.0"

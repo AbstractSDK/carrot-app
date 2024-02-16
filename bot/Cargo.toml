@@ -10,8 +10,8 @@ path = "src/bin/local.rs"
 
 [dependencies]
 cw-orch = { workspace = true, features = ["daemon"] }
-abstract-app = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch" }
+abstract-app = { workspace = true }
+abstract-client = { workspace = true }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
