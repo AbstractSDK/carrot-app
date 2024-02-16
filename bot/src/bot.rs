@@ -160,7 +160,7 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
             &[],
-            &address,
+            address,
         )?;
     }
     Ok(())

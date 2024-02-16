@@ -1,10 +1,11 @@
 mod bot;
+mod bot_args;
 
-use std::time::Duration;
+pub use bot::Bot;
+pub use bot_args::BotArgs;
 
 use abstract_app::objects::module::{ModuleInfo, ModuleVersion};
 use abstract_client::AbstractClient;
-pub use bot::Bot;
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMO_5, Daemon},
@@ -13,11 +14,19 @@ use cw_orch::{
 use savings_app::contract::{APP_ID, APP_VERSION};
 
 /// entrypoint for the bot
-pub fn cron_main() -> anyhow::Result<()> {
+pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     let rt = Runtime::new()?;
+    let mut chain_info = OSMO_5;
+    let grpc_urls = if let Some(grpc_urls) = &bot_args.grps_urls {
+        grpc_urls.iter().map(String::as_ref).collect()
+    } else {
+        chain_info.grpc_urls.to_vec()
+    };
+
+    chain_info.grpc_urls = &grpc_urls;
     let daemon = Daemon::builder()
         .handle(rt.handle())
-        .chain(OSMO_5)
+        .chain(chain_info)
         .build()?;
 
     let abstr = AbstractClient::new(daemon.clone())?;
@@ -27,8 +36,8 @@ pub fn cron_main() -> anyhow::Result<()> {
     let mut bot = Bot::new(
         abstr,
         module_info,
-        Duration::from_secs(10),
-        Duration::from_secs(10),
+        bot_args.fetch_cooldown,
+        bot_args.autocompound_cooldown,
     );
 
     // Run long-running autocompound job.
