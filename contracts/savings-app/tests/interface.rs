@@ -49,7 +49,7 @@ use osmosis_std::types::osmosis::{
 use prost::Message;
 use prost_types::Any;
 
-fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
+pub fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
     let expected = expected.into().u128();
     let result = result.u128();
 
@@ -61,11 +61,11 @@ fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Re
     Ok(())
 }
 
-fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
+pub fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
     format!("factory/{}/{}", chain.sender(), subdenom)
 }
 
-fn create_denom<Chain: CwEnv + Stargate>(chain: Chain, subdenom: String) -> anyhow::Result<()> {
+pub fn create_denom<Chain: CwEnv + Stargate>(chain: Chain, subdenom: String) -> anyhow::Result<()> {
     chain.commit_any::<MsgCreateDenomResponse>(
         vec![Any {
             value: MsgCreateDenom {
@@ -83,7 +83,7 @@ fn create_denom<Chain: CwEnv + Stargate>(chain: Chain, subdenom: String) -> anyh
 
 pub const LOTS: u128 = 100_000_000_000_000;
 
-fn mint_lots_of_denom<Chain: CwEnv + Stargate>(
+pub fn mint_lots_of_denom<Chain: CwEnv + Stargate>(
     chain: Chain,
     subdenom: String,
 ) -> anyhow::Result<()> {
@@ -106,8 +106,6 @@ fn mint_lots_of_denom<Chain: CwEnv + Stargate>(
 pub const USDC: &str = "USDC";
 pub const USDT: &str = "USDT";
 pub const DEX_NAME: &str = "osmosis";
-pub const VAULT_NAME: &str = "quasar_vault";
-pub const VAULT_SUBDENOM: &str = "vault-token";
 
 pub const TICK_SPACING: u64 = 100;
 pub const SPREAD_FACTOR: u64 = 1;
@@ -211,7 +209,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     Ok(savings_app)
 }
 
-fn create_position<Chain: CwEnv>(
+pub fn create_position<Chain: CwEnv>(
     app: &Application<Chain, app::AppInterface<Chain>>,
     funds: Vec<Coin>,
     asset0: Coin,
@@ -231,7 +229,7 @@ fn create_position<Chain: CwEnv>(
     Ok(())
 }
 
-fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
+pub fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     // We create two tokenfactory denoms
     create_denom(chain.clone(), USDC.to_string())?;
     create_denom(chain.clone(), USDT.to_string())?;
@@ -306,7 +304,7 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<u64> {
     Ok(pool.id)
 }
 
-fn setup_test_tube(
+pub fn setup_test_tube(
     create_position: bool,
 ) -> anyhow::Result<(
     u64,
@@ -337,7 +335,7 @@ fn setup_test_tube(
     Ok((pool_id, savings_app))
 }
 
-fn give_authorizations<Chain: CwEnv + Stargate>(
+pub fn give_authorizations<Chain: CwEnv + Stargate>(
     client: &AbstractClient<Chain>,
     savings_app_addr: String,
 ) -> Result<(), anyhow::Error> {
