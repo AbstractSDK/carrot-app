@@ -6,8 +6,6 @@ use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
 use thiserror::Error;
 
-use crate::msg::CompoundStatus;
-
 #[derive(Error, Debug, PartialEq)]
 pub enum AppError {
     #[error("{0}")]
@@ -60,7 +58,4 @@ pub enum AppError {
 
     #[error("Reward configuration error: {0}")]
     RewardConfigError(String),
-
-    #[error("Not ready to autocompound: {0:?}")]
-    AutocompoundNotReady(CompoundStatus),
 }

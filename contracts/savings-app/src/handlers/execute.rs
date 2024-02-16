@@ -147,14 +147,6 @@ fn withdraw(
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
     let config = CONFIG.load(deps.storage)?;
-    let status = get_position_status(
-        deps.storage,
-        &env,
-        config.autocompound_cooldown_seconds.u64(),
-    )?;
-    if !status.is_ready() {
-        return Err(crate::error::AppError::AutocompoundNotReady(status));
-    }
 
     let position = get_osmosis_position(deps.as_ref())?;
     let position_details = position.position.unwrap();
@@ -208,8 +200,15 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_messages(collect_rewards_msgs)
         .add_message(msg_deposit);
 
-    // If called by non-admin - send rewards to the sender
-    if !app.admin.is_admin(deps.as_ref(), &info.sender)? {
+    // If called by non-admin and savings app ready to give rewards to the sender - send rewards to the sender
+    if !app.admin.is_admin(deps.as_ref(), &info.sender)?
+        && get_position_status(
+            deps.storage,
+            &env,
+            config.autocompound_cooldown_seconds.u64(),
+        )?
+        .is_ready()
+    {
         let executor_reward_messages =
             autocompound_executor_rewards(deps.as_ref(), &env, info.sender.into_string(), &app)?;
 
