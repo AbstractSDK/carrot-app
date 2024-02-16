@@ -5,10 +5,6 @@ edition = "2021"
 publish = false
 
 [[bin]]
-name = "shuttle"
-path = "src/bin/shuttle.rs"
-
-[[bin]]
 name = "local"
 path = "src/bin/local.rs"
 
@@ -23,4 +19,3 @@ env_logger = "0.10.0"
 log = "0.4.20"
 tonic = "0.10.0"
 savings-app = { path = "../contracts/savings-app", features = ["interface"] }
-shuttle-runtime = "0.38.0"
