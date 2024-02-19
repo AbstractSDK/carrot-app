@@ -8,7 +8,7 @@ use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 use crate::{
-    contract::{App, AppResult},
+    contract::{App, AppResult, OSMOSIS},
     helpers::get_user,
     state::CONFIG,
 };
@@ -26,13 +26,12 @@ pub(crate) fn swap_msg(
     if offer_asset.amount.is_zero() {
         return Ok(vec![]);
     }
-    let config = CONFIG.load(deps.storage)?;
     let sender = get_user(deps, app)?;
 
-    let dex = app.dex(deps, config.exchange.clone());
+    let dex = app.dex(deps, OSMOSIS.to_string());
     let query_msg = DexQueryMsg::GenerateMessages {
         message: DexExecuteMsg::Action {
-            dex: config.exchange,
+            dex: OSMOSIS.to_string(),
             action: DexAction::Swap {
                 offer_asset,
                 ask_asset,
@@ -197,7 +196,6 @@ mod tests {
                     asset0: AssetEntry::new(TOKEN0),
                     asset1: AssetEntry::new(TOKEN1),
                 },
-                exchange: "osmosis".to_string(),
                 autocompound_cooldown_seconds: Uint64::zero(),
                 autocompound_rewards_config: AutocompoundRewardsConfig {
                     gas_denom: "foo".to_owned(),

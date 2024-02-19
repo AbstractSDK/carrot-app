@@ -22,6 +22,8 @@ pub type AppResult<T = Response> = Result<T, AppError>;
 /// The type of the app that is used to build your app and access the Abstract SDK features.
 pub type App = AppContract<AppError, AppInstantiateMsg, AppExecuteMsg, AppQueryMsg, AppMigrateMsg>;
 
+pub(crate) const OSMOSIS: &'static str = "osmosis";
+
 const DEX_DEPENDENCY: StaticDependency = StaticDependency::new(
     abstract_dex_adapter::DEX_ADAPTER_ID,
     &[abstract_dex_adapter::contract::CONTRACT_VERSION],

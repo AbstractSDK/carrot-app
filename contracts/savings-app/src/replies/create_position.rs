@@ -19,12 +19,12 @@ pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
     let response: MsgCreatePositionResponse =
         Binary(authz_response.results[0].clone()).try_into()?;
 
-    // We get the recipient of the position
-    let recipient = get_user(deps.as_ref(), &app)?;
+    // We get the creator of the position
+    let creator = get_user(deps.as_ref(), &app)?;
 
     // We save the position
     let position = Position {
-        owner: recipient.to_string(),
+        owner: creator,
         position_id: response.position_id,
         last_compound: env.block.time,
     };

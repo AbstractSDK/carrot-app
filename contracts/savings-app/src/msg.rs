@@ -17,7 +17,7 @@ pub struct AppInstantiateMsg {
     pub pool_id: u64,
     /// Dex that we are ok to swap on !
     pub exchanges: Vec<DexName>,
-    /// Cooldown of autocompound
+    /// Seconds to wait before autocompound is incentivized.
     pub autocompound_cooldown_seconds: Uint64,
     /// Configuration of rewards to the address who helped to execute autocompound
     pub autocompound_rewards_config: AutocompoundRewardsConfig,
@@ -64,10 +64,14 @@ pub enum AppQueryMsg {
     Config {},
     #[returns(AssetsBalanceResponse)]
     Balance {},
+    /// Get the claimable rewards that the position has accumulated.
+    /// Returns [`AvailableRewardsResponse`]
     #[returns(AvailableRewardsResponse)]
     AvailableRewards {},
     #[returns(PositionResponse)]
     Position {},
+    /// Get the status of the compounding logic of the application
+    /// Returns [`CompoundStatusResponse`]
     #[returns(CompoundStatusResponse)]
     CompoundStatus {},
 }

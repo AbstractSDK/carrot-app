@@ -1,6 +1,5 @@
 use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
-use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
 use cw_asset::AssetInfo;
@@ -11,10 +10,13 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
 
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
+pub const CONFIG: Item<Config> = Item::new("config");
+pub const POSITION: Item<Position> = Item::new("position");
+pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
+
 #[cw_serde]
 pub struct Config {
     pub pool_config: PoolConfig,
-    pub exchange: DexName,
     pub autocompound_cooldown_seconds: Uint64,
     pub autocompound_rewards_config: AutocompoundRewardsConfig,
 }
@@ -79,13 +81,9 @@ pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
     }
 }
 
-pub const CONFIG: Item<Config> = Item::new("config");
-pub const POSITION: Item<Position> = Item::new("position");
-pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
-
 #[cw_serde]
 pub struct Position {
-    pub owner: String,
+    pub owner: Addr,
     pub position_id: u64,
     pub last_compound: Timestamp,
 }

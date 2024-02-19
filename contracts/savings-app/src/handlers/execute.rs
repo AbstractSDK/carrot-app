@@ -1,6 +1,6 @@
 use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
-    contract::{App, AppResult},
+    contract::{App, AppResult, OSMOSIS},
     helpers::get_user,
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
@@ -145,6 +145,8 @@ fn withdraw(
         .add_message(withdraw_msg))
 }
 
+/// Auto-compound the position with earned fees and incentives.
+
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
 
@@ -154,8 +156,11 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     let mut rewards = cosmwasm_std::Coins::default();
     let mut collect_rewards_msgs = vec![];
 
+    // Get app's user and set up authz.
     let user = get_user(deps.as_ref(), &app)?;
     let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
+    
+    // If there are external incentives, claim them.
     if !position.claimable_incentives.is_empty() {
         for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
             rewards.add(coin)?;
@@ -169,6 +174,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         ));
     }
 
+    // If there is income from swap fees, claim them.
     if !position.claimable_spread_rewards.is_empty() {
         for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
             rewards.add(coin)?;
@@ -182,11 +188,12 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         ))
     }
 
+    // If there are no rewards, we can't do anything
     if rewards.is_empty() {
         return Err(crate::error::AppError::NoRewards {});
     }
 
-    // Finally we ask for a deposit of all rewards from the wallet to the position
+    // Finally we deposit of all rewarded tokens into the position
     let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
@@ -200,7 +207,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_messages(collect_rewards_msgs)
         .add_message(msg_deposit);
 
-    // If called by non-admin and savings app ready to give rewards to the sender - send rewards to the sender
+    // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
     let config = CONFIG.load(deps.storage)?;
     if !app.admin.is_admin(deps.as_ref(), &info.sender)?
         && get_position_status(
@@ -325,7 +332,8 @@ pub(crate) fn _create_position(
 }
 
 /// Sends autocompound rewards to the executor.
-/// In case user have not enough rewards it will also do a swap
+/// In case user does not have not enough gas token the contract will swap some 
+/// tokens for gas tokens.
 pub fn autocompound_executor_rewards(
     deps: Deps,
     env: &Env,
@@ -347,7 +355,7 @@ pub fn autocompound_executor_rewards(
     // If not enough gas coins - swap for some amount
     if user_gas_balance.amount < rewards_config.min_gas_balance {
         // Get asset entries
-        let dex = app.dex(deps, config.exchange);
+        let dex = app.dex(deps, OSMOSIS.to_string());
         let ans_host = app.ans_host(deps)?;
         let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
             .resolve(&deps.querier, &ans_host)?;
@@ -385,23 +393,24 @@ pub fn autocompound_executor_rewards(
         denom: rewards_config.gas_denom,
         amount: rewards_config.reward,
     };
-    // To avoid giving general `MsgSend` authorization we do 2 sends here
+    // To avoid giving general `MsgSend` authorization to any address we do 2 sends here
     // 1) From user to the contract
     // 2) From contract to the executor
+    // That way we can limit the `MsgSend` authorization to the contract address only.
     let msg_send = BankMsg::Send {
         to_address: env.contract.address.to_string(),
         amount: vec![reward.clone()],
     };
-    let reward_into_contract = app
+    let send_reward_to_contract_msg = app
         .auth_z(deps, Some(cosmwasm_std::Addr::unchecked(user)))?
         .execute(&env.contract.address, msg_send);
-    rewards_messages.push(reward_into_contract);
+    rewards_messages.push(send_reward_to_contract_msg);
 
-    let reward_into_executor = BankMsg::Send {
+    let send_reward_to_executor_msg = BankMsg::Send {
         to_address: executor,
         amount: vec![reward],
     };
-    rewards_messages.push(reward_into_executor.into());
+    rewards_messages.push(send_reward_to_executor_msg.into());
 
     Ok(rewards_messages)
 }
