@@ -5,7 +5,7 @@ use abstract_dex_adapter::{
 };
 use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
-const MAX_SPREAD_PERCENT: u64 = 20;
+const MAX_SPREAD_PERCENT: u64 = 1;
 
 use crate::{
     contract::{App, AppResult},
