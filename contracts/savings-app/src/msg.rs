@@ -43,9 +43,7 @@ pub struct CreatePositionMessage {
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
     /// Create the initial liquidity position
-    #[cfg_attr(feature = "interface", payable)]
     CreatePosition(CreatePositionMessage),
-
     /// Deposit funds onto the app
     Deposit { funds: Vec<Coin> },
     /// Partial withdraw of the funds available on the app
