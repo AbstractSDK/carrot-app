@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use abstract_app::abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
 use abstract_app::abstract_sdk::{features::AbstractNameService, AbstractResponse};
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
@@ -48,11 +46,9 @@ pub fn instantiate_handler(
         None,
     )?;
 
-    // We query the dex that is accepted to swap the assets
-    let exchange_strs: HashSet<&str> = msg.exchanges.iter().map(AsRef::as_ref).collect();
     let pair = asset_pairing_resp
         .into_iter()
-        .find(|(pair, refs)| !refs.is_empty() && exchange_strs.contains(pair.dex()))
+        .find(|(_, refs)| !refs.is_empty())
         .ok_or(AppError::NoSwapPossibility {})?
         .0;
     let dex_name = pair.dex();

@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/*", "savings-bot"]
+members = ["contracts/*", "bot"]
 resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -7,8 +7,8 @@ resolver = "2"
 cw-orch = "0.20.1"
 abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
 abstract-interface = { version = "0.20.0" }
-
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
 
 [patch.crates-io]
 abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
