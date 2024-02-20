@@ -19,7 +19,6 @@ pub fn add_to_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
     let response: MsgAddToPositionResponse =
         Binary(authz_response.results[0].clone()).try_into()?;
 
-
     let creator = get_user(deps.as_ref(), &app)?;
 
     // We update the position

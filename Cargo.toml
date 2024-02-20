@@ -18,4 +18,3 @@ abstract-core = { git = "https://github.com/abstractsdk/abstract.git", branch = 
 abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
 abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-
