@@ -24,7 +24,7 @@ use osmosis_std::types::{
     },
 };
 use savings_app::{
-    msg::{AppExecuteMsg, AvailableRewardsResponse, CompoundStatusResponse, ExecuteMsg},
+    msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
     AppInterface,
 };
 use std::{
