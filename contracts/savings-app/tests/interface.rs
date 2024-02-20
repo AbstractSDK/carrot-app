@@ -10,8 +10,8 @@ use abstract_app::{
 };
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_interface::AccountFactoryQueryFns;
-use app::contract::APP_ID;
-use app::msg::{
+use savings_app::contract::APP_ID;
+use savings_app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
     AvailableRewardsResponse, CompoundStatusResponse, CreatePositionMessage, PositionResponse,
 };
@@ -49,11 +49,6 @@ use osmosis_std::types::osmosis::{
 };
 use prost::Message;
 use prost_types::Any;
-use savings_app::contract::APP_ID;
-use savings_app::msg::{
-    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse, CreatePositionMessage, PositionResponse,
-};
 use savings_app::state::AutocompoundRewardsConfig;
 
 fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
