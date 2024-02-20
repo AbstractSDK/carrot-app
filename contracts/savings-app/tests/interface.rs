@@ -249,6 +249,8 @@ fn create_position<Chain: CwEnv>(
             funds,
             asset0,
             asset1,
+            token_min_amount0: "0".to_string(),
+            token_min_amount1: "0".to_string(),
         })
         .into(),
         None,
@@ -368,6 +370,8 @@ fn setup_test_tube(
         funds: coins(100_000, factory_denom(&chain, USDC)),
         asset0: coin(1_000_000, factory_denom(&chain, USDC)),
         asset1: coin(1_000_000, factory_denom(&chain, USDT)),
+        token_min_amount0: "0".to_string(),
+        token_min_amount1: "0".to_string(),
     });
     let savings_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 
@@ -397,7 +401,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
     ]
     .map(ToOwned::to_owned);
     let granter = chain.sender().to_string();
-    let grantee = savings_app_addr;
+    let grantee = savings_app_addr.clone();
 
     let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
@@ -407,7 +411,13 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: factory_denom(&chain, USDT),
             amount: LOTS.to_string(),
-        }];
+        },
+        // TODO: We can't give 2 different authorization to the same address which is unlucky
+        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+            denom: REWARD_DENOM.to_owned(),
+            amount: LOTS.to_string(),
+        },
+    ];
     let dex_fee_authorization = Any {
         value: MsgGrant {
             granter: chain.sender().to_string(),
@@ -416,7 +426,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
                 authorization: Some(
                     SendAuthorization {
                         spend_limit: dex_spend_limit,
-                        allow_list: vec![dex_fee_addr],
+                        allow_list: vec![dex_fee_addr, savings_app_addr],
                     }
                     .to_any(),
                 ),
@@ -456,7 +466,7 @@ fn deposit_lands() -> anyhow::Result<()> {
     let chain = savings_app.get_chain().clone();
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(1));
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
     // Create position
     create_position(
         &savings_app,
@@ -473,7 +483,11 @@ fn deposit_lands() -> anyhow::Result<()> {
     assert!(sum.u128() > deposit_amount - max_fee.u128());
 
     // Do the deposit
-    savings_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
+    savings_app.deposit(
+        vec![coin(deposit_amount, factory_denom(&chain, USDC))],
+        "0".to_string(),
+        "0".to_string(),
+    )?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = savings_app.balance()?;
     let sum = balance
@@ -483,7 +497,11 @@ fn deposit_lands() -> anyhow::Result<()> {
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 2);
 
     // Do the second deposit
-    savings_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
+    savings_app.deposit(
+        vec![coin(deposit_amount, factory_denom(&chain, USDC))],
+        "0".to_string(),
+        "0".to_string(),
+    )?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = savings_app.balance()?;
     let sum = balance
@@ -614,10 +632,14 @@ fn deposit_both_assets() -> anyhow::Result<()> {
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    savings_app.deposit(vec![
-        coin(258, factory_denom(&chain, USDC)),
-        coin(234, factory_denom(&chain, USDT)),
-    ])?;
+    savings_app.deposit(
+        vec![
+            coin(258, factory_denom(&chain, USDC)),
+            coin(234, factory_denom(&chain, USDT)),
+        ],
+        "0".to_string(),
+        "0".to_string(),
+    )?;
 
     Ok(())
 }

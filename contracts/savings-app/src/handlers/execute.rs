@@ -39,7 +39,19 @@ pub fn execute_handler(
         AppExecuteMsg::CreatePosition(create_position_msg) => {
             create_position(deps, env, info, app, create_position_msg)
         }
-        AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
+        AppExecuteMsg::Deposit {
+            funds,
+            token_min_amount0,
+            token_min_amount1,
+        } => deposit(
+            deps,
+            env,
+            info,
+            funds,
+            token_min_amount0,
+            token_min_amount1,
+            app,
+        ),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
@@ -87,7 +99,15 @@ fn create_position(
         .add_submessage(create_position_msg))
 }
 
-fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
+fn deposit(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    funds: Vec<Coin>,
+    token_min_amount0: String,
+    token_min_amount1: String,
+    app: App,
+) -> AppResult {
     // Only the admin (manager contracts or account owner) + the smart contract can deposit
     app.admin
         .assert_admin(deps.as_ref(), &info.sender)
@@ -114,8 +134,8 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
             sender: user.to_string(),
             amount0: resulting_assets[0].amount.to_string(),
             amount1: resulting_assets[1].amount.to_string(),
-            token_min_amount0: "0".to_string(), // No min, this always works
-            token_min_amount1: "0".to_string(), // No min, this always works
+            token_min_amount0,
+            token_min_amount1,
         },
     );
 
@@ -198,6 +218,9 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
             funds: rewards.into(),
+            // TODO: Should we have min_amounts autocompound in config?
+            token_min_amount0: "0".to_string(),
+            token_min_amount1: "0".to_string(),
         }))?,
         funds: vec![],
     });
@@ -303,6 +326,8 @@ pub(crate) fn _create_position(
         funds,
         asset0,
         asset1,
+        token_min_amount0,
+        token_min_amount1,
     } = create_position_msg;
 
     // With the current funds, we need to be able to create a position that makes sense
@@ -320,8 +345,8 @@ pub(crate) fn _create_position(
             lower_tick,
             upper_tick,
             tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
-            token_min_amount0: "0".to_string(), // No min amount here
-            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
+            token_min_amount0,
+            token_min_amount1,
         },
     );
 

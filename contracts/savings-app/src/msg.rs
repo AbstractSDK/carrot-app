@@ -32,6 +32,9 @@ pub struct CreatePositionMessage {
     /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
     pub asset0: Coin,
     pub asset1: Coin,
+    // Slippage
+    pub token_min_amount0: String,
+    pub token_min_amount1: String,
 }
 
 /// App execute messages
@@ -42,7 +45,11 @@ pub enum AppExecuteMsg {
     /// Create the initial liquidity position
     CreatePosition(CreatePositionMessage),
     /// Deposit funds onto the app
-    Deposit { funds: Vec<Coin> },
+    Deposit {
+        funds: Vec<Coin>,
+        token_min_amount0: String,
+        token_min_amount1: String,
+    },
     /// Partial withdraw of the funds available on the app
     Withdraw { amount: Uint128 },
     /// Withdraw everything that is on the app
