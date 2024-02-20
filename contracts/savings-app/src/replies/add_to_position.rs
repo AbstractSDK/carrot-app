@@ -11,7 +11,7 @@ use crate::{
     state::{Position, POSITION},
 };
 
-pub fn add_to_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -> AppResult {
+pub fn add_to_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) -> AppResult {
     // Parse the msg exec response from the reply
     let authz_response: MsgExecResponse = reply.result.try_into()?;
 
@@ -19,13 +19,14 @@ pub fn add_to_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
     let response: MsgAddToPositionResponse =
         Binary(authz_response.results[0].clone()).try_into()?;
 
-    // We get the recipient of the position
-    let recipient = get_user(deps.as_ref(), &app)?;
+
+    let creator = get_user(deps.as_ref(), &app)?;
 
     // We update the position
     let position = Position {
-        owner: recipient.to_string(),
+        owner: creator,
         position_id: response.position_id,
+        last_compound: env.block.time,
     };
 
     POSITION.save(deps.storage, &position)?;
