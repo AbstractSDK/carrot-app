@@ -24,7 +24,7 @@ use osmosis_std::types::{
     },
 };
 use savings_app::{
-    msg::{AppExecuteMsg, AvailableRewardsResponse, ExecuteMsg},
+    msg::{AppExecuteMsg, AvailableRewardsResponse, CompoundStatusResponse, ExecuteMsg},
     AppInterface,
 };
 use std::{
@@ -149,12 +149,12 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let app = AppInterface::new(id, daemon.clone());
     app.set_address(address);
     use savings_app::AppQueryMsgFns;
-    let resp: AvailableRewardsResponse = app.available_rewards()?;
+    let resp: CompoundStatusResponse = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee
     // To discuss if we really need it?
 
-    if !resp.available_rewards.is_empty() {
+    if resp.rewards_available {
         // Execute autocompound
         let daemon = daemon.rebuild().authz_granter(address).build()?;
         daemon.execute(
