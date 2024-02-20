@@ -12,8 +12,7 @@ use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_interface::AccountFactoryQueryFns;
 use savings_app::contract::APP_ID;
 use savings_app::msg::{
-    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse, CompoundStatusResponse, CreatePositionMessage, PositionResponse,
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse, CreatePositionMessage, PositionResponse
 };
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
@@ -760,7 +759,7 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     assert_eq!(
         compound_status,
         CompoundStatusResponse {
-            status: app::msg::CompoundStatus::Ready {},
+            status: CompoundStatus::Ready {},
             reward: Coin::new(1000, REWARD_DENOM),
             rewards_available: true
         }
