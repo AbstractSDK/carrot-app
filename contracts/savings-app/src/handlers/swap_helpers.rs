@@ -1,6 +1,6 @@
 use abstract_app::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::{
-    msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
+    msg::{GenerateMessagesResponse},
     DexInterface,
 };
 use abstract_sdk::AuthZInterface;
@@ -8,14 +8,14 @@ use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 const MAX_SPREAD_PERCENT: u64 = 20;
 
 use crate::{
-    contract::{App, AppResult},
+    contract::{App, AppResult, OSMOSIS},
     helpers::get_user,
     state::CONFIG,
 };
 
 use super::query::query_price;
 
-fn swap_msg(
+pub(crate) fn swap_msg(
     deps: Deps,
     env: &Env,
     offer_asset: AnsAsset,
@@ -26,28 +26,11 @@ fn swap_msg(
     if offer_asset.amount.is_zero() {
         return Ok(vec![]);
     }
-    let config = CONFIG.load(deps.storage)?;
     let sender = get_user(deps, app)?;
 
-    let dex = app.dex(deps, config.exchange.clone());
-    let query_msg = DexQueryMsg::GenerateMessages {
-        message: DexExecuteMsg::Action {
-            dex: config.exchange,
-            action: DexAction::Swap {
-                offer_asset,
-                ask_asset,
-                max_spread: Some(Decimal::percent(MAX_SPREAD_PERCENT)),
-                belief_price: None,
-            },
-        },
-        addr_as_sender: sender.to_string(),
-    };
+    let dex = app.ans_dex(deps, OSMOSIS.to_string());
     let trigger_swap_msg: GenerateMessagesResponse =
-        dex.query(query_msg.clone()).map_err(|_| {
-            cosmwasm_std::StdError::generic_err(format!(
-                "Failed to query generate message, query_msg: {query_msg:?}"
-            ))
-        })?;
+        dex.generate_swap_messages(offer_asset, ask_asset, Some(Decimal::percent(MAX_SPREAD_PERCENT)), None, sender.clone() )?;
     let authz = app.auth_z(deps, Some(sender))?;
 
     Ok(trigger_swap_msg
@@ -171,9 +154,8 @@ pub fn swap_to_enter_position(
 mod tests {
     use super::*;
 
-    use crate::state::{Config, PoolConfig};
-    use cosmwasm_std::{coin, coins, testing::mock_dependencies, DepsMut};
-    use cw_asset::AssetInfo;
+    use crate::state::{AutocompoundRewardsConfig, Config, PoolConfig};
+    use cosmwasm_std::{coin, coins, testing::mock_dependencies, DepsMut, Uint64};
     pub const DEPOSIT_TOKEN: &str = "USDC";
     pub const TOKEN0: &str = "USDT";
     pub const TOKEN1: &str = DEPOSIT_TOKEN;
@@ -191,7 +173,6 @@ mod tests {
         CONFIG.save(
             deps.storage,
             &Config {
-                deposit_info: AssetInfo::Native(DEPOSIT_TOKEN.to_string()),
                 pool_config: PoolConfig {
                     pool_id: 45,
                     token0: TOKEN0.to_string(),
@@ -199,7 +180,14 @@ mod tests {
                     asset0: AssetEntry::new(TOKEN0),
                     asset1: AssetEntry::new(TOKEN1),
                 },
-                exchange: "osmosis".to_string(),
+                autocompound_cooldown_seconds: Uint64::zero(),
+                autocompound_rewards_config: AutocompoundRewardsConfig {
+                    gas_denom: "foo".to_owned(),
+                    swap_denom: "bar".to_owned(),
+                    reward: Uint128::zero(),
+                    min_gas_balance: Uint128::zero(),
+                    max_gas_balance: Uint128::new(1),
+                },
             },
         )?;
         Ok(())

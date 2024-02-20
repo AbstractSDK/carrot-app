@@ -47,7 +47,7 @@ schemars = "0.8"
 cw-asset = { version = "3.0" }
 
 abstract-app = { workspace = true }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32", features = [
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
   "stargate",
 ] }
 # Dependencies for interface
@@ -65,9 +65,9 @@ prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
 app = { path = ".", features = ["interface"] }
-abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "bump/cw-orch-bech32", features = [
+abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
   "test-utils",
 ] }
 speculoos = "0.11.0"
