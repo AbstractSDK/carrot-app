@@ -1,6 +1,6 @@
 {
   "contract_name": "module-schema",
-  "contract_version": "0.19.2",
+  "contract_version": "0.20.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -8,16 +8,155 @@
     "description": "App instantiate message",
     "type": "object",
     "required": [
-      "count"
+      "autocompound_cooldown_seconds",
+      "autocompound_rewards_config",
+      "pool_id"
     ],
     "properties": {
-      "count": {
-        "description": "Initial count",
+      "autocompound_cooldown_seconds": {
+        "description": "Seconds to wait before autocompound is incentivized.",
+        "allOf": [
+          {
+            "$ref": "#/definitions/Uint64"
+          }
+        ]
+      },
+      "autocompound_rewards_config": {
+        "description": "Configuration of rewards to the address who helped to execute autocompound",
+        "allOf": [
+          {
+            "$ref": "#/definitions/AutocompoundRewardsConfig"
+          }
+        ]
+      },
+      "create_position": {
+        "description": "Create position with instantiation. Will not create position if omitted",
+        "anyOf": [
+          {
+            "$ref": "#/definitions/CreatePositionMessage"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pool_id": {
+        "description": "Id of the pool used to get rewards",
         "type": "integer",
-        "format": "int32"
+        "format": "uint64",
+        "minimum": 0.0
       }
     },
-    "additionalProperties": false
+    "additionalProperties": false,
+    "definitions": {
+      "AutocompoundRewardsConfig": {
+        "description": "Configuration on how rewards should be distributed to the address who helped to execute autocompound",
+        "type": "object",
+        "required": [
+          "gas_denom",
+          "max_gas_balance",
+          "min_gas_balance",
+          "reward",
+          "swap_denom"
+        ],
+        "properties": {
+          "gas_denom": {
+            "description": "Gas denominator for this chain",
+            "type": "string"
+          },
+          "max_gas_balance": {
+            "description": "Upper bound of gas tokens expected after the swap",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Uint128"
+              }
+            ]
+          },
+          "min_gas_balance": {
+            "description": "If gas token balance falls below this bound a swap will be generated",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Uint128"
+              }
+            ]
+          },
+          "reward": {
+            "description": "Reward amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Uint128"
+              }
+            ]
+          },
+          "swap_denom": {
+            "description": "Denominator of the asset that will be used for swap to the gas asset",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Coin": {
+        "type": "object",
+        "required": [
+          "amount",
+          "denom"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/definitions/Uint128"
+          },
+          "denom": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatePositionMessage": {
+        "type": "object",
+        "required": [
+          "asset0",
+          "asset1",
+          "funds",
+          "lower_tick",
+          "upper_tick"
+        ],
+        "properties": {
+          "asset0": {
+            "description": "The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Coin"
+              }
+            ]
+          },
+          "asset1": {
+            "$ref": "#/definitions/Coin"
+          },
+          "funds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Coin"
+            }
+          },
+          "lower_tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "upper_tick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Uint128": {
+        "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+        "type": "string"
+      },
+      "Uint64": {
+        "description": "A thin wrapper around u64 that is using strings for JSON encoding/decoding, such that the full u64 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u64` to get the value out:\n\n``` # use cosmwasm_std::Uint64; let a = Uint64::from(42u64); assert_eq!(a.u64(), 42);\n\nlet b = Uint64::from(70u32); assert_eq!(b.u64(), 70); ```",
+        "type": "string"
+      }
+    }
   },
   "execute": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -25,36 +164,36 @@
     "description": "App execute messages",
     "oneOf": [
       {
-        "description": "Increment count by 1",
+        "description": "Create the initial liquidity position",
         "type": "object",
         "required": [
-          "increment"
+          "create_position"
         ],
         "properties": {
-          "increment": {
-            "type": "object",
-            "additionalProperties": false
+          "create_position": {
+            "$ref": "#/definitions/CreatePositionMessage"
           }
         },
         "additionalProperties": false
       },
       {
-        "description": "Admin method - reset count",
+        "description": "Deposit funds onto the app",
         "type": "object",
         "required": [
-          "reset"
+          "deposit"
         ],
         "properties": {
-          "reset": {
+          "deposit": {
             "type": "object",
             "required": [
-              "count"
+              "funds"
             ],
             "properties": {
-              "count": {
-                "description": "Count value after reset",
-                "type": "integer",
-                "format": "int32"
+              "funds": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/Coin"
+                }
               }
             },
             "additionalProperties": false
@@ -63,19 +202,115 @@
         "additionalProperties": false
       },
       {
+        "description": "Partial withdraw of the funds available on the app",
         "type": "object",
         "required": [
-          "update_config"
+          "withdraw"
         ],
         "properties": {
-          "update_config": {
+          "withdraw": {
+            "type": "object",
+            "required": [
+              "amount"
+            ],
+            "properties": {
+              "amount": {
+                "$ref": "#/definitions/Uint128"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Withdraw everything that is on the app",
+        "type": "object",
+        "required": [
+          "withdraw_all"
+        ],
+        "properties": {
+          "withdraw_all": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Auto-compounds the pool rewards into the pool",
+        "type": "object",
+        "required": [
+          "autocompound"
+        ],
+        "properties": {
+          "autocompound": {
             "type": "object",
             "additionalProperties": false
           }
         },
         "additionalProperties": false
       }
-    ]
+    ],
+    "definitions": {
+      "Coin": {
+        "type": "object",
+        "required": [
+          "amount",
+          "denom"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/definitions/Uint128"
+          },
+          "denom": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatePositionMessage": {
+        "type": "object",
+        "required": [
+          "asset0",
+          "asset1",
+          "funds",
+          "lower_tick",
+          "upper_tick"
+        ],
+        "properties": {
+          "asset0": {
+            "description": "The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Coin"
+              }
+            ]
+          },
+          "asset1": {
+            "$ref": "#/definitions/Coin"
+          },
+          "funds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Coin"
+            }
+          },
+          "lower_tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "upper_tick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Uint128": {
+        "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+        "type": "string"
+      }
+    }
   },
   "query": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -98,10 +333,51 @@
       {
         "type": "object",
         "required": [
-          "count"
+          "balance"
         ],
         "properties": {
-          "count": {
+          "balance": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Get the claimable rewards that the position has accumulated. Returns [`AvailableRewardsResponse`]",
+        "type": "object",
+        "required": [
+          "available_rewards"
+        ],
+        "properties": {
+          "available_rewards": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "position"
+        ],
+        "properties": {
+          "position": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Get the status of the compounding logic of the application Returns [`CompoundStatusResponse`]",
+        "type": "object",
+        "required": [
+          "compound_status"
+        ],
+        "properties": {
+          "compound_status": {
             "type": "object",
             "additionalProperties": false
           }
@@ -118,26 +394,348 @@
   },
   "sudo": null,
   "responses": {
-    "config": {
+    "available_rewards": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ConfigResponse",
-      "type": "object",
-      "additionalProperties": false
-    },
-    "count": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "CountResponse",
+      "title": "AvailableRewardsResponse",
       "type": "object",
       "required": [
-        "count"
+        "available_rewards"
       ],
       "properties": {
-        "count": {
-          "type": "integer",
-          "format": "int32"
+        "available_rewards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Coin"
+          }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "definitions": {
+        "Coin": {
+          "type": "object",
+          "required": [
+            "amount",
+            "denom"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "denom": {
+              "type": "string"
+            }
+          }
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "balance": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AssetsBalanceResponse",
+      "type": "object",
+      "required": [
+        "balances",
+        "liquidity"
+      ],
+      "properties": {
+        "balances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Coin"
+          }
+        },
+        "liquidity": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Coin": {
+          "type": "object",
+          "required": [
+            "amount",
+            "denom"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "denom": {
+              "type": "string"
+            }
+          }
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "compound_status": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CompoundStatusResponse",
+      "type": "object",
+      "required": [
+        "reward",
+        "rewards_available",
+        "status"
+      ],
+      "properties": {
+        "reward": {
+          "$ref": "#/definitions/Coin"
+        },
+        "rewards_available": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/definitions/CompoundStatus"
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Coin": {
+          "type": "object",
+          "required": [
+            "amount",
+            "denom"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "denom": {
+              "type": "string"
+            }
+          }
+        },
+        "CompoundStatus": {
+          "description": "Wether contract is ready for the compound",
+          "oneOf": [
+            {
+              "description": "Contract is ready for the compound",
+              "type": "object",
+              "required": [
+                "ready"
+              ],
+              "properties": {
+                "ready": {
+                  "type": "object",
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "description": "How much seconds left for the next compound",
+              "type": "object",
+              "required": [
+                "cooldown"
+              ],
+              "properties": {
+                "cooldown": {
+                  "$ref": "#/definitions/Uint64"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "description": "No open position right now",
+              "type": "object",
+              "required": [
+                "no_position"
+              ],
+              "properties": {
+                "no_position": {
+                  "type": "object",
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        },
+        "Uint64": {
+          "description": "A thin wrapper around u64 that is using strings for JSON encoding/decoding, such that the full u64 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u64` to get the value out:\n\n``` # use cosmwasm_std::Uint64; let a = Uint64::from(42u64); assert_eq!(a.u64(), 42);\n\nlet b = Uint64::from(70u32); assert_eq!(b.u64(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "config": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Config",
+      "type": "object",
+      "required": [
+        "autocompound_cooldown_seconds",
+        "autocompound_rewards_config",
+        "pool_config"
+      ],
+      "properties": {
+        "autocompound_cooldown_seconds": {
+          "$ref": "#/definitions/Uint64"
+        },
+        "autocompound_rewards_config": {
+          "$ref": "#/definitions/AutocompoundRewardsConfig"
+        },
+        "pool_config": {
+          "$ref": "#/definitions/PoolConfig"
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "AssetEntry": {
+          "description": "An unchecked ANS asset entry. This is a string that is formatted as `src_chain>[intermediate_chain>]asset_name`",
+          "type": "string"
+        },
+        "AutocompoundRewardsConfig": {
+          "description": "Configuration on how rewards should be distributed to the address who helped to execute autocompound",
+          "type": "object",
+          "required": [
+            "gas_denom",
+            "max_gas_balance",
+            "min_gas_balance",
+            "reward",
+            "swap_denom"
+          ],
+          "properties": {
+            "gas_denom": {
+              "description": "Gas denominator for this chain",
+              "type": "string"
+            },
+            "max_gas_balance": {
+              "description": "Upper bound of gas tokens expected after the swap",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                }
+              ]
+            },
+            "min_gas_balance": {
+              "description": "If gas token balance falls below this bound a swap will be generated",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                }
+              ]
+            },
+            "reward": {
+              "description": "Reward amount",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                }
+              ]
+            },
+            "swap_denom": {
+              "description": "Denominator of the asset that will be used for swap to the gas asset",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "PoolConfig": {
+          "type": "object",
+          "required": [
+            "asset0",
+            "asset1",
+            "pool_id",
+            "token0",
+            "token1"
+          ],
+          "properties": {
+            "asset0": {
+              "$ref": "#/definitions/AssetEntry"
+            },
+            "asset1": {
+              "$ref": "#/definitions/AssetEntry"
+            },
+            "pool_id": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "token0": {
+              "type": "string"
+            },
+            "token1": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        },
+        "Uint64": {
+          "description": "A thin wrapper around u64 that is using strings for JSON encoding/decoding, such that the full u64 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u64` to get the value out:\n\n``` # use cosmwasm_std::Uint64; let a = Uint64::from(42u64); assert_eq!(a.u64(), 42);\n\nlet b = Uint64::from(70u32); assert_eq!(b.u64(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "position": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PositionResponse",
+      "type": "object",
+      "properties": {
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Position"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Addr": {
+          "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+          "type": "string"
+        },
+        "Position": {
+          "type": "object",
+          "required": [
+            "last_compound",
+            "owner",
+            "position_id"
+          ],
+          "properties": {
+            "last_compound": {
+              "$ref": "#/definitions/Timestamp"
+            },
+            "owner": {
+              "$ref": "#/definitions/Addr"
+            },
+            "position_id": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "Timestamp": {
+          "description": "A point in time in nanosecond precision.\n\nThis type can represent times from 1970-01-01T00:00:00Z to 2554-07-21T23:34:33Z.\n\n## Examples\n\n``` # use cosmwasm_std::Timestamp; let ts = Timestamp::from_nanos(1_000_000_202); assert_eq!(ts.nanos(), 1_000_000_202); assert_eq!(ts.seconds(), 1); assert_eq!(ts.subsec_nanos(), 202);\n\nlet ts = ts.plus_seconds(2); assert_eq!(ts.nanos(), 3_000_000_202); assert_eq!(ts.seconds(), 3); assert_eq!(ts.subsec_nanos(), 202); ```",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint64"
+            }
+          ]
+        },
+        "Uint64": {
+          "description": "A thin wrapper around u64 that is using strings for JSON encoding/decoding, such that the full u64 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u64` to get the value out:\n\n``` # use cosmwasm_std::Uint64; let a = Uint64::from(42u64); assert_eq!(a.u64(), 42);\n\nlet b = Uint64::from(70u32); assert_eq!(b.u64(), 70); ```",
+          "type": "string"
+        }
+      }
     }
   }
 }
