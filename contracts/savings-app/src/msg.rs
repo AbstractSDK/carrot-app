@@ -1,4 +1,3 @@
-use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Uint128, Uint64};
 
