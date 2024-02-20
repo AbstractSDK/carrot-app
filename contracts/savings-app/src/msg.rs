@@ -100,7 +100,7 @@ pub struct PositionResponse {
 pub struct CompoundStatusResponse {
     pub status: CompoundStatus,
     pub reward: Coin,
-    // TODO: Contract can't query authz, should this check be done by bot instead?
+    // Wether user have enough balance to reward or can swap
     pub rewards_available: bool,
 }
 

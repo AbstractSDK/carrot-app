@@ -88,7 +88,6 @@ pub(crate) fn tokens_to_swap(
     let x0_a1 = x0.amount * asset1.amount;
     let x1_a0 = x1.amount * asset0.amount;
 
-    // TODO: resulting_balance denoms is unsorted right now
     let (offer_asset, ask_asset, resulting_balance) = if x0_a1 < x1_a0 {
         let numerator = x1_a0 - x0_a1;
         let denominator = asset0.amount + price * asset1.amount;

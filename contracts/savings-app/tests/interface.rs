@@ -362,9 +362,7 @@ fn setup_test_tube(
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let create_position_msg = create_position.then(||
-        // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
-        CreatePositionMessage {
+    let create_position_msg = create_position.then(|| CreatePositionMessage {
         lower_tick: INITIAL_LOWER_TICK,
         upper_tick: INITIAL_UPPER_TICK,
         funds: coins(100_000, factory_denom(&chain, USDC)),
