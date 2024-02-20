@@ -54,6 +54,7 @@ use savings_app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
     AvailableRewardsResponse, CreatePositionMessage, PositionResponse,
 };
+use savings_app::state::AutocompoundRewardsConfig;
 
 fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
     let expected = expected.into().u128();
@@ -206,11 +207,10 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             .account()
             .install_app_with_dependencies::<savings_app::contract::interface::AppInterface<Chain>>(
                 &AppInstantiateMsg {
-                    exchanges: vec![DEX_NAME.to_string()],
                     pool_id,
                     // 5 mins
                     autocompound_cooldown_seconds: Uint64::new(300),
-                    autocompound_rewards_config: app::state::AutocompoundRewardsConfig {
+                    autocompound_rewards_config: AutocompoundRewardsConfig {
                         gas_denom: REWARD_DENOM.to_owned(),
                         swap_denom: asset0,
                         reward: Uint128::new(1000),
