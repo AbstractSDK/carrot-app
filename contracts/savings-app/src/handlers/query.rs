@@ -52,7 +52,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
     } else {
         // check if can swap
         let rewards_config = config.autocompound_rewards_config;
-        let dex = app.dex(deps, OSMOSIS.to_string());
+        let dex = app.ans_dex(deps, OSMOSIS.to_string());
         let ans_host = app.ans_host(deps)?;
 
         let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
@@ -139,14 +139,14 @@ pub fn query_price(deps: Deps, funds: &[Coin], app: &App) -> AppResult<Decimal> 
 
     // We take the biggest amount and simulate a swap for the corresponding asset
     let price = if amount0 > amount1 {
-        let simulation_result = app.dex(deps, OSMOSIS.to_string()).simulate_swap(
+        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset0, amount0),
             config.pool_config.asset1,
         )?;
 
         Decimal::from_ratio(amount0, simulation_result.return_amount)
     } else {
-        let simulation_result = app.dex(deps, OSMOSIS.to_string()).simulate_swap(
+        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset1, amount1),
             config.pool_config.asset0,
         )?;

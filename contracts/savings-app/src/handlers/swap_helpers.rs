@@ -1,6 +1,6 @@
 use abstract_app::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::{
-    msg::{DexAction, DexExecuteMsg, DexQueryMsg, GenerateMessagesResponse},
+    msg::{GenerateMessagesResponse},
     DexInterface,
 };
 use abstract_sdk::AuthZInterface;
@@ -28,25 +28,9 @@ pub(crate) fn swap_msg(
     }
     let sender = get_user(deps, app)?;
 
-    let dex = app.dex(deps, OSMOSIS.to_string());
-    let query_msg = DexQueryMsg::GenerateMessages {
-        message: DexExecuteMsg::Action {
-            dex: OSMOSIS.to_string(),
-            action: DexAction::Swap {
-                offer_asset,
-                ask_asset,
-                max_spread: Some(Decimal::percent(MAX_SPREAD_PERCENT)),
-                belief_price: None,
-            },
-        },
-        addr_as_sender: sender.to_string(),
-    };
+    let dex = app.ans_dex(deps, OSMOSIS.to_string());
     let trigger_swap_msg: GenerateMessagesResponse =
-        dex.query(query_msg.clone()).map_err(|_| {
-            cosmwasm_std::StdError::generic_err(format!(
-                "Failed to query generate message, query_msg: {query_msg:?}"
-            ))
-        })?;
+        dex.generate_swap_messages(offer_asset, ask_asset, Some(Decimal::percent(MAX_SPREAD_PERCENT)), None, sender.clone() )?;
     let authz = app.auth_z(deps, Some(sender))?;
 
     Ok(trigger_swap_msg

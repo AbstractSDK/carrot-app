@@ -650,8 +650,8 @@ fn check_autocompound() -> anyhow::Result<()> {
         ],
     )?;
     for _ in 0..10 {
-        dex.swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
-        dex.swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
     }
 
     // Check autocompound adds liquidity from the rewards and user balance remain unchanged
@@ -739,8 +739,8 @@ fn stranger_autocompound() -> anyhow::Result<()> {
         ],
     )?;
     for _ in 0..10 {
-        dex.swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
-        dex.swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
     }
 
     // Check autocompound adds liquidity from the rewards, user balance remain unchanged

@@ -355,7 +355,7 @@ pub fn autocompound_executor_rewards(
     // If not enough gas coins - swap for some amount
     if user_gas_balance.amount < rewards_config.min_gas_balance {
         // Get asset entries
-        let dex = app.dex(deps, OSMOSIS.to_string());
+        let dex = app.ans_dex(deps, OSMOSIS.to_string());
         let ans_host = app.ans_host(deps)?;
         let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
             .resolve(&deps.querier, &ans_host)?;
