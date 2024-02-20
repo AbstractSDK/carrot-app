@@ -20,7 +20,7 @@ FROM debian:buster-slim
 
 # Install needed libraries for a Rust binary
 # This might change based on your project's needs
-# RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from the builder stage
 COPY --from=builder /carrot_workspace/target/release/prod .
