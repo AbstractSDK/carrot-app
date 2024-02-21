@@ -1,5 +1,5 @@
 # Use the official Rust image as the base
-FROM rust:latest
+FROM rust:latest as builder
 
 # Create a new empty shell project
 RUN mkdir carrot_workspace
@@ -15,6 +15,10 @@ COPY Cargo.toml ./
 
 # Build your application
 RUN cargo build --bin prod --release
+
+# TODO: use a new base image and move the binary to the new image when this bug is fixed
+# https://linear.app/abstract-sdk/issue/ORC-80/fix-state-content-not-being-included-in-binary-builds
+# FROM debian:bookworm-slim
 
 # Install needed libraries for a Rust binary
 # This might change based on your project's needs
