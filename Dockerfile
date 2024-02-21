@@ -11,7 +11,7 @@ COPY ./contracts ./contracts
 # Also copy Cargo.toml 
 COPY Cargo.toml ./
 
-RUN echo | ls && exit 1
+# RUN echo | ls && exit 1
 
 # Build your application
 RUN cargo build --bin prod --release
