@@ -8,7 +8,7 @@ use abstract_app::objects::module::{ModuleInfo, ModuleVersion};
 use abstract_client::AbstractClient;
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMO_5, Daemon},
+    daemon::{networks::OSMOSIS_1, Daemon},
     tokio::runtime::Runtime,
 };
 use savings_app::contract::{APP_ID, APP_VERSION};
@@ -16,7 +16,7 @@ use savings_app::contract::{APP_ID, APP_VERSION};
 /// entrypoint for the bot
 pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     let rt = Runtime::new()?;
-    let mut chain_info = OSMO_5;
+    let mut chain_info = OSMOSIS_1;
     let grpc_urls = if let Some(grpc_urls) = &bot_args.grps_urls {
         grpc_urls.iter().map(String::as_ref).collect()
     } else {
