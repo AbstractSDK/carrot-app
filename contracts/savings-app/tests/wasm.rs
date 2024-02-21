@@ -1,6 +1,6 @@
 use abstract_testing::OWNER;
 use cw_orch::prelude::*;
-use savings_app::{contract::APP_ID, AppInterface};
+use carrot_app::{contract::APP_ID, AppInterface};
 
 #[test]
 fn successful_wasm() {

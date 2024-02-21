@@ -2,17 +2,17 @@ use abstract_app::objects::namespace::ABSTRACT_NAMESPACE;
 use abstract_client::Namespace;
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMO_5, Daemon, DaemonBuilder},
+    daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
     tokio::runtime::Runtime,
 };
 use dotenv::dotenv;
 
-use savings_app::AppInterface;
+use carrot_app::AppInterface;
 
 fn main() -> anyhow::Result<()> {
     dotenv().ok();
     env_logger::init();
-    let chain = OSMO_5;
+    let chain = OSMOSIS_1;
     let rt = Runtime::new()?;
     let daemon = DaemonBuilder::default()
         .chain(chain)

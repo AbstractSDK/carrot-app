@@ -23,7 +23,7 @@ use osmosis_std::types::{
         gamm::v1beta1::MsgSwapExactAmountIn,
     },
 };
-use savings_app::{
+use carrot_app::{
     msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
     AppInterface,
 };
@@ -135,7 +135,7 @@ impl Bot {
             if let Err(err) = result {
                 log!(
                     Level::Error,
-                    "error ocurred for {addr} savings-app: {err:?}"
+                    "error ocurred for {addr} carrot-app: {err:?}"
                 );
             }
         }
@@ -148,7 +148,7 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let (id, address) = instance;
     let app = AppInterface::new(id, daemon.clone());
     app.set_address(address);
-    use savings_app::AppQueryMsgFns;
+    use carrot_app::AppQueryMsgFns;
     let resp: CompoundStatusResponse = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee

@@ -1,6 +1,6 @@
 # Savings bot
 
-The savings bot is an executable that calls the autocompound method of all savings-app users.
+The savings bot is an executable that calls the autocompound method of all carrot-app users.
 
 ## Installation
 

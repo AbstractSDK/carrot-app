@@ -11,7 +11,7 @@ use cw_orch::{
     daemon::{networks::OSMOSIS_1, Daemon},
     tokio::runtime::Runtime,
 };
-use savings_app::contract::{APP_ID, APP_VERSION};
+use carrot_app::contract::{APP_ID, APP_VERSION};
 
 /// entrypoint for the bot
 pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {

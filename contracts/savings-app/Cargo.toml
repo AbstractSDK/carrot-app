@@ -1,5 +1,5 @@
 [package]
-name = "savings-app"
+name = "carrot-app"
 version = "0.0.1"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
@@ -64,7 +64,7 @@ abstract-interface = { workspace = true, features = ["daemon"] }
 prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
-savings-app = { path = ".", features = ["interface"] }
+carrot-app = { path = ".", features = ["interface"] }
 abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
 abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
