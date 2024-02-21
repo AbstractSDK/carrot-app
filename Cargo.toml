@@ -4,8 +4,11 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-cw-orch = "0.20.1"
+cw-orch = { version = "0.20.1" }
 abstract-app = { version = "0.21.0" }
 abstract-interface = { version = "0.21.0" }
-abstract-dex-adapter = {git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0"}
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0" }
 abstract-client = { version = "0.21.0" }
+
+[patch.crates-io]
+cw-orch = { git = "https://github.com/AbstractSDK/cw-orchestrator.git", branch = "misha/orc-79-fix-cw-orch-crashing-when-theres-no-state-file" }
