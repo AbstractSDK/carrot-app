@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /v
 COPY --from=builder /carrot_workspace/target/release/prod .
 
 # Patch until https://linear.app/abstract-sdk/issue/ORC-79/fix-cw-orch-crashing-when-theres-no-state-file is fixed.
-RUN mkdir ~/.cw_orchestrator
+RUN mkdir ~/.cw-orchestrator
 RUN echo "{}" > ~/cw-orchestrator/state.json
 
 # Command to run the binary
