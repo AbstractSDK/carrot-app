@@ -2,7 +2,7 @@
 FROM rust:latest as builder
 
 # Create a new empty shell project
-RUN USER=root cargo new --bin carrot_workspace
+RUN mkdir carrot_workspace
 WORKDIR /carrot_workspace
 
 # Copy your source tree
@@ -10,6 +10,8 @@ COPY ./bot ./bot
 COPY ./contracts ./contracts
 # Also copy Cargo.toml 
 COPY Cargo.toml ./
+
+RUN echo | ls && exit 1
 
 # Build your application
 RUN cargo build --bin prod --release
