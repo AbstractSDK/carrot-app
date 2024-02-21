@@ -47,12 +47,11 @@ schemars = "0.8"
 cw-asset = { version = "3.0" }
 
 abstract-app = { workspace = true }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
+abstract-sdk = {version = "0.21.0", features = [
   "stargate",
 ] }
 # Dependencies for interface
 abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
-
 cw-orch = { workspace = true, optional = true }
 
 osmosis-std = { version = "0.21.0" }
@@ -65,9 +64,9 @@ prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
 carrot-app = { path = ".", features = ["interface"] }
-abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
+abstract-testing = { version = "0.21.0" }
+abstract-client = { version = "0.21.0" }
+abstract-sdk = { version = "0.21.0", features = [
   "test-utils",
 ] }
 speculoos = "0.11.0"
