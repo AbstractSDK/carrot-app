@@ -18,7 +18,7 @@ RUN cargo build --bin prod --release
 
 # Create a new stage with a minimal image
 # to run our application
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 # Install needed libraries for a Rust binary
 # This might change based on your project's needs
