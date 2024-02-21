@@ -32,4 +32,4 @@ RUN mkdir ~/.cw-orchestrator
 RUN echo "{}" > ~/.cw-orchestrator/state.json
 
 # Command to run the binary
-CMD ["./prod", "--fcd", "1h", "--acd", "1d"]
+CMD ["./prod", "--fcd", "1d", "--acd", "1h"]
