@@ -27,5 +27,8 @@ RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /v
 # Copy the binary from the builder stage
 COPY --from=builder /carrot_workspace/target/release/prod .
 
+# Patch until https://linear.app/abstract-sdk/issue/ORC-79/fix-cw-orch-crashing-when-theres-no-state-file is fixed.
+RUN touch ~/.cw_orchestrator/state.json
+
 # Command to run the binary
 CMD ["./prod", "--fcd", "1h", "--acd", "1d"]
