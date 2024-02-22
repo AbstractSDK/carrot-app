@@ -2,7 +2,9 @@ use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{Binary, DepsMut, Env, QueryRequest, Reply, StdError};
 use osmosis_std::types::{
     cosmos::authz::v1beta1::MsgExecResponse,
-    osmosis::concentratedliquidity::v1beta1::{MsgCreatePositionResponse, UserPositionsRequest, UserPositionsResponse},
+    osmosis::concentratedliquidity::v1beta1::{
+        MsgCreatePositionResponse, UserPositionsRequest, UserPositionsResponse,
+    },
 };
 
 use crate::{
@@ -15,22 +17,34 @@ pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
     // We get the creator of the position
     let creator = get_user(deps.as_ref(), &app)?;
     let config = CONFIG.load(deps.storage)?;
-    
-    let position_resp_bin: Binary = deps.querier.query(&QueryRequest::Stargate {
-        path: UserPositionsRequest::TYPE_URL.to_string(),
-        data: Binary(UserPositionsRequest {
-            address: creator.to_string(),
-            pool_id: config.pool_config.pool_id,
-            pagination: None,
-        }.to_proto_bytes()),
-    }).map_err(|e| StdError::generic_err(format!("stargate query err: {e}")))?;
+
+    let position_resp_bin: Binary = deps
+        .querier
+        .query(&QueryRequest::Stargate {
+            path: UserPositionsRequest::TYPE_URL.to_string(),
+            data: Binary(
+                UserPositionsRequest {
+                    address: creator.to_string(),
+                    pool_id: config.pool_config.pool_id,
+                    pagination: None,
+                }
+                .to_proto_bytes(),
+            ),
+        })
+        .map_err(|e| StdError::generic_err(format!("stargate query err: {e}")))?;
 
     let position_resp: UserPositionsResponse = position_resp_bin.try_into()?;
 
+    let position_id = position_resp.positions[0]
+        .clone()
+        .position
+        .unwrap()
+        .position_id
+        .clone();
     // We save the position
     let position = Position {
         owner: creator,
-        position_id: position_resp.positions[0].position.unwrap().position_id,
+        position_id: position_id.clone(),
         last_compound: env.block.time,
     };
 
@@ -38,5 +52,5 @@ pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
 
     Ok(app
         .response("create_position_reply")
-        .add_attribute("initial_position_id", response.position_id.to_string()))
+        .add_attribute("initial_position_id", position_id.to_string()))
 }
