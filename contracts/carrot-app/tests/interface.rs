@@ -399,7 +399,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
     ]
     .map(ToOwned::to_owned);
     let granter = chain.sender().to_string();
-    let grantee = savings_app_addr;
+    let grantee = savings_app_addr.clone();
 
     let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
