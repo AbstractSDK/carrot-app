@@ -166,7 +166,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     let dex_adapter = publisher
         .publish_adapter::<_, abstract_dex_adapter::interface::DexAdapter<Chain>>(
             abstract_dex_adapter::msg::DexInstantiateMsg {
-                swap_fee: Decimal::percent(1),
+                swap_fee: Decimal::percent(2),
                 recipient_account: 0,
             },
         )?;
@@ -399,7 +399,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
     ]
     .map(ToOwned::to_owned);
     let granter = chain.sender().to_string();
-    let grantee = savings_app_addr;
+    let grantee = savings_app_addr.clone();
 
     let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
@@ -408,6 +408,10 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: factory_denom(&chain, USDT),
+            amount: LOTS.to_string(),
+        },
+        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+            denom: REWARD_DENOM.to_owned(),
             amount: LOTS.to_string(),
         }];
     let dex_fee_authorization = Any {
@@ -418,7 +422,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
                 authorization: Some(
                     SendAuthorization {
                         spend_limit: dex_spend_limit,
-                        allow_list: vec![dex_fee_addr],
+                        allow_list: vec![dex_fee_addr, savings_app_addr],
                     }
                     .to_any(),
                 ),
