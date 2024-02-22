@@ -409,7 +409,12 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: factory_denom(&chain, USDT),
             amount: LOTS.to_string(),
-        }];
+        },
+        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+            denom: REWARD_DENOM.to_owned(),
+            amount: LOTS.to_string(),
+        },
+    ];
     let dex_fee_authorization = Any {
         value: MsgGrant {
             granter: chain.sender().to_string(),
@@ -418,7 +423,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
                 authorization: Some(
                     SendAuthorization {
                         spend_limit: dex_spend_limit,
-                        allow_list: vec![dex_fee_addr],
+                        allow_list: vec![dex_fee_addr, savings_app_addr],
                     }
                     .to_any(),
                 ),
@@ -458,7 +463,7 @@ fn deposit_lands() -> anyhow::Result<()> {
     let chain = carrot_app.get_chain().clone();
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(1));
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
     // Create position
     create_position(
         &carrot_app,
