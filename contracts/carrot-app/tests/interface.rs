@@ -10,6 +10,13 @@ use abstract_app::{
 };
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_interface::AccountFactoryQueryFns;
+use carrot_app::contract::APP_ID;
+use carrot_app::msg::{
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
+    AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse, CreatePositionMessage,
+    PositionResponse,
+};
+use carrot_app::state::AutocompoundRewardsConfig;
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Gamm};
@@ -44,13 +51,6 @@ use osmosis_std::types::osmosis::{
 };
 use prost::Message;
 use prost_types::Any;
-use carrot_app::contract::APP_ID;
-use carrot_app::msg::{
-    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
-    AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse, CreatePositionMessage,
-    PositionResponse,
-};
-use carrot_app::state::AutocompoundRewardsConfig;
 
 fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
     let expected = expected.into().u128();

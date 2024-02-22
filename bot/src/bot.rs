@@ -1,4 +1,8 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
+use carrot_app::{
+    msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
+    AppInterface,
+};
 use cosmos_sdk_proto::{
     cosmwasm::wasm::v1::{query_client::QueryClient, QueryContractsByCodeRequest},
     traits::Message as _,
@@ -22,10 +26,6 @@ use osmosis_std::types::{
         },
         gamm::v1beta1::MsgSwapExactAmountIn,
     },
-};
-use carrot_app::{
-    msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
-    AppInterface,
 };
 use std::{
     collections::HashSet,
@@ -133,10 +133,7 @@ impl Bot {
         for (id, addr) in self.contract_instances_to_ac.iter() {
             let result = autocompound_instance(&self.daemon, (id, addr));
             if let Err(err) = result {
-                log!(
-                    Level::Error,
-                    "error ocurred for {addr} carrot-app: {err:?}"
-                );
+                log!(Level::Error, "error ocurred for {addr} carrot-app: {err:?}");
             }
         }
         // Wait for autocompound duration

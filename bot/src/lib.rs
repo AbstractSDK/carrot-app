@@ -6,12 +6,12 @@ pub use bot_args::BotArgs;
 
 use abstract_app::objects::module::{ModuleInfo, ModuleVersion};
 use abstract_client::AbstractClient;
+use carrot_app::contract::{APP_ID, APP_VERSION};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon},
     tokio::runtime::Runtime,
 };
-use carrot_app::contract::{APP_ID, APP_VERSION};
 
 /// entrypoint for the bot
 pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
