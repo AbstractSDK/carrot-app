@@ -4,6 +4,7 @@ use abstract_app::{abstract_core::AbstractError, objects::ans_host::AnsHostError
 use cosmwasm_std::{Coin, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
+use cw_utils::ParseReplyError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -28,6 +29,9 @@ pub enum AppError {
 
     #[error("{0}")]
     AnsHost(#[from] AnsHostError),
+
+    #[error("{0}")]
+    ParseReplyError(#[from] ParseReplyError),
 
     #[error(transparent)]
     ProstDecodeError(#[from] prost::DecodeError),

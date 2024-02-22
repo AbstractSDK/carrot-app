@@ -1,9 +1,6 @@
 use abstract_app::abstract_sdk::AbstractResponse;
-use cosmwasm_std::{Binary, DepsMut, Env, Reply};
-use osmosis_std::types::{
-    cosmos::authz::v1beta1::MsgExecResponse,
-    osmosis::concentratedliquidity::v1beta1::MsgCreatePositionResponse,
-};
+use cosmwasm_std::{from_json, DepsMut, Env, Reply};
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePositionResponse;
 
 use crate::{
     contract::{App, AppResult},
@@ -12,12 +9,14 @@ use crate::{
 };
 
 pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) -> AppResult {
+    let b = reply
+        .result
+        .unwrap()
+        .data
+        .expect("Failed to create position");
     // Parse the msg exec response from the reply
-    let authz_response: MsgExecResponse = reply.result.try_into()?;
-
-    // Parse the position response from the first authz message
-    let response: MsgCreatePositionResponse =
-        Binary(authz_response.results[0].clone()).try_into()?;
+    let parsed = cw_utils::parse_execute_response_data(&b)?;
+    let response: MsgCreatePositionResponse = from_json(parsed.data.unwrap_or_default())?;
 
     // We get the creator of the position
     let creator = get_user(deps.as_ref(), &app)?;
