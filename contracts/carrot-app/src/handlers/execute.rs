@@ -327,7 +327,7 @@ pub(crate) fn _create_position(
 
     Ok((
         swap_msgs,
-        SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
+        SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID),
     ))
 }
 
