@@ -30,9 +30,6 @@ fn main() -> anyhow::Result<()> {
         .handle(rt.handle())
         .build()?;
 
-    // let sender_addr = daemon.sender();
-    // panic!("{:?}", sender_addr);
-
     let client = AbstractClient::new(daemon.clone())?;
     let next_local_account_id = client.next_local_account_id()?;
 
@@ -45,7 +42,6 @@ fn main() -> anyhow::Result<()> {
     }];
     let init_msg = AppInstantiateMsg {
         pool_id: POOL_ID,
-        // 5 mins
         autocompound_cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
         autocompound_rewards_config: AutocompoundRewardsConfig {
             gas_denom: utils::REWARD_DENOM.to_owned(),
@@ -63,7 +59,7 @@ fn main() -> anyhow::Result<()> {
                 amount: Uint128::new(1000137456),
             },
             asset1: Coin {
-                denom: utils::TOKEN0.to_owned(),
+                denom: utils::TOKEN1.to_owned(),
                 amount: Uint128::new(1000000000),
             },
         }),
