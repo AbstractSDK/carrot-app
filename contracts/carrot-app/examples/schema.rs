@@ -1,6 +1,6 @@
 use std::{env::current_dir, fs::create_dir_all};
 
-use carrot_app::contract::App;
+use carrot_app_no_swap::contract::App;
 use cosmwasm_schema::remove_schemas;
 
 fn main() {

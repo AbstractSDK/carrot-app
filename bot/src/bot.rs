@@ -1,5 +1,5 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
-use carrot_app::{
+use carrot_app_no_swap::{
     msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
     AppInterface,
 };
@@ -145,7 +145,7 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let (id, address) = instance;
     let app = AppInterface::new(id, daemon.clone());
     app.set_address(address);
-    use carrot_app::AppQueryMsgFns;
+    use carrot_app_no_swap::AppQueryMsgFns;
     let resp: CompoundStatusResponse = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee

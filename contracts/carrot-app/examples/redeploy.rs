@@ -9,7 +9,7 @@ use cw_orch::{
 };
 use dotenv::dotenv;
 
-use carrot_app::{contract::APP_ID, AppInterface};
+use carrot_app_no_swap::{contract::APP_ID, AppInterface};
 
 fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
     abstr.version_control().remove_module(ModuleInfo::from_id(
         APP_ID,
         abstract_app::objects::module::ModuleVersion::Version(
-            carrot_app::contract::APP_VERSION.to_owned(),
+            carrot_app_no_swap::contract::APP_VERSION.to_owned(),
         ),
     )?)?;
 

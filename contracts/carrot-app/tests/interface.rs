@@ -8,13 +8,13 @@ use abstract_app::objects::module::ModuleInfo;
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_dex_adapter::DEX_ADAPTER_ID;
 use abstract_sdk::core::manager::{self, ModuleInstallConfig};
-use carrot_app::contract::APP_ID;
-use carrot_app::msg::{
+use carrot_app_no_swap::contract::APP_ID;
+use carrot_app_no_swap::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
     AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse, CreatePositionMessage,
     PositionResponse,
 };
-use carrot_app::state::AutocompoundRewardsConfig;
+use carrot_app_no_swap::state::AutocompoundRewardsConfig;
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Gamm};
@@ -122,7 +122,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     pool_id: u64,
     gas_pool_id: u64,
     create_position: Option<CreatePositionMessage>,
-) -> anyhow::Result<Application<Chain, carrot_app::AppInterface<Chain>>> {
+) -> anyhow::Result<Application<Chain, carrot_app_no_swap::AppInterface<Chain>>> {
     let asset0 = factory_denom(&chain, USDC);
     let asset1 = factory_denom(&chain, USDT);
     // We register the pool inside the Abstract ANS
@@ -156,7 +156,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         ])
         .build()?;
 
-    // We deploy the carrot_app
+    // We deploy the carrot_app_no_swap
     let publisher = client
         .publisher_builder(Namespace::new("abstract")?)
         .build()?;
@@ -169,7 +169,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             },
         )?;
     // The savings app
-    publisher.publish_app::<carrot_app::contract::interface::AppInterface<Chain>>()?;
+    publisher.publish_app::<carrot_app_no_swap::contract::interface::AppInterface<Chain>>()?;
 
     let create_position_on_init = create_position.is_some();
     let init_msg = AppInstantiateMsg {
@@ -186,15 +186,15 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         create_position,
     };
     // If we create position on instantiate - give auth
-    let carrot_app = if create_position_on_init {
+    let carrot_app_no_swap = if create_position_on_init {
         // TODO: We can't get account factory or module factory objects from the client.
         // get Account id of the upcoming sub-account
         let next_local_account_id = client.next_local_account_id()?;
 
         let savings_app_addr = client
-            .module_instantiate2_address::<carrot_app::AppInterface<Chain>>(&AccountId::local(
-                next_local_account_id,
-            ))?;
+            .module_instantiate2_address::<carrot_app_no_swap::AppInterface<Chain>>(
+                &AccountId::local(next_local_account_id),
+            )?;
 
         // Give all authzs and create subaccount with app in single tx
         let mut msgs = give_authorizations_msgs(&client, savings_app_addr)?;
@@ -227,26 +227,26 @@ pub fn deploy<Chain: CwEnv + Stargate>(
 
         // Now get Application struct
         let account = client.account_from(AccountId::local(next_local_account_id))?;
-        account.application::<carrot_app::AppInterface<Chain>>()?
+        account.application::<carrot_app_no_swap::AppInterface<Chain>>()?
     } else {
         // We install the carrot-app
-        let carrot_app: Application<Chain, carrot_app::AppInterface<Chain>> =
+        let carrot_app_no_swap: Application<Chain, carrot_app_no_swap::AppInterface<Chain>> =
         publisher
             .account()
-            .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<Chain>>(
+            .install_app_with_dependencies::<carrot_app_no_swap::contract::interface::AppInterface<Chain>>(
                 &init_msg,
                 Empty {},
                 &[],
             )?;
-        carrot_app
+        carrot_app_no_swap
     };
     // We update authorized addresses on the adapter for the app
     dex_adapter.execute(
         &abstract_dex_adapter::msg::ExecuteMsg::Base(
             abstract_app::abstract_core::adapter::BaseExecuteMsg {
-                proxy_address: Some(carrot_app.account().proxy()?.to_string()),
+                proxy_address: Some(carrot_app_no_swap.account().proxy()?.to_string()),
                 msg: abstract_app::abstract_core::adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
-                    to_add: vec![carrot_app.addr_str()?],
+                    to_add: vec![carrot_app_no_swap.addr_str()?],
                     to_remove: vec![],
                 },
             },
@@ -254,17 +254,17 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         None,
     )?;
 
-    Ok(carrot_app)
+    Ok(carrot_app_no_swap)
 }
 
 fn create_position<Chain: CwEnv>(
-    app: &Application<Chain, carrot_app::AppInterface<Chain>>,
+    app: &Application<Chain, carrot_app_no_swap::AppInterface<Chain>>,
     funds: Vec<Coin>,
     asset0: Coin,
     asset1: Coin,
 ) -> anyhow::Result<()> {
     app.execute(
-        &carrot_app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
+        &carrot_app_no_swap::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
             funds,
@@ -371,12 +371,10 @@ fn setup_test_tube(
     create_position: bool,
 ) -> anyhow::Result<(
     u64,
-    Application<OsmosisTestTube, carrot_app::AppInterface<OsmosisTestTube>>,
+    Application<OsmosisTestTube, carrot_app_no_swap::AppInterface<OsmosisTestTube>>,
 )> {
     let _ = env_logger::builder().is_test(true).try_init();
-    let chain = OsmosisTestTube::new(vec![
-        coin(LOTS, GAS_DENOM),
-    ]);
+    let chain = OsmosisTestTube::new(vec![coin(LOTS, GAS_DENOM)]);
 
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
@@ -390,14 +388,14 @@ fn setup_test_tube(
         asset0: coin(1_000_000, factory_denom(&chain, USDC)),
         asset1: coin(1_000_000, factory_denom(&chain, USDT)),
     });
-    let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
+    let carrot_app_no_swap = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 
     // Give authorizations if not given already
     if !create_position {
         let client = AbstractClient::new(chain)?;
-        give_authorizations(&client, carrot_app.addr_str()?)?;
+        give_authorizations(&client, carrot_app_no_swap.addr_str()?)?;
     }
-    Ok((pool_id, carrot_app))
+    Ok((pool_id, carrot_app_no_swap))
 }
 
 fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
@@ -485,21 +483,21 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
 
 #[test]
 fn deposit_lands() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app_no_swap.get_chain().clone();
 
     let deposit_amount = 5_000;
     let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
     // Create position
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(deposit_amount, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
     // Check almost everything landed
-    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     let sum = balance
         .balances
         .iter()
@@ -507,9 +505,9 @@ fn deposit_lands() -> anyhow::Result<()> {
     assert!(sum.u128() > deposit_amount - max_fee.u128());
 
     // Do the deposit
-    carrot_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
+    carrot_app_no_swap.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
     // Check almost everything landed
-    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     let sum = balance
         .balances
         .iter()
@@ -517,9 +515,9 @@ fn deposit_lands() -> anyhow::Result<()> {
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 2);
 
     // Do the second deposit
-    carrot_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
+    carrot_app_no_swap.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
     // Check almost everything landed
-    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     let sum = balance
         .balances
         .iter()
@@ -530,19 +528,19 @@ fn deposit_lands() -> anyhow::Result<()> {
 
 #[test]
 fn withdraw_position() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app_no_swap.get_chain().clone();
 
     // Create position
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(10_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     let balance_usdc_before_withdraw = chain
         .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
@@ -557,7 +555,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Withdraw half of liquidity
     let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
     let half_of_liquidity = liquidity_amount / Uint128::new(2);
-    carrot_app.withdraw(half_of_liquidity)?;
+    carrot_app_no_swap.withdraw(half_of_liquidity)?;
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
@@ -574,7 +572,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     assert!(balance_usdt_after_half_withdraw.amount > balance_usdt_before_withdraw.amount);
 
     // Withdraw rest of liquidity
-    carrot_app.withdraw_all()?;
+    carrot_app_no_swap.withdraw_all()?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
@@ -593,28 +591,28 @@ fn withdraw_position() -> anyhow::Result<()> {
 
 #[test]
 fn create_multiple_positions() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app_no_swap.get_chain().clone();
 
     // Create position
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(10_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balances_first_position: AssetsBalanceResponse = carrot_app.balance()?;
+    let balances_first_position: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     // Create position second time, user decided to close first one
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(5_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    let balances_second_position: AssetsBalanceResponse = carrot_app.balance()?;
+    let balances_second_position: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
 
     // Should have more usd in total because it adds up
     let total_usd_first: Uint128 = balances_first_position
@@ -636,19 +634,19 @@ fn create_multiple_positions() -> anyhow::Result<()> {
 
 #[test]
 fn deposit_both_assets() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app_no_swap.get_chain().clone();
 
     // Create position
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(10_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
-    carrot_app.deposit(vec![
+    carrot_app_no_swap.deposit(vec![
         coin(258, factory_denom(&chain, USDC)),
         coin(234, factory_denom(&chain, USDT)),
     ])?;
@@ -658,22 +656,22 @@ fn deposit_both_assets() -> anyhow::Result<()> {
 
 #[test]
 fn check_autocompound() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app_no_swap.get_chain().clone();
 
     // Create position
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(100_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
     // Do some swaps
-    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app_no_swap.module()?;
     let abs = Abstract::load_from(chain.clone())?;
-    let account_id = carrot_app.account().id()?;
+    let account_id = carrot_app_no_swap.account().id()?;
     let account = AbstractAccount::new(&abs, account_id);
     chain.bank_send(
         account.proxy.addr_str()?,
@@ -690,11 +688,11 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Check autocompound adds liquidity from the rewards and user balance remain unchanged
 
     // Check it has some rewards to autocompound first
-    let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
+    let rewards: AvailableRewardsResponse = carrot_app_no_swap.available_rewards()?;
     assert!(!rewards.available_rewards.is_empty());
 
     // Save balances
-    let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance_before_autocompound: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     let balance_usdc_before_autocompound = chain
         .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
@@ -708,10 +706,10 @@ fn check_autocompound() -> anyhow::Result<()> {
 
     // Autocompound
     chain.wait_seconds(300)?;
-    carrot_app.autocompound()?;
+    carrot_app_no_swap.autocompound()?;
 
     // Save new balances
-    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance_after_autocompound: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
     let balance_usdc_after_autocompound = chain
         .bank_querier()
         .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
@@ -738,7 +736,7 @@ fn check_autocompound() -> anyhow::Result<()> {
     .unwrap();
 
     // Check it used all of the rewards
-    let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
+    let rewards: AvailableRewardsResponse = carrot_app_no_swap.available_rewards()?;
     assert!(rewards.available_rewards.is_empty());
 
     Ok(())
@@ -746,23 +744,23 @@ fn check_autocompound() -> anyhow::Result<()> {
 
 #[test]
 fn stranger_autocompound() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(false)?;
 
-    let mut chain = carrot_app.get_chain().clone();
+    let mut chain = carrot_app_no_swap.get_chain().clone();
     let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
 
     // Create position
     create_position(
-        &carrot_app,
+        &carrot_app_no_swap,
         coins(100_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
 
     // Do some swaps
-    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app_no_swap.module()?;
     let abs = Abstract::load_from(chain.clone())?;
-    let account_id = carrot_app.account().id()?;
+    let account_id = carrot_app_no_swap.account().id()?;
     let account = AbstractAccount::new(&abs, account_id);
     chain.bank_send(
         account.proxy.addr_str()?,
@@ -780,16 +778,16 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     // and rewards gets passed to the "stranger"
 
     // Check it has some rewards to autocompound first
-    let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
+    let rewards: AvailableRewardsResponse = carrot_app_no_swap.available_rewards()?;
     assert!(!rewards.available_rewards.is_empty());
 
     // Save balances
-    let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance_before_autocompound: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
 
     // Autocompound by stranger
     chain.wait_seconds(300)?;
     // Check query is able to compute rewards, when swap is required
-    let compound_status: CompoundStatusResponse = carrot_app.compound_status()?;
+    let compound_status: CompoundStatusResponse = carrot_app_no_swap.compound_status()?;
     assert_eq!(
         compound_status,
         CompoundStatusResponse {
@@ -798,16 +796,16 @@ fn stranger_autocompound() -> anyhow::Result<()> {
             rewards_available: true
         }
     );
-    carrot_app.call_as(&stranger).autocompound()?;
+    carrot_app_no_swap.call_as(&stranger).autocompound()?;
 
     // Save new balances
-    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance_after_autocompound: AssetsBalanceResponse = carrot_app_no_swap.balance()?;
 
     // Liquidity added
     assert!(balance_after_autocompound.liquidity > balance_before_autocompound.liquidity);
 
     // Check it used all of the rewards
-    let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
+    let rewards: AvailableRewardsResponse = carrot_app_no_swap.available_rewards()?;
     assert!(rewards.available_rewards.is_empty());
 
     // Check stranger gets rewarded
@@ -818,9 +816,9 @@ fn stranger_autocompound() -> anyhow::Result<()> {
 
 #[test]
 fn create_position_on_instantiation() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(true)?;
+    let (_, carrot_app_no_swap) = setup_test_tube(true)?;
 
-    let position: PositionResponse = carrot_app.position()?;
+    let position: PositionResponse = carrot_app_no_swap.position()?;
     assert!(position.position.is_some());
     Ok(())
 }

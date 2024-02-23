@@ -13,7 +13,7 @@ use crate::{
     state::{Config, PoolConfig, CONFIG},
 };
 
-use super::execute::create_position_msg;
+use super::execute::create_position_proto_msg;
 
 pub fn instantiate_handler(
     deps: DepsMut,
@@ -74,10 +74,9 @@ pub fn instantiate_handler(
     let mut response = app.response("instantiate_savings_app");
 
     // If provided - create position
-    if let Some(create_position_msg) = msg.create_position {
-        let (swap_msgs, create_msg) =
-            create_position_msg(deps.as_ref(), &env, &app, create_position_msg)?;
-        response = response.add_messages(swap_msgs).add_submessage(create_msg);
+    if let Some(msg) = msg.create_position {
+        let create_msg = create_position_proto_msg(deps.as_ref(), &env, &app, msg)?;
+        response = response.add_submessage(create_msg);
     }
     Ok(response)
 }

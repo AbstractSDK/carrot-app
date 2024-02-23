@@ -79,12 +79,10 @@ fn create_position(
     };
 
     create_position_msg.funds = funds_to_deposit;
-    let (swap_messages, create_position_msg) =
-        create_position_msg(deps.as_ref(), &env, &app, create_position_msg)?;
+    let create_position_msg =
+        create_position_proto_msg(deps.as_ref(), &env, &app, create_position_msg)?;
 
-    Ok(response
-        .add_messages(swap_messages)
-        .add_submessage(create_position_msg))
+    Ok(response.add_submessage(create_position_msg))
 }
 
 fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
@@ -289,7 +287,7 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
 }
 
-pub(crate) fn create_position_msg(
+pub(crate) fn create_position_proto_msg(
     deps: Deps,
     env: &Env,
     app: &App,
@@ -319,9 +317,7 @@ pub(crate) fn create_position_msg(
         },
     );
 
-    Ok(
-        SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID),
-    )
+    Ok(SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID))
 }
 
 /// Sends autocompound rewards to the executor.

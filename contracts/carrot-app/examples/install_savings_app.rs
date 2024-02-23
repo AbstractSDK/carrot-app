@@ -10,7 +10,7 @@ use cw_orch::{
 };
 use dotenv::dotenv;
 
-use carrot_app::{
+use carrot_app_no_swap::{
     msg::{AppInstantiateMsg, CreatePositionMessage},
     state::AutocompoundRewardsConfig,
 };
@@ -37,17 +37,21 @@ fn main() -> anyhow::Result<()> {
     let client = AbstractClient::new(daemon.clone())?;
     let next_local_account_id = client.next_local_account_id()?;
 
-    let savings_app_addr = client.module_instantiate2_address::<carrot_app::AppInterface<Daemon>>(
-        &AccountId::local(next_local_account_id),
-    )?;
+    let savings_app_addr = client
+        .module_instantiate2_address::<carrot_app_no_swap::AppInterface<Daemon>>(
+            &AccountId::local(next_local_account_id),
+        )?;
 
-    let funds = vec![Coin {
-        denom: utils::TOKEN1.to_owned(),
-        amount: Uint128::new(30_000),
-    }, Coin {
-        denom: utils::TOKEN0.to_owned(),
-        amount: Uint128::new(30_000),
-    }];
+    let funds = vec![
+        Coin {
+            denom: utils::TOKEN1.to_owned(),
+            amount: Uint128::new(30_000),
+        },
+        Coin {
+            denom: utils::TOKEN0.to_owned(),
+            amount: Uint128::new(30_000),
+        },
+    ];
 
     let init_msg = AppInstantiateMsg {
         pool_id: POOL_ID,
@@ -98,7 +102,7 @@ mod utils {
     use abstract_dex_adapter::DEX_ADAPTER_ID;
     use abstract_interface::Abstract;
     use abstract_sdk::core::{account_factory, manager::ModuleInstallConfig};
-    use carrot_app::contract::{APP_ID, APP_VERSION};
+    use carrot_app_no_swap::contract::{APP_ID, APP_VERSION};
     use cosmwasm_std::{to_json_binary, to_json_vec};
     use cw_orch::{environment::CwEnv, prelude::*};
     use osmosis_std::types::{

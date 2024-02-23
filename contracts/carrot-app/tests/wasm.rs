@@ -1,5 +1,5 @@
 use abstract_testing::OWNER;
-use carrot_app::{contract::APP_ID, AppInterface};
+use carrot_app_no_swap::{contract::APP_ID, AppInterface};
 use cw_orch::prelude::*;
 
 #[test]

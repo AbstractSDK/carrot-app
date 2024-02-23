@@ -6,7 +6,7 @@ pub use bot_args::BotArgs;
 
 use abstract_app::objects::module::{ModuleInfo, ModuleVersion};
 use abstract_client::AbstractClient;
-use carrot_app::contract::{APP_ID, APP_VERSION};
+use carrot_app_no_swap::contract::{APP_ID, APP_VERSION};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon},
