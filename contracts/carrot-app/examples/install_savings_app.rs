@@ -96,7 +96,7 @@ mod utils {
     use abstract_client::*;
     use abstract_dex_adapter::DEX_ADAPTER_ID;
     use abstract_interface::Abstract;
-    use abstract_sdk::core::{account_factory, manager::ModuleInstallConfig, ACCOUNT_FACTORY};
+    use abstract_sdk::core::{account_factory, manager::ModuleInstallConfig};
     use carrot_app::contract::APP_ID;
     use cosmwasm_std::{to_json_binary, to_json_vec};
     use cw_orch::{environment::CwEnv, prelude::*};
