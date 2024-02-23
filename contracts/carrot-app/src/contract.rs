@@ -14,7 +14,7 @@ use crate::{
 /// The version of your app
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The id of the app
-pub const APP_ID: &str = "abstract:carrot-app";
+pub const APP_ID: &str = "abstract:carrot-app-no-swap";
 
 /// The type of the result returned by your app's entry points.
 pub type AppResult<T = Response> = Result<T, AppError>;

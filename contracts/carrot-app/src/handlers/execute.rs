@@ -80,7 +80,7 @@ fn create_position(
 
     create_position_msg.funds = funds_to_deposit;
     let (swap_messages, create_position_msg) =
-        _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
+        create_position_msg(deps.as_ref(), &env, &app, create_position_msg)?;
 
     Ok(response
         .add_messages(swap_messages)
@@ -289,30 +289,23 @@ fn _inner_withdraw(
     Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
 }
 
-pub(crate) fn _create_position(
+pub(crate) fn create_position_msg(
     deps: Deps,
     env: &Env,
     app: &App,
     create_position_msg: CreatePositionMessage,
-) -> AppResult<(Vec<CosmosMsg>, SubMsg)> {
+) -> AppResult<SubMsg> {
     let config = CONFIG.load(deps.storage)?;
 
     let CreatePositionMessage {
         lower_tick,
         upper_tick,
         funds,
-        asset0,
-        asset1,
     } = create_position_msg;
 
-    // With the current funds, we need to be able to create a position that makes sense
-    // Therefore we swap the incoming funds to fit inside the future position
-    let (swap_msgs, mut resulting_assets) =
-        swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
-    resulting_assets.sort_by(|a, b| a.denom.cmp(&b.denom));
     let sender = get_user(deps, app)?;
 
-    let tokens = cosmwasm_to_proto_coins(resulting_assets);
+    let tokens = cosmwasm_to_proto_coins(funds);
     let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
@@ -326,10 +319,9 @@ pub(crate) fn _create_position(
         },
     );
 
-    Ok((
-        swap_msgs,
+    Ok(
         SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID),
-    ))
+    )
 }
 
 /// Sends autocompound rewards to the executor.

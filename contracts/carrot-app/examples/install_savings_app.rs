@@ -40,10 +40,15 @@ fn main() -> anyhow::Result<()> {
     let savings_app_addr = client.module_instantiate2_address::<carrot_app::AppInterface<Daemon>>(
         &AccountId::local(next_local_account_id),
     )?;
+
     let funds = vec![Coin {
         denom: utils::TOKEN1.to_owned(),
-        amount: Uint128::new(300_000),
+        amount: Uint128::new(30_000),
+    }, Coin {
+        denom: utils::TOKEN0.to_owned(),
+        amount: Uint128::new(30_000),
     }];
+
     let init_msg = AppInstantiateMsg {
         pool_id: POOL_ID,
         // 5 mins
@@ -59,14 +64,6 @@ fn main() -> anyhow::Result<()> {
             lower_tick: LOWER_TICK,
             upper_tick: UPPER_TICK,
             funds,
-            asset0: Coin {
-                denom: utils::TOKEN0.to_owned(),
-                amount: Uint128::new(1000137456),
-            },
-            asset1: Coin {
-                denom: utils::TOKEN1.to_owned(),
-                amount: Uint128::new(1000000000),
-            },
         }),
     };
     // Give all authzs and create subaccount with app in single tx

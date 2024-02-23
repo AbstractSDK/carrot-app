@@ -29,9 +29,6 @@ pub struct CreatePositionMessage {
     pub upper_tick: i64,
     // Funds to use to deposit on the account
     pub funds: Vec<Coin>,
-    /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
-    pub asset0: Coin,
-    pub asset1: Coin,
 }
 
 /// App execute messages
