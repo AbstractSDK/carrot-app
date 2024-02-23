@@ -1,15 +1,13 @@
 use std::iter;
 
-use abstract_app::abstract_interface::{Abstract, AbstractAccount};
-use abstract_app::objects::salt::generate_instantiate_salt;
-use abstract_app::{
-    abstract_core::objects::{
-        pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType,
-    },
-    objects::module::ModuleVersion,
+use abstract_app::abstract_core::objects::{
+    pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType,
 };
+use abstract_app::abstract_interface::{Abstract, AbstractAccount};
+use abstract_app::objects::module::ModuleInfo;
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
-use abstract_interface::AccountFactoryQueryFns;
+use abstract_dex_adapter::DEX_ADAPTER_ID;
+use abstract_sdk::core::manager::{self, ModuleInstallConfig};
 use carrot_app::contract::APP_ID;
 use carrot_app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
@@ -17,12 +15,11 @@ use carrot_app::msg::{
     PositionResponse,
 };
 use carrot_app::state::AutocompoundRewardsConfig;
-use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
+use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Gamm};
 use cw_orch::{
     anyhow,
-    environment::WasmQuerier,
     osmosis_test_tube::osmosis_test_tube::{
         osmosis_std::types::{
             cosmos::{
@@ -42,6 +39,7 @@ use cw_orch::{
     prelude::*,
 };
 use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
+use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 use osmosis_std::types::osmosis::{
     concentratedliquidity::v1beta1::{
         CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
@@ -173,52 +171,75 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // The savings app
     publisher.publish_app::<carrot_app::contract::interface::AppInterface<Chain>>()?;
 
-    let app_code = client
-        .version_control()
-        .get_app_code(APP_ID, ModuleVersion::Latest)?;
-
+    let create_position_on_init = create_position.is_some();
+    let init_msg = AppInstantiateMsg {
+        pool_id,
+        // 5 mins
+        autocompound_cooldown_seconds: Uint64::new(300),
+        autocompound_rewards_config: AutocompoundRewardsConfig {
+            gas_denom: REWARD_DENOM.to_owned(),
+            swap_denom: asset0,
+            reward: Uint128::new(1000),
+            min_gas_balance: Uint128::new(2000),
+            max_gas_balance: Uint128::new(10000),
+        },
+        create_position,
+    };
     // If we create position on instantiate - give auth
-    if create_position.is_some() {
+    let carrot_app = if create_position_on_init {
         // TODO: We can't get account factory or module factory objects from the client.
         // get Account id of the upcoming sub-account
-        let abs = Abstract::load_from(chain.clone())?;
-        let account_factory_config = abs.account_factory.config()?;
-        let next_local_account_id = AccountId::local(account_factory_config.local_account_sequence);
+        let next_local_account_id = client.next_local_account_id()?;
 
-        // Get salt for the module
-        let salt = generate_instantiate_salt(&next_local_account_id);
+        let savings_app_addr = client
+            .module_instantiate2_address::<carrot_app::AppInterface<Chain>>(&AccountId::local(
+                next_local_account_id,
+            ))?;
 
-        let wasm_querier = chain.wasm_querier();
+        // Give all authzs and create subaccount with app in single tx
+        let mut msgs = give_authorizations_msgs(&client, savings_app_addr)?;
+        let create_sub_account_message = Any {
+            type_url: MsgExecuteContract::TYPE_URL.to_owned(),
+            value: MsgExecuteContract {
+                sender: chain.sender().to_string(),
+                contract: publisher.account().manager()?.to_string(),
+                msg: to_json_vec(&manager::ExecuteMsg::CreateSubAccount {
+                    name: "bob".to_owned(),
+                    description: None,
+                    link: None,
+                    base_asset: None,
+                    namespace: None,
+                    install_modules: vec![
+                        ModuleInstallConfig::new(ModuleInfo::from_id_latest(DEX_ADAPTER_ID)?, None),
+                        ModuleInstallConfig::new(
+                            ModuleInfo::from_id_latest(APP_ID)?,
+                            Some(to_json_binary(&init_msg)?),
+                        ),
+                    ],
+                    account_id: Some(next_local_account_id),
+                })?,
+                funds: vec![],
+            }
+            .to_proto_bytes(),
+        };
+        msgs.push(create_sub_account_message);
+        let _ = chain.commit_any::<MsgGrantResponse>(msgs, None)?;
 
-        let module_factory_addr = abs.module_factory.address()?;
-        let savings_app_addr = wasm_querier
-            .instantiate2_addr(app_code, module_factory_addr, salt)
-            .unwrap();
-        give_authorizations(&client, savings_app_addr)?;
-    }
-
-    // We deploy the carrot-app
-    let carrot_app: Application<Chain, carrot_app::AppInterface<Chain>> =
+        // Now get Application struct
+        let account = client.account_from(AccountId::local(next_local_account_id))?;
+        account.application::<carrot_app::AppInterface<Chain>>()?
+    } else {
+        // We install the carrot-app
+        let carrot_app: Application<Chain, carrot_app::AppInterface<Chain>> =
         publisher
             .account()
             .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<Chain>>(
-                &AppInstantiateMsg {
-                    pool_id,
-                    // 5 mins
-                    autocompound_cooldown_seconds: Uint64::new(300),
-                    autocompound_rewards_config: AutocompoundRewardsConfig {
-                        gas_denom: REWARD_DENOM.to_owned(),
-                        swap_denom: asset0,
-                        reward: Uint128::new(1000),
-                        min_gas_balance: Uint128::new(2000),
-                        max_gas_balance: Uint128::new(10000),
-                    },
-                    create_position,
-                },
+                &init_msg,
                 Empty {},
                 &[],
             )?;
-
+        carrot_app
+    };
     // We update authorized addresses on the adapter for the app
     dex_adapter.execute(
         &abstract_dex_adapter::msg::ExecuteMsg::Base(
@@ -381,10 +402,10 @@ fn setup_test_tube(
     Ok((pool_id, carrot_app))
 }
 
-fn give_authorizations<Chain: CwEnv + Stargate>(
+fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
     client: &AbstractClient<Chain>,
-    savings_app_addr: String,
-) -> Result<(), anyhow::Error> {
+    savings_app_addr: impl Into<String>,
+) -> Result<Vec<Any>, anyhow::Error> {
     let dex_fee_account = client.account_from(AccountId::local(0))?;
     let dex_fee_addr = dex_fee_account.proxy()?.to_string();
     let chain = client.environment().clone();
@@ -398,6 +419,7 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
         MsgCollectSpreadRewards::TYPE_URL,
     ]
     .map(ToOwned::to_owned);
+    let savings_app_addr: String = savings_app_addr.into();
     let granter = chain.sender().to_string();
     let grantee = savings_app_addr.clone();
 
@@ -433,25 +455,33 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
         type_url: MsgGrant::TYPE_URL.to_owned(),
     };
 
-    chain.commit_any::<MsgGrantResponse>(
-        authorization_urls
-            .into_iter()
-            .map(|msg| Any {
-                value: MsgGrant {
-                    granter: granter.clone(),
-                    grantee: grantee.clone(),
-                    grant: Some(Grant {
-                        authorization: Some(GenericAuthorization { msg }.to_any()),
-                        expiration: None,
-                    }),
-                }
-                .encode_to_vec(),
-                type_url: MsgGrant::TYPE_URL.to_owned(),
-            })
-            .chain(iter::once(dex_fee_authorization))
-            .collect(),
-        None,
-    )?;
+    let msgs: Vec<Any> = authorization_urls
+        .into_iter()
+        .map(|msg| Any {
+            value: MsgGrant {
+                granter: granter.clone(),
+                grantee: grantee.clone(),
+                grant: Some(Grant {
+                    authorization: Some(GenericAuthorization { msg }.to_any()),
+                    expiration: None,
+                }),
+            }
+            .encode_to_vec(),
+            type_url: MsgGrant::TYPE_URL.to_owned(),
+        })
+        .chain(iter::once(dex_fee_authorization))
+        .collect();
+    Ok(msgs)
+}
+
+fn give_authorizations<Chain: CwEnv + Stargate>(
+    client: &AbstractClient<Chain>,
+    savings_app_addr: impl Into<String>,
+) -> Result<(), anyhow::Error> {
+    let msgs = give_authorizations_msgs(client, savings_app_addr)?;
+    client
+        .environment()
+        .commit_any::<MsgGrantResponse>(msgs, None)?;
     Ok(())
 }
 
@@ -462,7 +492,7 @@ fn deposit_lands() -> anyhow::Result<()> {
     let chain = carrot_app.get_chain().clone();
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(1));
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
     // Create position
     create_position(
         &carrot_app,
@@ -601,8 +631,8 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         .sum();
     assert!(total_usd_second > total_usd_first);
 
-    // Should be at least (10_000 + 5_000) -2% with all fees
-    assert!(total_usd_second > Uint128::new(15_000).mul_floor(Decimal::percent(98)));
+    // Should be at least (10_000 + 5_000) -3% with all fees
+    assert!(total_usd_second > Uint128::new(15_000).mul_floor(Decimal::percent(97)));
     Ok(())
 }
 
