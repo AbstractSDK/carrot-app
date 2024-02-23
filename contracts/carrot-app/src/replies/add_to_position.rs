@@ -3,7 +3,10 @@ use cosmwasm_std::{DepsMut, Env, Reply, StdError, SubMsgResponse, SubMsgResult};
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgAddToPositionResponse;
 
 use crate::{
-    contract::{App, AppResult}, error::AppError, helpers::get_user, state::{Position, POSITION}
+    contract::{App, AppResult},
+    error::AppError,
+    helpers::get_user,
+    state::{Position, POSITION},
 };
 
 pub fn add_to_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) -> AppResult {
