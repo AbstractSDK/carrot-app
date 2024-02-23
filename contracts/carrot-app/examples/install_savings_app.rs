@@ -4,6 +4,7 @@ use cosmwasm_std::{Coin, Uint128, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
+    environment::{BankQuerier, DefaultQueriers},
     prelude::Stargate,
     tokio::runtime::Runtime,
 };
@@ -13,7 +14,10 @@ use carrot_app::{
     msg::{AppInstantiateMsg, CreatePositionMessage},
     state::AutocompoundRewardsConfig,
 };
-use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
+use osmosis_std::types::{
+    cosmos::authz::v1beta1::MsgGrantResponse,
+    osmosis::{gamm::v1beta1::MsgSwapExactAmountIn, poolmanager::v1beta1::SwapAmountInRoute},
+};
 
 const POOL_ID: u64 = 1220;
 const AUTOCOMPOUND_COOLDOWN_SECONDS: u64 = 86400;
@@ -29,9 +33,6 @@ fn main() -> anyhow::Result<()> {
         .chain(chain)
         .handle(rt.handle())
         .build()?;
-
-    // let sender_addr = daemon.sender();
-    // panic!("{:?}", sender_addr);
 
     let client = AbstractClient::new(daemon.clone())?;
     let next_local_account_id = client.next_local_account_id()?;
@@ -63,7 +64,7 @@ fn main() -> anyhow::Result<()> {
                 amount: Uint128::new(1000137456),
             },
             asset1: Coin {
-                denom: utils::TOKEN0.to_owned(),
+                denom: utils::TOKEN1.to_owned(),
                 amount: Uint128::new(1000000000),
             },
         }),
@@ -92,12 +93,15 @@ mod utils {
 
     pub const REWARD_DENOM: &str = "uosmo";
 
-    use abstract_app::objects::{module::ModuleInfo, AccountId};
+    use abstract_app::objects::{
+        module::{ModuleInfo, ModuleVersion},
+        AccountId,
+    };
     use abstract_client::*;
     use abstract_dex_adapter::DEX_ADAPTER_ID;
     use abstract_interface::Abstract;
     use abstract_sdk::core::{account_factory, manager::ModuleInstallConfig};
-    use carrot_app::contract::APP_ID;
+    use carrot_app::contract::{APP_ID, APP_VERSION};
     use cosmwasm_std::{to_json_binary, to_json_vec};
     use cw_orch::{environment::CwEnv, prelude::*};
     use osmosis_std::types::{
@@ -213,9 +217,20 @@ mod utils {
                     base_asset: None,
                     namespace: None,
                     install_modules: vec![
-                        ModuleInstallConfig::new(ModuleInfo::from_id_latest(DEX_ADAPTER_ID)?, None),
                         ModuleInstallConfig::new(
-                            ModuleInfo::from_id_latest(APP_ID)?,
+                            ModuleInfo::from_id(
+                                DEX_ADAPTER_ID,
+                                ModuleVersion::Version(
+                                    abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
+                                ),
+                            )?,
+                            None,
+                        ),
+                        ModuleInstallConfig::new(
+                            ModuleInfo::from_id(
+                                APP_ID,
+                                ModuleVersion::Version(APP_VERSION.to_owned()),
+                            )?,
                             Some(to_json_binary(&init_msg)?),
                         ),
                     ],

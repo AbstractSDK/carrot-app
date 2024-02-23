@@ -376,8 +376,6 @@ fn setup_test_tube(
     let _ = env_logger::builder().is_test(true).try_init();
     let chain = OsmosisTestTube::new(vec![
         coin(LOTS, GAS_DENOM),
-        // All of it will get sent to the rewards pool
-        // coin(2_000_000_000, REWARD_DENOM),
     ]);
 
     // We create a usdt-usdc pool

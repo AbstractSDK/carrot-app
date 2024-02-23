@@ -18,9 +18,20 @@ pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
 
     let parsed = cw_utils::parse_execute_response_data(&b)?;
     // Parse create position response
-    let response: MsgCreatePositionResponse = parsed.data.unwrap_or_default().try_into()?;
+    let response: MsgCreatePositionResponse = parsed
+        .data
+        .clone()
+        .unwrap_or_default()
+        .try_into()
+        .map_err(|e| {
+            StdError::generic_err(format!(
+                "Failed to decode create position reply, parsed: {parsed_data}. e: {e}",
+                parsed_data = parsed.data.unwrap_or_default()
+            ))
+        })?;
     // We get the creator of the position
-    let creator = get_user(deps.as_ref(), &app)?;
+    let creator = get_user(deps.as_ref(), &app)
+        .map_err(|e| StdError::generic_err(format!("User got lost: {e}")))?;
 
     // We save the position
     let position = Position {
