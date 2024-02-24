@@ -21,12 +21,6 @@ fn main() -> anyhow::Result<()> {
         .build()?;
 
     let abstr = abstract_client::AbstractClient::new(daemon)?;
-    abstr.version_control().remove_module(ModuleInfo::from_id(
-        APP_ID,
-        abstract_app::objects::module::ModuleVersion::Version(
-            carrot_app::contract::APP_VERSION.to_owned(),
-        ),
-    )?)?;
 
     let publisher = abstr
         .publisher_builder(Namespace::new(ABSTRACT_NAMESPACE)?)
