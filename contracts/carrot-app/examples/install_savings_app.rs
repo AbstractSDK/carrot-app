@@ -14,10 +14,7 @@ use carrot_app::{
     msg::{AppInstantiateMsg, CreatePositionMessage},
     state::AutocompoundRewardsConfig,
 };
-use osmosis_std::types::{
-    cosmos::authz::v1beta1::MsgGrantResponse,
-    osmosis::{gamm::v1beta1::MsgSwapExactAmountIn, poolmanager::v1beta1::SwapAmountInRoute},
-};
+use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 
 const POOL_ID: u64 = 1220;
 const AUTOCOMPOUND_COOLDOWN_SECONDS: u64 = 86400;
@@ -42,7 +39,7 @@ fn main() -> anyhow::Result<()> {
     )?;
     let funds = vec![Coin {
         denom: utils::TOKEN1.to_owned(),
-        amount: Uint128::new(300_000),
+        amount: Uint128::new(60_000),
     }];
     let init_msg = AppInstantiateMsg {
         pool_id: POOL_ID,
@@ -144,11 +141,11 @@ mod utils {
 
         let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: TOKEN0.to_string(),
+            denom: TOKEN1.to_string(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: TOKEN1.to_string(),
+            denom: TOKEN0.to_string(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {

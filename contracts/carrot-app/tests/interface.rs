@@ -381,11 +381,11 @@ fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
 
     let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: USDT.to_owned(),
+            denom: USDC.to_owned(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: USDC.to_owned(),
+            denom: USDT.to_owned(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
@@ -634,8 +634,8 @@ fn check_autocompound() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, USDT.to_owned()),
             coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
         ],
     )?;
     for _ in 0..10 {
@@ -723,8 +723,8 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, USDT.to_owned()),
             coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
         ],
     )?;
     for _ in 0..10 {

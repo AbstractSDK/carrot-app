@@ -38,7 +38,6 @@ pub(crate) fn swap_msg(
     Ok(trigger_swap_msg
         .messages
         .into_iter()
-        .filter(|m| !matches!(m, CosmosMsg::Bank(_)))
         .map(|m| authz.execute(&env.contract.address, m))
         .collect())
 }
