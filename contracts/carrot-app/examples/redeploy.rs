@@ -1,9 +1,8 @@
 use abstract_app::objects::{module::ModuleInfo, namespace::ABSTRACT_NAMESPACE};
 use abstract_client::Namespace;
-use abstract_interface::{Abstract, RegisteredModule, VCExecFns};
+use abstract_interface::VCExecFns;
 use cw_orch::{
     anyhow,
-    contract::Deploy,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
     tokio::runtime::Runtime,
 };

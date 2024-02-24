@@ -4,7 +4,6 @@ use cosmwasm_std::{Coin, Uint128, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
-    environment::{BankQuerier, DefaultQueriers},
     prelude::Stargate,
     tokio::runtime::Runtime,
 };
@@ -43,7 +42,6 @@ fn main() -> anyhow::Result<()> {
     }];
     let init_msg = AppInstantiateMsg {
         pool_id: POOL_ID,
-        // 5 mins
         autocompound_cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
         autocompound_rewards_config: AutocompoundRewardsConfig {
             gas_denom: utils::REWARD_DENOM.to_owned(),
