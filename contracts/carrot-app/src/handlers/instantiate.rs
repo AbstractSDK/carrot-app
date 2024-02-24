@@ -1,6 +1,6 @@
 use abstract_app::abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
 use abstract_app::abstract_sdk::{features::AbstractNameService, AbstractResponse};
-use cosmwasm_std::{DepsMut, Env, MessageInfo, StdError};
+use cosmwasm_std::{DepsMut, Env, MessageInfo};
 use cw_asset::AssetInfo;
 use osmosis_std::types::osmosis::{
     concentratedliquidity::v1beta1::Pool, poolmanager::v1beta1::PoolmanagerQuerier,
@@ -26,8 +26,7 @@ pub fn instantiate_handler(
         .pool(msg.pool_id)?
         .pool
         .unwrap()
-        .try_into()
-        .map_err(|e| StdError::generic_err(format!("PoolManager Querier failed query lul: {e}")))?;
+        .try_into()?;
 
     // We query the ANS for useful information on the tokens and pool
     let ans = app.name_service(deps.as_ref());
