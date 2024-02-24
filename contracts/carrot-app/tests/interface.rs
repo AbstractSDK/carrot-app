@@ -39,12 +39,9 @@ use cw_orch::{
 };
 use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
 use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-use osmosis_std::types::osmosis::{
-    concentratedliquidity::v1beta1::{
-        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-        MsgCollectSpreadRewards, PoolRecord,
-    },
-    tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
+    CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+    MsgCollectSpreadRewards, PoolRecord,
 };
 use prost::Message;
 use prost_types::Any;
@@ -445,8 +442,6 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
 fn deposit_lands() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
-
     let deposit_amount = 5_000;
     let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
     // Create position
@@ -554,8 +549,6 @@ fn withdraw_position() -> anyhow::Result<()> {
 fn create_multiple_positions() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
-
     // Create position
     create_position(
         &carrot_app,
@@ -596,8 +589,6 @@ fn create_multiple_positions() -> anyhow::Result<()> {
 #[test]
 fn deposit_both_assets() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
-
-    let chain = carrot_app.get_chain().clone();
 
     // Create position
     create_position(

@@ -1,6 +1,5 @@
-use abstract_app::objects::{module::ModuleInfo, namespace::ABSTRACT_NAMESPACE};
+use abstract_app::objects::namespace::ABSTRACT_NAMESPACE;
 use abstract_client::Namespace;
-use abstract_interface::VCExecFns;
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
@@ -8,7 +7,7 @@ use cw_orch::{
 };
 use dotenv::dotenv;
 
-use carrot_app::{contract::APP_ID, AppInterface};
+use carrot_app::AppInterface;
 
 fn main() -> anyhow::Result<()> {
     dotenv().ok();
