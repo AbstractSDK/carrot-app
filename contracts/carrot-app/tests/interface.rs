@@ -653,12 +653,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
 
@@ -670,12 +670,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
 
