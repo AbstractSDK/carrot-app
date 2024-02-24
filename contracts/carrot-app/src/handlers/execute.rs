@@ -307,9 +307,8 @@ pub(crate) fn _create_position(
 
     // With the current funds, we need to be able to create a position that makes sense
     // Therefore we swap the incoming funds to fit inside the future position
-    let (swap_msgs, mut resulting_assets) =
+    let (swap_msgs, resulting_assets) =
         swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
-    resulting_assets.sort_by(|a, b| a.denom.cmp(&b.denom));
     let sender = get_user(deps, app)?;
 
     let tokens = cosmwasm_to_proto_coins(resulting_assets);

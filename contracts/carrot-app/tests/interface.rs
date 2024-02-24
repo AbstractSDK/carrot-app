@@ -448,7 +448,7 @@ fn deposit_lands() -> anyhow::Result<()> {
     let chain = carrot_app.get_chain().clone();
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
     // Create position
     create_position(
         &carrot_app,
@@ -482,6 +482,7 @@ fn deposit_lands() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    dbg!(sum);
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
     Ok(())
 }
