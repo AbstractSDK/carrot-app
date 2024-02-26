@@ -17,8 +17,10 @@ pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
     };
 
     let parsed = cw_utils::parse_execute_response_data(&b)?;
+
     // Parse create position response
-    let response: MsgCreatePositionResponse = parsed.data.unwrap_or_default().try_into()?;
+    let response: MsgCreatePositionResponse = parsed.data.clone().unwrap_or_default().try_into()?;
+
     // We get the creator of the position
     let creator = get_user(deps.as_ref(), &app)?;
 

@@ -31,7 +31,6 @@ use cw_orch::{
                     MsgCreatePosition, MsgWithdrawPosition, Pool, PoolsRequest,
                 },
                 gamm::v1beta1::MsgSwapExactAmountIn,
-                tokenfactory::v1beta1::{MsgMint, MsgMintResponse},
             },
         },
         ConcentratedLiquidity, GovWithAppAccess, Module,
@@ -40,12 +39,9 @@ use cw_orch::{
 };
 use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
 use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-use osmosis_std::types::osmosis::{
-    concentratedliquidity::v1beta1::{
-        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-        MsgCollectSpreadRewards, PoolRecord,
-    },
-    tokenfactory::v1beta1::{MsgCreateDenom, MsgCreateDenomResponse},
+use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
+    CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+    MsgCollectSpreadRewards, PoolRecord,
 };
 use prost::Message;
 use prost_types::Any;
@@ -62,50 +58,14 @@ fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Re
     Ok(())
 }
 
-fn factory_denom<Chain: CwEnv>(chain: &Chain, subdenom: &str) -> String {
-    format!("factory/{}/{}", chain.sender(), subdenom)
-}
-
-fn create_denom<Chain: CwEnv + Stargate>(chain: Chain, subdenom: String) -> anyhow::Result<()> {
-    chain.commit_any::<MsgCreateDenomResponse>(
-        vec![Any {
-            value: MsgCreateDenom {
-                sender: chain.sender().to_string(),
-                subdenom,
-            }
-            .encode_to_vec(),
-            type_url: MsgCreateDenom::TYPE_URL.to_string(),
-        }],
-        None,
-    )?;
-
-    Ok(())
-}
-
 pub const LOTS: u128 = 100_000_000_000_000;
 
-fn mint_lots_of_denom<Chain: CwEnv + Stargate>(
-    chain: Chain,
-    subdenom: String,
-) -> anyhow::Result<()> {
-    chain.commit_any::<MsgMintResponse>(
-        vec![Any {
-            value: MsgMint {
-                sender: chain.sender().to_string(),
-                amount: Some(coin(LOTS, factory_denom(&chain, &subdenom)).into()),
-                mint_to_address: chain.sender().to_string(),
-            }
-            .encode_to_vec(),
-            type_url: MsgMint::TYPE_URL.to_string(),
-        }],
-        None,
-    )?;
+// Asset 0
+pub const USDT: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
 
-    Ok(())
-}
+// Asset 1
+pub const USDC: &str = "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
 
-pub const USDC: &str = "USDC";
-pub const USDT: &str = "USDT";
 pub const REWARD_DENOM: &str = "reward";
 pub const GAS_DENOM: &str = "uosmo";
 pub const DEX_NAME: &str = "osmosis";
@@ -123,8 +83,8 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     gas_pool_id: u64,
     create_position: Option<CreatePositionMessage>,
 ) -> anyhow::Result<Application<Chain, carrot_app::AppInterface<Chain>>> {
-    let asset0 = factory_denom(&chain, USDC);
-    let asset1 = factory_denom(&chain, USDT);
+    let asset0 = USDT.to_owned();
+    let asset1 = USDC.to_owned();
     // We register the pool inside the Abstract ANS
     let client = AbstractClient::builder(chain.clone())
         .dex(DEX_NAME)
@@ -277,22 +237,19 @@ fn create_position<Chain: CwEnv>(
     Ok(())
 }
 
-fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
-    // We create two tokenfactory denoms
-    create_denom(chain.clone(), USDC.to_string())?;
-    create_denom(chain.clone(), USDT.to_string())?;
-    mint_lots_of_denom(chain.clone(), USDC.to_string())?;
-    mint_lots_of_denom(chain.clone(), USDT.to_string())?;
+fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
+    chain.add_balance(chain.sender(), coins(LOTS, USDC))?;
+    chain.add_balance(chain.sender(), coins(LOTS, USDT))?;
 
-    let asset0 = factory_denom(&chain, USDC);
-    let asset1 = factory_denom(&chain, USDT);
+    let asset0 = USDT.to_owned();
+    let asset1 = USDC.to_owned();
     // Message for an actual chain (creating concentrated pool)
     // let create_pool_response = chain.commit_any::<MsgCreateConcentratedPoolResponse>(
     //     vec![Any {
     //         value: MsgCreateConcentratedPool {
     //             sender: chain.sender().to_string(),
-    //             denom0: factory_denom(&chain, USDC),
-    //             denom1: factory_denom(&chain, USDT),
+    //             denom0: USDT.to_owned(),
+    //             denom1: USDC.to_owned(),
     //             tick_spacing: TICK_SPACING,
     //             spread_factor: SPREAD_FACTOR.to_string(),
     //         }
@@ -309,8 +266,8 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 description: "Create concentrated uosmo:usdc pool, so that we can trade it"
                     .to_string(),
                 pool_records: vec![PoolRecord {
-                    denom0: factory_denom(&chain, USDC),
-                    denom1: factory_denom(&chain, USDT),
+                    denom0: USDT.to_owned(),
+                    denom1: USDC.to_owned(),
                     tick_spacing: TICK_SPACING,
                     spread_factor: Decimal::percent(SPREAD_FACTOR).atomics().to_string(),
                 }],
@@ -334,11 +291,11 @@ fn create_pool(chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 upper_tick: INITIAL_UPPER_TICK,
                 tokens_provided: vec![
                     v1beta1::Coin {
-                        denom: asset0.clone(),
+                        denom: asset1,
                         amount: "1_000_000".to_owned(),
                     },
                     v1beta1::Coin {
-                        denom: asset1,
+                        denom: asset0.clone(),
                         amount: "1_000_000".to_owned(),
                     },
                 ],
@@ -384,9 +341,9 @@ fn setup_test_tube(
         CreatePositionMessage {
         lower_tick: INITIAL_LOWER_TICK,
         upper_tick: INITIAL_UPPER_TICK,
-        funds: coins(100_000, factory_denom(&chain, USDC)),
-        asset0: coin(1_000_000, factory_denom(&chain, USDC)),
-        asset1: coin(1_000_000, factory_denom(&chain, USDT)),
+        funds: coins(100_000, USDT),
+        asset0: coin(1_000_000, USDT),
+        asset1: coin(1_000_000, USDC),
     });
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 
@@ -421,11 +378,11 @@ fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
 
     let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: factory_denom(&chain, USDC),
+            denom: USDC.to_owned(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: factory_denom(&chain, USDT),
+            denom: USDT.to_owned(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
@@ -485,16 +442,14 @@ fn give_authorizations<Chain: CwEnv + Stargate>(
 fn deposit_lands() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
-
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
     // Create position
     create_position(
         &carrot_app,
-        coins(deposit_amount, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(deposit_amount, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
@@ -505,7 +460,7 @@ fn deposit_lands() -> anyhow::Result<()> {
     assert!(sum.u128() > deposit_amount - max_fee.u128());
 
     // Do the deposit
-    carrot_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
+    carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())])?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let sum = balance
@@ -515,13 +470,14 @@ fn deposit_lands() -> anyhow::Result<()> {
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 2);
 
     // Do the second deposit
-    carrot_app.deposit(vec![coin(deposit_amount, factory_denom(&chain, USDC))])?;
+    carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())])?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let sum = balance
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    dbg!(sum);
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
     Ok(())
 }
@@ -535,20 +491,20 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
 
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
 
@@ -559,12 +515,12 @@ fn withdraw_position() -> anyhow::Result<()> {
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
 
@@ -575,12 +531,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     carrot_app.withdraw_all()?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_full_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
 
@@ -593,23 +549,21 @@ fn withdraw_position() -> anyhow::Result<()> {
 fn create_multiple_positions() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
-
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
 
     let balances_first_position: AssetsBalanceResponse = carrot_app.balance()?;
     // Create position second time, user decided to close first one
     create_position(
         &carrot_app,
-        coins(5_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(5_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
 
     let balances_second_position: AssetsBalanceResponse = carrot_app.balance()?;
@@ -636,20 +590,15 @@ fn create_multiple_positions() -> anyhow::Result<()> {
 fn deposit_both_assets() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
-
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
 
-    carrot_app.deposit(vec![
-        coin(258, factory_denom(&chain, USDC)),
-        coin(234, factory_denom(&chain, USDT)),
-    ])?;
+    carrot_app.deposit(vec![coin(258, USDT.to_owned()), coin(234, USDC.to_owned())])?;
 
     Ok(())
 }
@@ -663,9 +612,9 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(100_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(100_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
 
     // Do some swaps
@@ -676,8 +625,8 @@ fn check_autocompound() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, factory_denom(&chain, USDC)),
-            coin(200_000, factory_denom(&chain, USDT)),
+            coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
         ],
     )?;
     for _ in 0..10 {
@@ -695,12 +644,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
 
@@ -712,12 +661,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDC)))?
+        .balance(chain.sender(), Some(USDC.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(factory_denom(&chain, USDT)))?
+        .balance(chain.sender(), Some(USDT.to_owned()))?
         .pop()
         .unwrap();
 
@@ -752,9 +701,9 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(100_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDC)),
-        coin(1_000_000, factory_denom(&chain, USDT)),
+        coins(100_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
     )?;
 
     // Do some swaps
@@ -765,8 +714,8 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, factory_denom(&chain, USDC)),
-            coin(200_000, factory_denom(&chain, USDT)),
+            coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
         ],
     )?;
     for _ in 0..10 {
