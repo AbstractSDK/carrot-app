@@ -60,6 +60,11 @@ pub enum AppError {
     #[error("No rewards for autocompound")]
     NoRewards {},
 
+    #[error(
+        "Failed to query position with id {0}, perhaps it got withdrawn outside of a contract: {1}. Use create_position for a new position"
+    )]
+    UnableToQueryPosition(u64, StdError),
+
     #[error("Reward configuration error: {0}")]
     RewardConfigError(String),
 }

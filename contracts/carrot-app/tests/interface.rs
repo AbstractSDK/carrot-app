@@ -41,7 +41,7 @@ use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
 use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-    MsgCollectSpreadRewards, PoolRecord,
+    MsgCollectSpreadRewards, PoolRecord, PositionByIdRequest,
 };
 use prost::Message;
 use prost_types::Any;
@@ -745,6 +745,76 @@ fn stranger_autocompound() -> anyhow::Result<()> {
 #[test]
 fn create_position_on_instantiation() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(true)?;
+
+    let position: PositionResponse = carrot_app.position()?;
+    assert!(position.position.is_some());
+    Ok(())
+}
+
+#[test]
+fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(true)?;
+    let chain = carrot_app.get_chain().clone();
+
+    let position: PositionResponse = carrot_app.position()?;
+
+    let test_tube = chain.app.borrow();
+    let cl = ConcentratedLiquidity::new(&*test_tube);
+    let position_breakdown = cl
+        .query_position_by_id(&PositionByIdRequest {
+            position_id: position.position.unwrap().position_id,
+        })?
+        .position
+        .unwrap();
+    let position = position_breakdown.position.unwrap();
+
+    cl.withdraw_position(
+        MsgWithdrawPosition {
+            position_id: position.position_id,
+            sender: chain.sender().to_string(),
+            liquidity_amount: position.liquidity,
+        },
+        &chain.sender,
+    )?;
+
+    // Ensure it errors
+    carrot_app.withdraw_all().unwrap_err();
+    Ok(())
+}
+
+#[test]
+fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(true)?;
+    let chain = carrot_app.get_chain().clone();
+
+    let position: PositionResponse = carrot_app.position()?;
+
+    let test_tube = chain.app.borrow();
+    let cl = ConcentratedLiquidity::new(&*test_tube);
+    let position_breakdown = cl
+        .query_position_by_id(&PositionByIdRequest {
+            position_id: position.position.unwrap().position_id,
+        })?
+        .position
+        .unwrap();
+    let position = position_breakdown.position.unwrap();
+
+    cl.withdraw_position(
+        MsgWithdrawPosition {
+            position_id: position.position_id,
+            sender: chain.sender().to_string(),
+            liquidity_amount: position.liquidity,
+        },
+        &chain.sender,
+    )?;
+
+    // Create position, ignoring it was manually withdrawn
+    create_position(
+        &carrot_app,
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
 
     let position: PositionResponse = carrot_app.position()?;
     assert!(position.position.is_some());
