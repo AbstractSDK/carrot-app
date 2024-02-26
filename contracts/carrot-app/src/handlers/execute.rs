@@ -58,7 +58,7 @@ fn create_position(
     let mut response = app.response("create_position");
     // We start by checking if there is already a position
     let funds = create_position_msg.funds;
-    let funds_to_deposit = if POSITION.exists(deps.storage) {
+    let funds_to_deposit = if get_osmosis_position(deps.as_ref()).is_ok() {
         let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
             _inner_withdraw(deps.as_ref(), &env, None, &app)?;
 
