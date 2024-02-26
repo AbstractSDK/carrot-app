@@ -58,7 +58,7 @@ fn create_position(
     let mut response = app.response("create_position");
     // We start by checking if there is already a position
     let funds = create_position_msg.funds;
-    let funds_to_deposit = if POSITION.exists(deps.storage) {
+    let funds_to_deposit = if get_osmosis_position(deps.as_ref()).is_ok() {
         let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
             _inner_withdraw(deps.as_ref(), &env, None, &app)?;
 
@@ -309,9 +309,9 @@ pub(crate) fn _create_position(
     // Therefore we swap the incoming funds to fit inside the future position
     let (swap_msgs, resulting_assets) =
         swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
-
     let sender = get_user(deps, app)?;
 
+    let tokens = cosmwasm_to_proto_coins(resulting_assets);
     let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
@@ -319,7 +319,7 @@ pub(crate) fn _create_position(
             sender: sender.to_string(),
             lower_tick,
             upper_tick,
-            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
+            tokens_provided: tokens,
             token_min_amount0: "0".to_string(), // No min amount here
             token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
         },
@@ -327,7 +327,7 @@ pub(crate) fn _create_position(
 
     Ok((
         swap_msgs,
-        SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
+        SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID),
     ))
 }
 
