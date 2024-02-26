@@ -1,3 +1,4 @@
+#![allow(unused)]
 use abstract_app::objects::AccountId;
 use abstract_client::AbstractClient;
 use cosmwasm_std::{Coin, Uint128, Uint64};
@@ -55,7 +56,7 @@ fn main() -> anyhow::Result<()> {
 
     // Give all authzs and create subaccount with app in single tx
     let mut msgs = utils::give_authorizations_msgs(&client, savings_app_addr, &app_data)?;
-    
+
     let init_msg = AppInstantiateMsg {
         pool_id: app_data.pool_id,
         autocompound_cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
