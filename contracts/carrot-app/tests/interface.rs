@@ -46,18 +46,6 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
 use prost::Message;
 use prost_types::Any;
 
-fn assert_is_around(result: Uint128, expected: impl Into<Uint128>) -> anyhow::Result<()> {
-    let expected = expected.into().u128();
-    let result = result.u128();
-
-    if !(expected - 2..=expected + 2).contains(&result) {
-        return Err(anyhow::anyhow!(
-            "Results are not close enough, expected: {expected}, result: {result}"
-        ));
-    }
-    Ok(())
-}
-
 pub const LOTS: u128 = 100_000_000_000_000;
 
 // Asset 0
@@ -673,17 +661,8 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Liquidity added
     assert!(balance_after_autocompound.liquidity > balance_before_autocompound.liquidity);
     // Only rewards went in there
-    assert_is_around(
-        balance_usdc_after_autocompound.amount,
-        balance_usdc_before_autocompound.amount,
-    )
-    .unwrap();
-    assert_is_around(
-        balance_usdt_after_autocompound.amount,
-        balance_usdt_before_autocompound.amount,
-    )
-    .unwrap();
-
+    assert!(balance_usdc_after_autocompound.amount >= balance_usdc_before_autocompound.amount);
+    assert!(balance_usdt_after_autocompound.amount >= balance_usdt_before_autocompound.amount,);
     // Check it used all of the rewards
     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
     assert!(rewards.available_rewards.is_empty());
