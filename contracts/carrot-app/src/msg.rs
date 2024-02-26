@@ -1,4 +1,3 @@
-use abstract_dex_adapter::msg::DexName;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Uint128, Uint64};
 
@@ -15,8 +14,6 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 pub struct AppInstantiateMsg {
     /// Id of the pool used to get rewards
     pub pool_id: u64,
-    /// Dex that we are ok to swap on !
-    pub exchanges: Vec<DexName>,
     /// Seconds to wait before autocompound is incentivized.
     pub autocompound_cooldown_seconds: Uint64,
     /// Configuration of rewards to the address who helped to execute autocompound

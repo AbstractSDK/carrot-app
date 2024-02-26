@@ -1,20 +1,11 @@
 [workspace]
-members = ["contracts/*", "savings-bot"]
+members = ["contracts/*", "bot"]
 resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
 cw-orch = "0.20.1"
-abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-interface = { version = "0.20.0" }
-
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-
-[patch.crates-io]
-abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-core = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-staking-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
+abstract-app = { version = "0.21.0" }
+abstract-interface = { version = "0.21.0" }
+abstract-dex-adapter = {git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0"}
+abstract-client = { version = "0.21.0" }

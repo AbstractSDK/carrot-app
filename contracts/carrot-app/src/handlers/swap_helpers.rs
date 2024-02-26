@@ -1,8 +1,5 @@
 use abstract_app::objects::{AnsAsset, AssetEntry};
-use abstract_dex_adapter::{
-    msg::{GenerateMessagesResponse},
-    DexInterface,
-};
+use abstract_dex_adapter::{msg::GenerateMessagesResponse, DexInterface};
 use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 const MAX_SPREAD_PERCENT: u64 = 20;
@@ -29,8 +26,13 @@ pub(crate) fn swap_msg(
     let sender = get_user(deps, app)?;
 
     let dex = app.ans_dex(deps, OSMOSIS.to_string());
-    let trigger_swap_msg: GenerateMessagesResponse =
-        dex.generate_swap_messages(offer_asset, ask_asset, Some(Decimal::percent(MAX_SPREAD_PERCENT)), None, sender.clone() )?;
+    let trigger_swap_msg: GenerateMessagesResponse = dex.generate_swap_messages(
+        offer_asset,
+        ask_asset,
+        Some(Decimal::percent(MAX_SPREAD_PERCENT)),
+        None,
+        sender.clone(),
+    )?;
     let authz = app.auth_z(deps, Some(sender))?;
 
     Ok(trigger_swap_msg

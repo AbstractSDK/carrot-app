@@ -163,7 +163,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     // Get app's user and set up authz.
     let user = get_user(deps.as_ref(), &app)?;
     let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
-    
+
     // If there are external incentives, claim them.
     if !position.claimable_incentives.is_empty() {
         for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
@@ -353,7 +353,7 @@ pub(crate) fn _create_position(
 }
 
 /// Sends autocompound rewards to the executor.
-/// In case user does not have not enough gas token the contract will swap some 
+/// In case user does not have not enough gas token the contract will swap some
 /// tokens for gas tokens.
 pub fn autocompound_executor_rewards(
     deps: Deps,

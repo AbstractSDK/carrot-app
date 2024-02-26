@@ -2,16 +2,22 @@
 name = "savings-bot"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "local"
+path = "src/bin/local.rs"
 
 [dependencies]
 cw-orch = { workspace = true, features = ["daemon"] }
 abstract-app = { workspace = true }
+abstract-client = { workspace = true }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
 env_logger = "0.10.0"
 log = "0.4.20"
 tonic = "0.10.0"
-app = { path = "../contracts/savings-app" }
+carrot-app = { path = "../contracts/carrot-app", features = ["interface"] }
+clap = { version = "4", features = ["derive"] }
+humantime = "2.1.0"
