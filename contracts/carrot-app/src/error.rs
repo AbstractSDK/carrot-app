@@ -61,7 +61,7 @@ pub enum AppError {
     NoRewards {},
 
     #[error(
-        "Failed to query position with id {0}, perhaps it got withdrawn outside of contract: {1}"
+        "Failed to query position with id {0}, perhaps it got withdrawn outside of a contract: {1}. Use create_position for a new position"
     )]
     UnableToQueryPosition(u64, StdError),
 
