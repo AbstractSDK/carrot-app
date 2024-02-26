@@ -15,10 +15,19 @@ use carrot_app::{
 };
 use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 
-const POOL_ID: u64 = 1220;
+pub struct CarrotAppInitData {
+    pub pool_id: u64,
+    pub lower_tick: i64,
+    pub upper_tick: i64,
+    pub funds: Vec<Coin>,
+    pub denom0: String,
+    pub denom1: String,
+    pub asset0: Coin,
+    pub asset1: Coin,
+    pub swap_denom: String,
+}
+
 const AUTOCOMPOUND_COOLDOWN_SECONDS: u64 = 86400;
-const LOWER_TICK: i64 = 100;
-const UPPER_TICK: i64 = 200;
 
 fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -36,36 +45,35 @@ fn main() -> anyhow::Result<()> {
     let savings_app_addr = client.module_instantiate2_address::<carrot_app::AppInterface<Daemon>>(
         &AccountId::local(next_local_account_id),
     )?;
+
     let funds = vec![Coin {
-        denom: utils::TOKEN1.to_owned(),
-        amount: Uint128::new(60_000),
+        denom: usdc_usdc_ax::USDC_AXL.to_owned(),
+        amount: Uint128::new(6_000),
     }];
+
+    let app_data = usdc_usdc_ax::app_data(funds, 100_000_000_000_000, 100_000_000_000_000);
+
+    // Give all authzs and create subaccount with app in single tx
+    let mut msgs = utils::give_authorizations_msgs(&client, savings_app_addr, &app_data)?;
+    
     let init_msg = AppInstantiateMsg {
-        pool_id: POOL_ID,
+        pool_id: app_data.pool_id,
         autocompound_cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
         autocompound_rewards_config: AutocompoundRewardsConfig {
             gas_denom: utils::REWARD_DENOM.to_owned(),
-            swap_denom: utils::TOKEN1.to_owned(),
+            swap_denom: app_data.swap_denom.to_owned(),
             reward: Uint128::new(50_000),
             min_gas_balance: Uint128::new(1000000),
             max_gas_balance: Uint128::new(3000000),
         },
         create_position: Some(CreatePositionMessage {
-            lower_tick: LOWER_TICK,
-            upper_tick: UPPER_TICK,
-            funds,
-            asset0: Coin {
-                denom: utils::TOKEN0.to_owned(),
-                amount: Uint128::new(1000137456),
-            },
-            asset1: Coin {
-                denom: utils::TOKEN1.to_owned(),
-                amount: Uint128::new(1000000000),
-            },
+            lower_tick: app_data.lower_tick,
+            upper_tick: app_data.upper_tick,
+            funds: app_data.funds,
+            asset0: app_data.asset0,
+            asset1: app_data.asset1,
         }),
     };
-    // Give all authzs and create subaccount with app in single tx
-    let mut msgs = utils::give_authorizations_msgs(&client, savings_app_addr)?;
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;
 
     msgs.push(create_sub_account_message);
@@ -74,18 +82,86 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-mod utils {
+mod usdt_usdc {
+    use cosmwasm_std::{Coin, Uint128};
 
-    use std::iter;
+    use crate::CarrotAppInitData;
 
-    use super::*;
-
-    pub const LOTS: u128 = 100_000_000_000_000;
+    const POOL_ID: u64 = 1220;
+    const LOWER_TICK: i64 = 100;
+    const UPPER_TICK: i64 = 200;
     // USDT
     pub const TOKEN0: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
     // USDC
     pub const TOKEN1: &str = "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
 
+    pub fn app_data(
+        funds: Vec<Coin>,
+        asset0_amount: u128,
+        asset1_amount: u128,
+    ) -> CarrotAppInitData {
+        CarrotAppInitData {
+            pool_id: POOL_ID,
+            lower_tick: LOWER_TICK,
+            upper_tick: UPPER_TICK,
+            funds,
+            denom0: TOKEN0.to_owned(),
+            denom1: TOKEN1.to_owned(),
+            asset0: Coin {
+                denom: TOKEN0.to_owned(),
+                amount: Uint128::new(asset0_amount),
+            },
+            asset1: Coin {
+                denom: TOKEN1.to_owned(),
+                amount: Uint128::new(asset1_amount),
+            },
+            swap_denom: TOKEN1.to_owned(),
+        }
+    }
+}
+
+mod usdc_usdc_ax {
+    use cosmwasm_std::{Coin, Uint128};
+
+    use crate::CarrotAppInitData;
+
+    pub const USDC_NOBEL: &str =
+        "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
+    pub const USDC_AXL: &str =
+        "ibc/D189335C6E4A68B513C10AB227BF1C1D38C746766278BA3EEB4FB14124F1D858";
+    pub const USDC_AXL_POOL_ID: u64 = 1223;
+    const LOWER_TICK: i64 = -3700;
+    const UPPER_TICK: i64 = 300;
+
+    pub fn app_data(
+        funds: Vec<Coin>,
+        asset0_amount: u128,
+        asset1_amount: u128,
+    ) -> CarrotAppInitData {
+        CarrotAppInitData {
+            pool_id: USDC_AXL_POOL_ID,
+            lower_tick: LOWER_TICK,
+            upper_tick: UPPER_TICK,
+            funds,
+            denom0: USDC_NOBEL.to_owned(),
+            denom1: USDC_AXL.to_owned(),
+            asset0: Coin {
+                denom: USDC_NOBEL.to_owned(),
+                amount: Uint128::new(asset0_amount),
+            },
+            asset1: Coin {
+                denom: USDC_AXL.to_owned(),
+                amount: Uint128::new(asset1_amount),
+            },
+            swap_denom: USDC_NOBEL.to_owned(),
+        }
+    }
+}
+
+mod utils {
+    use super::*;
+
+    pub const LOTS: u128 = 100_000_000_000_000;
     pub const REWARD_DENOM: &str = "uosmo";
 
     use abstract_app::objects::{
@@ -115,10 +191,12 @@ mod utils {
     };
     use prost::Message;
     use prost_types::Any;
+    use std::iter;
 
     pub fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
         client: &AbstractClient<Chain>,
         savings_app_addr: impl Into<String>,
+        app_data: &CarrotAppInitData,
     ) -> Result<Vec<Any>, anyhow::Error> {
         let dex_fee_account = client.account_from(AccountId::local(0))?;
         let dex_fee_addr = dex_fee_account.proxy()?.to_string();
@@ -139,11 +217,11 @@ mod utils {
 
         let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: TOKEN1.to_string(),
+            denom: app_data.denom0.to_string(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: TOKEN0.to_string(),
+            denom: app_data.denom1.to_string(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
