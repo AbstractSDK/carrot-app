@@ -7,13 +7,13 @@ use cw_orch::{anyhow, prelude::*};
 
 use crate::interface::setup_test_tube;
 #[test]
-fn deposit_twice() -> anyhow::Result<()> {
+fn create_multiple_positions_with_0funds() -> anyhow::Result<()> {
     let (_, savings_app) = setup_test_tube(false)?;
 
     let chain = savings_app.get_chain().clone();
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(2));
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(1));
     // Create position
     create_position(
         &savings_app,
@@ -32,7 +32,7 @@ fn deposit_twice() -> anyhow::Result<()> {
     // Create a position once again
     create_position(
         &savings_app,
-        coins(deposit_amount, factory_denom(&chain, USDC)),
+        vec![],
         coin(1_000_000, factory_denom(&chain, USDC)),
         coin(1_000_000, factory_denom(&chain, USDT)),
     )?;
@@ -43,7 +43,7 @@ fn deposit_twice() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!((second_sum - first_sum).u128() > deposit_amount - max_fee.u128());
+    assert!(second_sum.u128() > deposit_amount - max_fee.u128());
 
     Ok(())
 }
