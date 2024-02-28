@@ -51,7 +51,6 @@ const AUTHORIZATION_URLS: &[&str] = &[
 ];
 
 pub struct Bot {
-    abstract_client: AbstractClient<Daemon>,
     pub daemon: Daemon,
     // Fetch information
     module_info: ModuleInfo,
@@ -64,14 +63,12 @@ pub struct Bot {
 
 impl Bot {
     pub fn new(
-        abstract_client: AbstractClient<Daemon>,
+        daemon: Daemon,
         module_info: ModuleInfo,
         fetch_contracts_cooldown: Duration,
         autocompound_cooldown: Duration,
     ) -> Self {
-        let daemon = abstract_client.environment();
         Self {
-            abstract_client,
             daemon,
             module_info,
             fetch_contracts_cooldown,
@@ -90,9 +87,10 @@ impl Bot {
         }
 
         let daemon = &self.daemon;
+        let abstr = AbstractClient::new(self.daemon.clone())?;
         let mut contract_instances_to_autocompound: HashSet<(String, Addr)> = HashSet::new();
 
-        let saving_modules = self.abstract_client.version_control().module_list(
+        let saving_modules = abstr.version_control().module_list(
             Some(ModuleFilter {
                 namespace: Some(self.module_info.namespace.to_string()),
                 name: Some(self.module_info.name.clone()),
@@ -111,7 +109,7 @@ impl Bot {
 
             // Only keep the contract addresses that have the required permissions
             contract_addrs.retain(|address| {
-                utils::has_authz_permission(&self.abstract_client, address)
+                utils::has_authz_permission(&abstr, address)
                     // Don't include if queries fail.
                     .unwrap_or_default()
             });
