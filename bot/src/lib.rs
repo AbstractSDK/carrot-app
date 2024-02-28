@@ -5,11 +5,10 @@ pub use bot::Bot;
 pub use bot_args::BotArgs;
 
 use abstract_app::objects::module::{ModuleInfo, ModuleVersion};
-use abstract_client::AbstractClient;
 use carrot_app::contract::{APP_ID, APP_VERSION};
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMOSIS_1, Daemon, GrpcChannel},
+    daemon::{networks::OSMOSIS_1, Daemon},
     tokio::runtime::Runtime,
 };
 
@@ -26,15 +25,14 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     chain_info.grpc_urls = &grpc_urls;
     let daemon = Daemon::builder()
         .handle(rt.handle())
-        .chain(chain_info)
+        .chain(chain_info.clone())
         .build()?;
 
-    let abstr = AbstractClient::new(daemon.clone())?;
     let module_info =
         ModuleInfo::from_id(APP_ID, ModuleVersion::Version(APP_VERSION.parse().unwrap()))?;
 
     let mut bot = Bot::new(
-        abstr,
+        daemon,
         module_info,
         bot_args.fetch_cooldown,
         bot_args.autocompound_cooldown,
@@ -47,20 +45,15 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
         bot.autocompound();
 
         // Drop connection
-        let mut state = std::sync::Arc::try_unwrap(bot.daemon.daemon.state).unwrap();
-        drop(state.grpc_channel);
+        drop(bot.daemon);
 
         // Wait for autocompound duration
         std::thread::sleep(bot.autocompound_cooldown);
 
         // Reconnect
-        state.grpc_channel = {
-            // TODO: what do we do on failed connection?
-            rt.block_on(GrpcChannel::connect(
-                &state.chain_data.apis.grpc,
-                state.chain_data.chain_id.as_str(),
-            ))?
-        };
-        bot.daemon.daemon.state = std::sync::Arc::new(state);
+        bot.daemon = Daemon::builder()
+            .handle(rt.handle())
+            .chain(chain_info.clone())
+            .build()?;
     }
 }
