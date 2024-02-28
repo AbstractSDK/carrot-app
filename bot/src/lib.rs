@@ -9,7 +9,7 @@ use abstract_client::AbstractClient;
 use carrot_app::contract::{APP_ID, APP_VERSION};
 use cw_orch::{
     anyhow,
-    daemon::{networks::OSMOSIS_1, Daemon},
+    daemon::{networks::OSMOSIS_1, Daemon, GrpcChannel},
     tokio::runtime::Runtime,
 };
 
@@ -45,5 +45,22 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
         // You can edit retries with CW_ORCH_MAX_TX_QUERY_RETRIES
         bot.fetch_contracts()?;
         bot.autocompound();
+
+        // Drop connection
+        let mut state = std::sync::Arc::try_unwrap(bot.daemon.daemon.state).unwrap();
+        drop(state.grpc_channel);
+
+        // Wait for autocompound duration
+        std::thread::sleep(bot.autocompound_cooldown);
+
+        // Reconnect
+        state.grpc_channel = {
+            // TODO: what do we do on failed connection?
+            rt.block_on(GrpcChannel::connect(
+                &state.chain_data.apis.grpc,
+                state.chain_data.chain_id.as_str(),
+            ))?
+        };
+        bot.daemon.daemon.state = std::sync::Arc::new(state);
     }
 }

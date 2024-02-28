@@ -52,14 +52,14 @@ const AUTHORIZATION_URLS: &[&str] = &[
 
 pub struct Bot {
     abstract_client: AbstractClient<Daemon>,
-    daemon: Daemon,
+    pub daemon: Daemon,
     // Fetch information
     module_info: ModuleInfo,
     fetch_contracts_cooldown: Duration,
     last_fetch: SystemTime,
     // Autocompound information
     contract_instances_to_ac: HashSet<(String, Addr)>,
-    autocompound_cooldown: Duration,
+    pub autocompound_cooldown: Duration,
 }
 
 impl Bot {
@@ -136,8 +136,6 @@ impl Bot {
                 log!(Level::Error, "error ocurred for {addr} carrot-app: {err:?}");
             }
         }
-        // Wait for autocompound duration
-        std::thread::sleep(self.autocompound_cooldown);
     }
 }
 
