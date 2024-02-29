@@ -125,8 +125,8 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         // 5 mins
         autocompound_cooldown_seconds: Uint64::new(300),
         autocompound_rewards_config: AutocompoundRewardsConfig {
-            gas_denom: REWARD_DENOM.to_owned(),
-            swap_denom: asset0,
+            gas_asset: AssetEntry::new("rew"),
+            swap_asset: AssetEntry::new(USDC),
             reward: Uint128::new(1000),
             min_gas_balance: Uint128::new(2000),
             max_gas_balance: Uint128::new(10000),

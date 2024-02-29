@@ -1,5 +1,5 @@
 #![allow(unused)]
-use abstract_app::objects::AccountId;
+use abstract_app::objects::{AccountId, AssetEntry};
 use abstract_client::AbstractClient;
 use cosmwasm_std::{Coin, Uint128, Uint64};
 use cw_orch::{
@@ -25,7 +25,7 @@ pub struct CarrotAppInitData {
     pub denom1: String,
     pub asset0: Coin,
     pub asset1: Coin,
-    pub swap_denom: String,
+    pub swap_asset: AssetEntry,
 }
 
 const AUTOCOMPOUND_COOLDOWN_SECONDS: u64 = 86400;
@@ -61,8 +61,8 @@ fn main() -> anyhow::Result<()> {
         pool_id: app_data.pool_id,
         autocompound_cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
         autocompound_rewards_config: AutocompoundRewardsConfig {
-            gas_denom: utils::REWARD_DENOM.to_owned(),
-            swap_denom: app_data.swap_denom.to_owned(),
+            gas_asset: AssetEntry::new(utils::REWARD_ASSET),
+            swap_asset: app_data.swap_asset,
             reward: Uint128::new(50_000),
             min_gas_balance: Uint128::new(1000000),
             max_gas_balance: Uint128::new(3000000),
@@ -84,9 +84,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 mod usdt_usdc {
+    use abstract_app::objects::AssetEntry;
     use cosmwasm_std::{Coin, Uint128};
 
-    use crate::CarrotAppInitData;
+    use crate::{usdc_usdc_ax::USDC_NOBLE_ASSET, CarrotAppInitData};
 
     const POOL_ID: u64 = 1220;
     const LOWER_TICK: i64 = 100;
@@ -116,18 +117,20 @@ mod usdt_usdc {
                 denom: TOKEN1.to_owned(),
                 amount: Uint128::new(asset1_amount),
             },
-            swap_denom: TOKEN1.to_owned(),
+            swap_asset: AssetEntry::new(USDC_NOBLE_ASSET),
         }
     }
 }
 
 mod usdc_usdc_ax {
+    use abstract_app::objects::AssetEntry;
     use cosmwasm_std::{Coin, Uint128};
 
     use crate::CarrotAppInitData;
 
-    pub const USDC_NOBEL: &str =
+    pub const USDC_NOBLE: &str =
         "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
+    pub const USDC_NOBLE_ASSET: &str = "noble>usdc";
     pub const USDC_AXL: &str =
         "ibc/D189335C6E4A68B513C10AB227BF1C1D38C746766278BA3EEB4FB14124F1D858";
     pub const USDC_AXL_POOL_ID: u64 = 1223;
@@ -144,17 +147,17 @@ mod usdc_usdc_ax {
             lower_tick: LOWER_TICK,
             upper_tick: UPPER_TICK,
             funds,
-            denom0: USDC_NOBEL.to_owned(),
+            denom0: USDC_NOBLE.to_owned(),
             denom1: USDC_AXL.to_owned(),
             asset0: Coin {
-                denom: USDC_NOBEL.to_owned(),
+                denom: USDC_NOBLE.to_owned(),
                 amount: Uint128::new(asset0_amount),
             },
             asset1: Coin {
                 denom: USDC_AXL.to_owned(),
                 amount: Uint128::new(asset1_amount),
             },
-            swap_denom: USDC_NOBEL.to_owned(),
+            swap_asset: AssetEntry::new(USDC_NOBLE_ASSET),
         }
     }
 }
@@ -164,6 +167,7 @@ mod utils {
 
     pub const LOTS: u128 = 100_000_000_000_000;
     pub const REWARD_DENOM: &str = "uosmo";
+    pub const REWARD_ASSET: &str = "osmosis>osmo";
 
     use abstract_app::objects::{
         module::{ModuleInfo, ModuleVersion},
