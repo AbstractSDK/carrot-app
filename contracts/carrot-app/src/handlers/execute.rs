@@ -7,7 +7,6 @@ use crate::{
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
         assert_contract, get_osmosis_position, get_position, get_position_status, Config, CONFIG,
-        POSITION,
     },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
@@ -235,11 +234,6 @@ fn _inner_withdraw(
         total_liquidity.clone()
     };
     let user = get_user(deps.as_ref(), app)?;
-
-    // We remove the position inside the contract in case the user withdraws everything at once
-    if liquidity_amount == total_liquidity {
-        POSITION.remove(deps.storage);
-    }
 
     // We need to execute withdraw on the user's behalf
     let msg = app.auth_z(deps.as_ref(), Some(user.clone()))?.execute(
