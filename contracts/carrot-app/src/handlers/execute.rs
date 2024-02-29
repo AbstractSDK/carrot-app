@@ -1,6 +1,7 @@
 use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
+    error::AppError,
     helpers::get_user,
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
@@ -10,14 +11,13 @@ use crate::{
     },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
-use abstract_app::AppError;
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
+use cosmwasm_std::Deps;
 use cosmwasm_std::{
     to_json_binary, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
 };
-use cosmwasm_std::{Coins, Deps};
 use cw_asset::AssetInfo;
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
@@ -51,38 +51,24 @@ fn create_position(
     env: Env,
     info: MessageInfo,
     app: App,
-    mut create_position_msg: CreatePositionMessage,
+    create_position_msg: CreatePositionMessage,
 ) -> AppResult {
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
-    let mut response = app.response("create_position");
     // We start by checking if there is already a position
-    let funds = create_position_msg.funds;
-    let funds_to_deposit = if get_osmosis_position(deps.as_ref()).is_ok() {
-        let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
-            _inner_withdraw(deps.as_ref(), &env, None, &app)?;
-
-        response = response
-            .add_message(withdraw_msg)
-            .add_attribute("withdraw_amount", withdraw_amount)
-            .add_attribute("total_amount", total_amount);
-
-        // We add the withdrawn funds to the input funds
-        let mut coins: Coins = funds.try_into()?;
-        for fund in withdrawn_funds {
-            coins.add(fund)?;
+    if let Ok(position) = get_osmosis_position(deps.as_ref()) {
+        // We only care if the position has liquidity
+        if position.position.unwrap().liquidity != "0" {
+            return Err(AppError::PositionExists {});
         }
-        POSITION.remove(deps.storage);
-        coins.to_vec()
-    } else {
-        funds
+        // If the position still has incentives to claim, the user is able to override it
     };
 
-    create_position_msg.funds = funds_to_deposit;
     let (swap_messages, create_position_msg) =
         _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
 
-    Ok(response
+    Ok(app
+        .response("create_position")
         .add_messages(swap_messages)
         .add_submessage(create_position_msg))
 }
@@ -136,7 +122,7 @@ fn withdraw(
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
     let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
-        _inner_withdraw(deps.as_ref(), &env, amount, &app)?;
+        _inner_withdraw(deps, &env, amount, &app)?;
 
     Ok(app
         .response("withdraw")
@@ -232,12 +218,12 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 }
 
 fn _inner_withdraw(
-    deps: Deps,
+    deps: DepsMut,
     env: &Env,
     amount: Option<Uint128>,
     app: &App,
 ) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
-    let position = get_osmosis_position(deps)?;
+    let position = get_osmosis_position(deps.as_ref())?;
     let position_details = position.position.unwrap();
 
     let total_liquidity = position_details.liquidity.replace('.', "");
@@ -248,10 +234,15 @@ fn _inner_withdraw(
         // TODO: it's decimals inside contracts
         total_liquidity.clone()
     };
-    let user = get_user(deps, app)?;
+    let user = get_user(deps.as_ref(), app)?;
+
+    // We remove the position inside the contract in case the user withdraws everything at once
+    if liquidity_amount == total_liquidity {
+        POSITION.remove(deps.storage);
+    }
 
     // We need to execute withdraw on the user's behalf
-    let msg = app.auth_z(deps, Some(user.clone()))?.execute(
+    let msg = app.auth_z(deps.as_ref(), Some(user.clone()))?.execute(
         &env.contract.address,
         MsgWithdrawPosition {
             position_id: position_details.position_id,

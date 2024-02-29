@@ -9,6 +9,7 @@ use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_dex_adapter::DEX_ADAPTER_ID;
 use abstract_sdk::core::manager::{self, ModuleInstallConfig};
 use carrot_app::contract::APP_ID;
+use carrot_app::error::AppError;
 use carrot_app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
     AvailableRewardsResponse, CompoundStatus, CompoundStatusResponse, CreatePositionMessage,
@@ -210,7 +211,7 @@ fn create_position<Chain: CwEnv>(
     funds: Vec<Coin>,
     asset0: Coin,
     asset1: Coin,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Chain::Response> {
     app.execute(
         &carrot_app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
             lower_tick: INITIAL_LOWER_TICK,
@@ -221,8 +222,8 @@ fn create_position<Chain: CwEnv>(
         })
         .into(),
         None,
-    )?;
-    Ok(())
+    )
+    .map_err(Into::into)
 }
 
 fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
@@ -545,8 +546,58 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         coin(1_000_000, USDC.to_owned()),
     )?;
 
-    let balances_first_position: AssetsBalanceResponse = carrot_app.balance()?;
-    // Create position second time, user decided to close first one
+    // Create position second time, it should fail
+    let position_err = create_position(
+        &carrot_app,
+        coins(5_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )
+    .unwrap_err();
+
+    assert!(position_err
+        .to_string()
+        .contains(&AppError::PositionExists {}.to_string()));
+    Ok(())
+}
+
+#[test]
+fn create_multiple_positions_after_withdraw() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    // Create position
+    create_position(
+        &carrot_app,
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
+
+    // Withdraw half of liquidity
+    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint128::new(2);
+    carrot_app.withdraw(half_of_liquidity)?;
+
+    // Create position second time, it should fail
+    let position_err = create_position(
+        &carrot_app,
+        coins(5_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )
+    .unwrap_err();
+
+    assert!(position_err
+        .to_string()
+        .contains(&AppError::PositionExists {}.to_string()));
+
+    // Withdraw whole liquidity
+    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
+    carrot_app.withdraw(liquidity_amount)?;
+
+    // Create position second time, it should fail
     create_position(
         &carrot_app,
         coins(5_000, USDT.to_owned()),
@@ -554,23 +605,31 @@ fn create_multiple_positions() -> anyhow::Result<()> {
         coin(1_000_000, USDC.to_owned()),
     )?;
 
-    let balances_second_position: AssetsBalanceResponse = carrot_app.balance()?;
+    Ok(())
+}
 
-    // Should have more usd in total because it adds up
-    let total_usd_first: Uint128 = balances_first_position
-        .balances
-        .into_iter()
-        .map(|c| c.amount)
-        .sum();
-    let total_usd_second: Uint128 = balances_second_position
-        .balances
-        .into_iter()
-        .map(|c| c.amount)
-        .sum();
-    assert!(total_usd_second > total_usd_first);
+#[test]
+fn create_multiple_positions_after_withdraw_all() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
 
-    // Should be at least (10_000 + 5_000) -3% with all fees
-    assert!(total_usd_second > Uint128::new(15_000).mul_floor(Decimal::percent(97)));
+    // Create position
+    create_position(
+        &carrot_app,
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
+
+    // Withdraw whole liquidity
+    carrot_app.withdraw_all()?;
+
+    // Create position second time, it should succeed
+    create_position(
+        &carrot_app,
+        coins(5_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
     Ok(())
 }
 

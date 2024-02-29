@@ -67,4 +67,7 @@ pub enum AppError {
 
     #[error("Reward configuration error: {0}")]
     RewardConfigError(String),
+
+    #[error("Position already exists. Please withdraw all funds before creating a new position")]
+    PositionExists {},
 }

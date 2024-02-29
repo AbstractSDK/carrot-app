@@ -9,3 +9,7 @@ abstract-app = { version = "0.21.0" }
 abstract-interface = { version = "0.21.0" }
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0" }
 abstract-client = { version = "0.21.0" }
+
+
+[patch.crates-io]
+osmosis-test-tube = { path = "../test-tube/packages/osmosis-test-tube" }
