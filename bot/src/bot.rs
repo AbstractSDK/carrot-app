@@ -49,6 +49,7 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectIncentives::TYPE_URL,
     MsgCollectSpreadRewards::TYPE_URL,
 ];
+use prometheus::{IntCounter, IntGauge, Registry};
 
 pub struct Bot {
     pub daemon: Daemon,
@@ -59,6 +60,11 @@ pub struct Bot {
     // Autocompound information
     contract_instances_to_ac: HashSet<(String, Addr)>,
     pub autocompound_cooldown: Duration,
+    // metrics
+    fetch_count: IntCounter,
+    fetch_instances_count: IntGauge,
+    autocompounded_count: IntCounter,
+    autocompounded_error_count: IntCounter,
 }
 
 impl Bot {
@@ -67,7 +73,38 @@ impl Bot {
         module_info: ModuleInfo,
         fetch_contracts_cooldown: Duration,
         autocompound_cooldown: Duration,
+        registry: &Registry,
     ) -> Self {
+        let fetch_count = IntCounter::new(
+            "carrot_app_bot_fetch_count",
+            "Number of times the bot has fetched the instances",
+        )
+        .unwrap();
+        let fetch_instances_count = IntGauge::new(
+            "carrot_app_bot_fetch_instances_count",
+            "Number of fetched instances",
+        )
+        .unwrap();
+        let autocompounded_count = IntCounter::new(
+            "carrot_app_bot_autocompounded_count",
+            "Number of times contracts have been autocompounded",
+        )
+        .unwrap();
+        let autocompounded_error_count = IntCounter::new(
+            "carrot_app_bot_autocompounded_error_count",
+            "Number of times autocompounding errored",
+        )
+        .unwrap();
+        registry.register(Box::new(fetch_count.clone())).unwrap();
+        registry
+            .register(Box::new(fetch_instances_count.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(autocompounded_count.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(autocompounded_error_count.clone()))
+            .unwrap();
         Self {
             daemon,
             module_info,
@@ -75,6 +112,11 @@ impl Bot {
             last_fetch: SystemTime::UNIX_EPOCH,
             contract_instances_to_ac: Default::default(),
             autocompound_cooldown,
+            // metrics
+            fetch_count,
+            fetch_instances_count,
+            autocompounded_count,
+            autocompounded_error_count,
         }
     }
 
@@ -100,12 +142,15 @@ impl Bot {
             None,
             None,
         )?;
+        let mut fetch_instances_count = 0;
 
         for app_info in saving_modules.modules {
             let code_id = app_info.module.reference.unwrap_app()?;
+
             let mut contract_addrs = daemon
                 .rt_handle
                 .block_on(utils::fetch_instances(daemon.channel(), code_id))?;
+            fetch_instances_count += contract_addrs.len();
 
             // Only keep the contract addresses that have the required permissions
             contract_addrs.retain(|address| {
@@ -122,6 +167,9 @@ impl Bot {
             );
         }
 
+        // Metrics
+        self.fetch_count.inc();
+        self.fetch_instances_count.set(fetch_instances_count as i64);
         self.contract_instances_to_ac = contract_instances_to_autocompound;
         Ok(())
     }
@@ -132,6 +180,9 @@ impl Bot {
             let result = autocompound_instance(&self.daemon, (id, addr));
             if let Err(err) = result {
                 log!(Level::Error, "error ocurred for {addr} carrot-app: {err:?}");
+                self.autocompounded_error_count.inc();
+            } else {
+                self.autocompounded_count.inc();
             }
         }
     }
