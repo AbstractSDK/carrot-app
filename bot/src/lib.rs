@@ -16,7 +16,7 @@ use cw_orch::{
 use prometheus::{Encoder, Registry, TextEncoder};
 
 async fn serve_metrics(registry: prometheus::Registry) {
-    let addr: std::net::SocketAddr = "127.0.0.1:9898".parse().unwrap();
+    let addr: std::net::SocketAddr = "0.0.0.0:8000".parse().unwrap();
     let metric_server = warp::serve(warp::path("metrics").map(move || {
         let metric_families = registry.gather();
         let mut buffer = vec![];
