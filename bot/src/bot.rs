@@ -61,20 +61,18 @@ pub struct Bot {
     contract_instances_to_ac: HashSet<(String, Addr)>,
     pub autocompound_cooldown: Duration,
     // metrics
+    metrics: Metrics,
+}
+
+struct Metrics {
     fetch_count: IntCounter,
     fetch_instances_count: IntGauge,
     autocompounded_count: IntCounter,
     autocompounded_error_count: IntCounter,
 }
 
-impl Bot {
-    pub fn new(
-        daemon: Daemon,
-        module_info: ModuleInfo,
-        fetch_contracts_cooldown: Duration,
-        autocompound_cooldown: Duration,
-        registry: &Registry,
-    ) -> Self {
+impl Metrics {
+    fn new(registry: &Registry) -> Self {
         let fetch_count = IntCounter::new(
             "carrot_app_bot_fetch_count",
             "Number of times the bot has fetched the instances",
@@ -106,17 +104,32 @@ impl Bot {
             .register(Box::new(autocompounded_error_count.clone()))
             .unwrap();
         Self {
+            fetch_count,
+            fetch_instances_count,
+            autocompounded_count,
+            autocompounded_error_count,
+        }
+    }
+}
+
+impl Bot {
+    pub fn new(
+        daemon: Daemon,
+        module_info: ModuleInfo,
+        fetch_contracts_cooldown: Duration,
+        autocompound_cooldown: Duration,
+        registry: &Registry,
+    ) -> Self {
+        let metrics = Metrics::new(registry);
+
+        Self {
             daemon,
             module_info,
             fetch_contracts_cooldown,
             last_fetch: SystemTime::UNIX_EPOCH,
             contract_instances_to_ac: Default::default(),
             autocompound_cooldown,
-            // metrics
-            fetch_count,
-            fetch_instances_count,
-            autocompounded_count,
-            autocompounded_error_count,
+            metrics,
         }
     }
 
@@ -168,8 +181,10 @@ impl Bot {
         }
 
         // Metrics
-        self.fetch_count.inc();
-        self.fetch_instances_count.set(fetch_instances_count as i64);
+        self.metrics.fetch_count.inc();
+        self.metrics
+            .fetch_instances_count
+            .set(fetch_instances_count as i64);
         self.contract_instances_to_ac = contract_instances_to_autocompound;
         Ok(())
     }
@@ -180,9 +195,9 @@ impl Bot {
             let result = autocompound_instance(&self.daemon, (id, addr));
             if let Err(err) = result {
                 log!(Level::Error, "error ocurred for {addr} carrot-app: {err:?}");
-                self.autocompounded_error_count.inc();
+                self.metrics.autocompounded_error_count.inc();
             } else {
-                self.autocompounded_count.inc();
+                self.metrics.autocompounded_count.inc();
             }
         }
     }
