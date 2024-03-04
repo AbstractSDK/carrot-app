@@ -151,13 +151,12 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
     let chain = carrot_app.get_chain().clone();
 
     let position: PositionResponse = carrot_app.position()?;
+    let position_id = position.position.unwrap().position_id;
 
     let test_tube = chain.app.borrow();
     let cl = ConcentratedLiquidity::new(&*test_tube);
     let position_breakdown = cl
-        .query_position_by_id(&PositionByIdRequest {
-            position_id: position.position.unwrap().position_id,
-        })?
+        .query_position_by_id(&PositionByIdRequest { position_id })?
         .position
         .unwrap();
     let position = position_breakdown.position.unwrap();
@@ -173,5 +172,13 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
 
     // Ensure it errors
     carrot_app.withdraw_all().unwrap_err();
+
+    // Ensure position deleted
+    let position_not_found = cl
+        .query_position_by_id(&PositionByIdRequest { position_id })
+        .unwrap_err();
+    assert!(position_not_found
+        .to_string()
+        .contains("position not found"));
     Ok(())
 }
