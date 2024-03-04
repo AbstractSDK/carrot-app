@@ -55,11 +55,8 @@ fn create_position(
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
     // We start by checking if there is already a position
-    if let Ok(position) = get_osmosis_position(deps.as_ref()) {
-        // We only care if the position has liquidity
-        if position.position.unwrap().liquidity != "0" {
-            return Err(AppError::PositionExists {});
-        }
+    if get_osmosis_position(deps.as_ref()).is_ok() {
+        return Err(AppError::PositionExists {});
         // If the position still has incentives to claim, the user is able to override it
     };
 
