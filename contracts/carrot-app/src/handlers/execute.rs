@@ -15,7 +15,7 @@ use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
-    to_json_binary, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
 };
 use cosmwasm_std::{Coins, Deps};
 use cw_asset::Asset;
@@ -382,26 +382,21 @@ pub fn autocompound_executor_rewards(
         rewards_messages.extend(msgs);
     }
 
-    let reward: Coin = Asset::new(gas_denom, rewards_config.reward).try_into()?;
+    let reward_asset = Asset::new(gas_denom, rewards_config.reward);
+    let msg_send = reward_asset.transfer_msg(env.contract.address.to_string())?;
 
     // To avoid giving general `MsgSend` authorization to any address we do 2 sends here
     // 1) From user to the contract
     // 2) From contract to the executor
     // That way we can limit the `MsgSend` authorization to the contract address only.
-    let msg_send = BankMsg::Send {
-        to_address: env.contract.address.to_string(),
-        amount: vec![reward.clone()],
-    };
     let send_reward_to_contract_msg = app
         .auth_z(deps, Some(cosmwasm_std::Addr::unchecked(user)))?
         .execute(&env.contract.address, msg_send);
     rewards_messages.push(send_reward_to_contract_msg);
 
-    let send_reward_to_executor_msg = BankMsg::Send {
-        to_address: executor,
-        amount: vec![reward],
-    };
-    rewards_messages.push(send_reward_to_executor_msg.into());
+    let send_reward_to_executor_msg = reward_asset.transfer_msg(executor)?;
+
+    rewards_messages.push(send_reward_to_executor_msg);
 
     Ok(rewards_messages)
 }

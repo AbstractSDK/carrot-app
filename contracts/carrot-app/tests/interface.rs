@@ -16,7 +16,7 @@ use carrot_app::msg::{
 };
 use carrot_app::state::AutocompoundRewardsConfig;
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
-use cw_asset::AssetInfoUnchecked;
+use cw_asset::{AssetBase, AssetInfoUnchecked};
 use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Gamm};
 use cw_orch::{
     anyhow,
@@ -55,6 +55,7 @@ pub const USDT: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6
 pub const USDC: &str = "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
 
 pub const REWARD_DENOM: &str = "reward";
+pub const REWARD_ASSET: &str = "rew";
 pub const GAS_DENOM: &str = "uosmo";
 pub const DEX_NAME: &str = "osmosis";
 
@@ -80,7 +81,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             (USDC.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
             (USDT.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
             (
-                "rew".to_string(),
+                REWARD_ASSET.to_string(),
                 AssetInfoUnchecked::Native(REWARD_DENOM.to_owned()),
             ),
         ])
@@ -90,7 +91,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 PoolMetadata {
                     dex: DEX_NAME.to_owned(),
                     pool_type: PoolType::ConcentratedLiquidity,
-                    assets: vec![AssetEntry::new(USDC), AssetEntry::new("rew")],
+                    assets: vec![AssetEntry::new(USDC), AssetEntry::new(REWARD_ASSET)],
                 },
             ),
             (
@@ -125,7 +126,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         // 5 mins
         autocompound_cooldown_seconds: Uint64::new(300),
         autocompound_rewards_config: AutocompoundRewardsConfig {
-            gas_asset: AssetEntry::new("rew"),
+            gas_asset: AssetEntry::new(REWARD_ASSET),
             swap_asset: AssetEntry::new(USDC),
             reward: Uint128::new(1000),
             min_gas_balance: Uint128::new(2000),
@@ -720,7 +721,7 @@ fn stranger_autocompound() -> anyhow::Result<()> {
         compound_status,
         CompoundStatusResponse {
             status: CompoundStatus::Ready {},
-            reward: Coin::new(1000, REWARD_DENOM),
+            reward: AssetBase::native(REWARD_DENOM, 1000u128),
             rewards_available: true
         }
     );

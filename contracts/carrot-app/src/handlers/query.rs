@@ -42,14 +42,14 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         .autocompound_rewards_config
         .gas_asset
         .resolve(&deps.querier, &app.ans_host(deps)?)?;
-    let reward: Coin =
-        Asset::new(gas_denom, config.autocompound_rewards_config.reward).try_into()?;
+
+    let reward = Asset::new(gas_denom.clone(), config.autocompound_rewards_config.reward);
 
     let user = get_user(deps, app)?;
-    let user_gas_balance = deps
-        .querier
-        .query_balance(user.clone(), reward.denom.clone())?;
-    let rewards_available = if user_gas_balance.amount >= reward.amount {
+
+    let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
+
+    let rewards_available = if user_gas_balance >= reward.amount {
         true
     } else {
         // check if can swap
@@ -57,7 +57,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         let dex = app.ans_dex(deps, OSMOSIS.to_string());
 
         // Reverse swap to see how many swap coins needed
-        let required_gas_coins = reward.amount - user_gas_balance.amount;
+        let required_gas_coins = reward.amount - user_gas_balance;
         let response = dex.simulate_swap(
             AnsAsset::new(rewards_config.gas_asset, required_gas_coins),
             rewards_config.swap_asset.clone(),
@@ -72,7 +72,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
 
     Ok(CompoundStatusResponse {
         status,
-        reward,
+        reward: reward.into(),
         rewards_available,
     })
 }
