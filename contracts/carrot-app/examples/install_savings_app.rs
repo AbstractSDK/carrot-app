@@ -166,7 +166,6 @@ mod utils {
     use super::*;
 
     pub const LOTS: u128 = 100_000_000_000_000;
-    pub const REWARD_DENOM: &str = "uosmo";
     pub const REWARD_ASSET: &str = "osmosis>osmo";
 
     use abstract_app::objects::{
@@ -220,6 +219,10 @@ mod utils {
         let granter = chain.sender().to_string();
         let grantee = savings_app_addr.clone();
 
+        let reward_denom = client
+            .name_service()
+            .resolve(&AssetEntry::new(REWARD_ASSET))?;
+
         let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: app_data.denom0.to_string(),
@@ -230,7 +233,7 @@ mod utils {
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: REWARD_DENOM.to_owned(),
+            denom: reward_denom.to_string(),
             amount: LOTS.to_string(),
         }];
         let dex_fee_authorization = Any {
