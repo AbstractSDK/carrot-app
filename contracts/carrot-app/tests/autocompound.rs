@@ -9,6 +9,7 @@ use carrot_app::msg::{
     CompoundStatus, CompoundStatusResponse,
 };
 use cosmwasm_std::{coin, coins, Uint128};
+use cw_asset::AssetBase;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Account;
 use cw_orch::{anyhow, prelude::*};
 
@@ -141,7 +142,7 @@ fn stranger_autocompound() -> anyhow::Result<()> {
         compound_status,
         CompoundStatusResponse {
             status: CompoundStatus::Ready {},
-            reward: Coin::new(1000, REWARD_DENOM),
+            reward: AssetBase::native(REWARD_DENOM, 1000u128),
             rewards_available: true
         }
     );

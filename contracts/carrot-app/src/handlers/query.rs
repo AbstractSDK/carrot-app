@@ -4,12 +4,12 @@ use abstract_app::{
 };
 use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
-use cw_asset::AssetInfo;
+use cw_asset::Asset;
 use osmosis_std::try_proto_to_cosmwasm_coins;
 
 use crate::{
     contract::{App, AppResult, OSMOSIS},
-    helpers::get_user,
+    helpers::{get_balance, get_user},
     msg::{
         AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
         PositionResponse,
@@ -38,50 +38,41 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         config.autocompound_cooldown_seconds.u64(),
     )?;
 
-    let reward = Coin {
-        denom: config.autocompound_rewards_config.gas_denom.clone(),
-        amount: config.autocompound_rewards_config.reward,
-    };
+    let gas_denom = config
+        .autocompound_rewards_config
+        .gas_asset
+        .resolve(&deps.querier, &app.ans_host(deps)?)?;
+
+    let reward = Asset::new(gas_denom.clone(), config.autocompound_rewards_config.reward);
 
     let user = get_user(deps, app)?;
-    let user_gas_balance = deps
-        .querier
-        .query_balance(user.clone(), reward.denom.clone())?;
-    let rewards_available = if user_gas_balance.amount >= reward.amount {
+
+    let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
+
+    let rewards_available = if user_gas_balance >= reward.amount {
         true
     } else {
         // check if can swap
         let rewards_config = config.autocompound_rewards_config;
         let dex = app.ans_dex(deps, OSMOSIS.to_string());
-        let ans_host = app.ans_host(deps)?;
-
-        let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
-            .resolve(&deps.querier, &ans_host)?;
-        let swap_asset = AssetInfo::Native(rewards_config.swap_denom.clone())
-            .resolve(&deps.querier, &ans_host)?;
 
         // Reverse swap to see how many swap coins needed
-        let required_gas_coins = reward.amount - user_gas_balance.amount;
+        let required_gas_coins = reward.amount - user_gas_balance;
         let response = dex.simulate_swap(
-            AnsAsset {
-                name: gas_asset,
-                amount: required_gas_coins,
-            },
-            swap_asset.clone(),
+            AnsAsset::new(rewards_config.gas_asset, required_gas_coins),
+            rewards_config.swap_asset.clone(),
         )?;
 
         // Check if user has enough of swap coins
-        let user_swap_balance = deps
-            .querier
-            .query_balance(user, rewards_config.swap_denom)?;
+        let user_swap_balance = get_balance(rewards_config.swap_asset, deps, user, app)?;
         let required_swap_amount = response.return_amount;
 
-        user_swap_balance.amount > required_swap_amount
+        user_swap_balance > required_swap_amount
     };
 
     Ok(CompoundStatusResponse {
         status,
-        reward,
+        reward: reward.into(),
         rewards_available,
     })
 }

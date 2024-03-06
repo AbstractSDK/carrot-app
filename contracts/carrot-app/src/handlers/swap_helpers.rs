@@ -184,8 +184,8 @@ mod tests {
                 },
                 autocompound_cooldown_seconds: Uint64::zero(),
                 autocompound_rewards_config: AutocompoundRewardsConfig {
-                    gas_denom: "foo".to_owned(),
-                    swap_denom: "bar".to_owned(),
+                    gas_asset: "foo".into(),
+                    swap_asset: "bar".into(),
                     reward: Uint128::zero(),
                     min_gas_balance: Uint128::zero(),
                     max_gas_balance: Uint128::new(1),

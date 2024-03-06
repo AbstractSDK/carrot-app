@@ -2,7 +2,7 @@ use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
-    helpers::get_user,
+    helpers::{get_balance, get_user},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
@@ -13,11 +13,10 @@ use abstract_app::abstract_sdk::AuthZInterface;
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
-use cosmwasm_std::Deps;
 use cosmwasm_std::{
-    to_json_binary, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
 };
-use cw_asset::AssetInfo;
+use cw_asset::Asset;
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
@@ -328,71 +327,57 @@ pub fn autocompound_executor_rewards(
     let user = position.owner;
 
     // Get user balance of gas denom
-    let user_gas_balance = deps
-        .querier
-        .query_balance(user.clone(), rewards_config.gas_denom.clone())?;
+    let gas_denom = rewards_config
+        .gas_asset
+        .resolve(&deps.querier, &app.ans_host(deps)?)?;
+    let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
 
     let mut rewards_messages = vec![];
 
     // If not enough gas coins - swap for some amount
-    if user_gas_balance.amount < rewards_config.min_gas_balance {
+    if user_gas_balance < rewards_config.min_gas_balance {
         // Get asset entries
         let dex = app.ans_dex(deps, OSMOSIS.to_string());
-        let ans_host = app.ans_host(deps)?;
-        let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
-            .resolve(&deps.querier, &ans_host)?;
-        let swap_asset = AssetInfo::Native(rewards_config.swap_denom.clone())
-            .resolve(&deps.querier, &ans_host)?;
 
         // Do reverse swap to find approximate amount we need to swap
-        let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance.amount;
+        let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;
         let simulate_swap_response = dex.simulate_swap(
-            AnsAsset::new(gas_asset.clone(), need_gas_coins),
-            swap_asset.clone(),
+            AnsAsset::new(rewards_config.gas_asset.clone(), need_gas_coins),
+            rewards_config.swap_asset.clone(),
         )?;
 
         // Get user balance of swap denom
-        let user_swap_balance = deps
-            .querier
-            .query_balance(user.clone(), rewards_config.swap_denom)?;
+        let user_swap_balance =
+            get_balance(rewards_config.swap_asset.clone(), deps, user.clone(), app)?;
 
         // Swap as much as available if not enough for max_gas_balance
-        let swap_amount = simulate_swap_response
-            .return_amount
-            .min(user_swap_balance.amount);
+        let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
 
         let msgs = swap_msg(
             deps,
             env,
-            AnsAsset::new(swap_asset, swap_amount),
-            gas_asset,
+            AnsAsset::new(rewards_config.swap_asset, swap_amount),
+            rewards_config.gas_asset,
             app,
         )?;
         rewards_messages.extend(msgs);
     }
 
-    let reward = Coin {
-        denom: rewards_config.gas_denom,
-        amount: rewards_config.reward,
-    };
+    let reward_asset = Asset::new(gas_denom, rewards_config.reward);
+    let msg_send = reward_asset.transfer_msg(env.contract.address.to_string())?;
+
     // To avoid giving general `MsgSend` authorization to any address we do 2 sends here
     // 1) From user to the contract
     // 2) From contract to the executor
     // That way we can limit the `MsgSend` authorization to the contract address only.
-    let msg_send = BankMsg::Send {
-        to_address: env.contract.address.to_string(),
-        amount: vec![reward.clone()],
-    };
     let send_reward_to_contract_msg = app
         .auth_z(deps, Some(cosmwasm_std::Addr::unchecked(user)))?
         .execute(&env.contract.address, msg_send);
     rewards_messages.push(send_reward_to_contract_msg);
 
-    let send_reward_to_executor_msg = BankMsg::Send {
-        to_address: executor,
-        amount: vec![reward],
-    };
-    rewards_messages.push(send_reward_to_executor_msg.into());
+    let send_reward_to_executor_msg = reward_asset.transfer_msg(executor)?;
+
+    rewards_messages.push(send_reward_to_executor_msg);
 
     Ok(rewards_messages)
 }
