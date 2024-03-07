@@ -57,8 +57,8 @@ pub const DEX_NAME: &str = "osmosis";
 pub const TICK_SPACING: u64 = 100;
 pub const SPREAD_FACTOR: u64 = 1;
 
-pub const INITIAL_LOWER_TICK: i64 = -10000;
-pub const INITIAL_UPPER_TICK: i64 = 1000;
+pub const INITIAL_LOWER_TICK: i64 = -100000;
+pub const INITIAL_UPPER_TICK: i64 = 10000;
 // Deploys abstract and other contracts
 pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,

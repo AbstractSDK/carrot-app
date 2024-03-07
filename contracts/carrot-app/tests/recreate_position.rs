@@ -1,9 +1,19 @@
 mod common;
 
-use crate::common::{create_position, setup_test_tube, USDC, USDT};
+use crate::common::{
+    create_position, give_authorizations, setup_test_tube, INITIAL_LOWER_TICK, INITIAL_UPPER_TICK,
+    USDC, USDT,
+};
+use abstract_app::objects::{AccountId, AssetEntry};
+use abstract_client::{AbstractClient, Environment};
 use carrot_app::error::AppError;
-use carrot_app::msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse};
-use cosmwasm_std::{coin, coins, Uint128};
+use carrot_app::msg::{
+    AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
+    CreatePositionMessage, PositionResponse,
+};
+use carrot_app::state::AutocompoundRewardsConfig;
+use common::REWARD_ASSET;
+use cosmwasm_std::{coin, coins, Uint128, Uint64};
 use cw_orch::{
     anyhow,
     osmosis_test_tube::osmosis_test_tube::{
@@ -148,6 +158,105 @@ fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()
     )?;
 
     let position = carrot_app.position()?;
+    assert!(position.position.is_some());
+    Ok(())
+}
+
+#[test]
+fn install_on_sub_account() -> anyhow::Result<()> {
+    let (pool_id, app) = setup_test_tube(false)?;
+    let owner_account = app.account();
+    let chain = owner_account.environment();
+    let client = AbstractClient::new(chain)?;
+    let next_id = client.next_local_account_id()?;
+
+    let init_msg = AppInstantiateMsg {
+        pool_id,
+        // 5 mins
+        autocompound_cooldown_seconds: Uint64::new(300),
+        autocompound_rewards_config: AutocompoundRewardsConfig {
+            gas_asset: AssetEntry::new(REWARD_ASSET),
+            swap_asset: AssetEntry::new(USDC),
+            reward: Uint128::new(1000),
+            min_gas_balance: Uint128::new(2000),
+            max_gas_balance: Uint128::new(10000),
+        },
+        create_position: None,
+    };
+
+    let account = client
+        .account_builder()
+        .sub_account(owner_account)
+        .account_id(next_id)
+        .name("carrot-sub-acc")
+        .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<OsmosisTestTube>>(
+            &init_msg,
+            Empty {},
+        )?
+        .build()?;
+
+    let carrot_app = account.application::<carrot_app::AppInterface<_>>()?;
+
+    give_authorizations(&client, carrot_app.addr_str()?)?;
+    create_position(
+        &carrot_app,
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
+
+    let position: PositionResponse = carrot_app.position()?;
+    assert!(position.position.is_some());
+    Ok(())
+}
+
+#[test]
+fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
+    let (pool_id, app) = setup_test_tube(false)?;
+    let owner_account = app.account();
+    let chain = owner_account.environment();
+    let client = AbstractClient::new(chain)?;
+    let next_id = client.next_local_account_id()?;
+    let carrot_app_address = client
+        .module_instantiate2_address::<carrot_app::AppInterface<OsmosisTestTube>>(
+            &AccountId::local(next_id),
+        )?;
+
+    give_authorizations(&client, carrot_app_address)?;
+    let init_msg = AppInstantiateMsg {
+        pool_id,
+        // 5 mins
+        autocompound_cooldown_seconds: Uint64::new(300),
+        autocompound_rewards_config: AutocompoundRewardsConfig {
+            gas_asset: AssetEntry::new(REWARD_ASSET),
+            swap_asset: AssetEntry::new(USDC),
+            reward: Uint128::new(500_000),
+            min_gas_balance: Uint128::new(1_000_000),
+            max_gas_balance: Uint128::new(3_000_000),
+        },
+        create_position: Some(CreatePositionMessage {
+            lower_tick: INITIAL_LOWER_TICK,
+            upper_tick: INITIAL_UPPER_TICK,
+            funds: coins(100_000, USDC),
+            asset0: coin(1_000_672_899, USDT),
+            asset1: coin(10_000_000_000, USDC),
+        }),
+    };
+
+    let account = client
+        .account_builder()
+        .sub_account(owner_account)
+        .account_id(next_id)
+        .name("carrot-sub-acc")
+        .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<OsmosisTestTube>>(
+            &init_msg,
+            Empty {},
+        )?
+        .build()?;
+
+    let carrot_app = account.application::<carrot_app::AppInterface<_>>()?;
+
+    let position: PositionResponse = carrot_app.position()?;
     assert!(position.position.is_some());
     Ok(())
 }

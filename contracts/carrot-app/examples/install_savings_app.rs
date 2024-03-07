@@ -223,7 +223,7 @@ mod utils {
             .name_service()
             .resolve(&AssetEntry::new(REWARD_ASSET))?;
 
-        let dex_spend_limit = vec![
+        let mut dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: app_data.denom0.to_string(),
             amount: LOTS.to_string(),
@@ -236,6 +236,7 @@ mod utils {
             denom: reward_denom.to_string(),
             amount: LOTS.to_string(),
         }];
+        dex_spend_limit.sort_unstable_by(|a, b| a.denom.cmp(&b.denom));
         let dex_fee_authorization = Any {
             value: MsgGrant {
                 granter: chain.sender().to_string(),
@@ -316,6 +317,52 @@ mod utils {
                         ),
                     ],
                     account_id: Some(AccountId::local(next_local_account_id)),
+                })?,
+                funds: vec![],
+            }
+            .to_proto_bytes(),
+        };
+        Ok(msg)
+    }
+
+    pub fn create_sub_account_message<Chain: CwEnv>(
+        client: &AbstractClient<Chain>,
+        account: &Account<Chain>,
+        init_msg: AppInstantiateMsg,
+    ) -> anyhow::Result<Any> {
+        let chain = client.environment();
+        let next_local_account_id = client.next_local_account_id()?;
+
+        let msg = Any {
+            type_url: MsgExecuteContract::TYPE_URL.to_owned(),
+            value: MsgExecuteContract {
+                sender: chain.sender().to_string(),
+                contract: account.manager()?.to_string(),
+                msg: to_json_vec(&abstract_sdk::core::manager::ExecuteMsg::CreateSubAccount {
+                    name: "deep-adventurous-afternoon".to_owned(),
+                    description: None,
+                    link: None,
+                    base_asset: None,
+                    namespace: None,
+                    install_modules: vec![
+                        ModuleInstallConfig::new(
+                            ModuleInfo::from_id(
+                                DEX_ADAPTER_ID,
+                                ModuleVersion::Version(
+                                    abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
+                                ),
+                            )?,
+                            None,
+                        ),
+                        ModuleInstallConfig::new(
+                            ModuleInfo::from_id(
+                                APP_ID,
+                                ModuleVersion::Version(APP_VERSION.to_owned()),
+                            )?,
+                            Some(to_json_binary(&init_msg)?),
+                        ),
+                    ],
+                    account_id: Some(next_local_account_id),
                 })?,
                 funds: vec![],
             }
