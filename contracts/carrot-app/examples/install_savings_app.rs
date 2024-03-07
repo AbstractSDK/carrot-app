@@ -90,8 +90,8 @@ mod usdt_usdc {
     use crate::{usdc_usdc_ax::USDC_NOBLE_ASSET, CarrotAppInitData};
 
     const POOL_ID: u64 = 1220;
-    const LOWER_TICK: i64 = 100;
-    const UPPER_TICK: i64 = 200;
+    const LOWER_TICK: i64 = -100000;
+    const UPPER_TICK: i64 = 10000;
     // USDT
     pub const TOKEN0: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
     // USDC
