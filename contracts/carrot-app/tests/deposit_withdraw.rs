@@ -136,6 +136,7 @@ fn deposit_both_assets() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 #[test]
 fn create_position_on_instantiation() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(true)?;

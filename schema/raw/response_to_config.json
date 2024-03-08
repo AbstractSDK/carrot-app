@@ -28,16 +28,20 @@
       "description": "Configuration on how rewards should be distributed to the address who helped to execute autocompound",
       "type": "object",
       "required": [
-        "gas_denom",
+        "gas_asset",
         "max_gas_balance",
         "min_gas_balance",
         "reward",
-        "swap_denom"
+        "swap_asset"
       ],
       "properties": {
-        "gas_denom": {
+        "gas_asset": {
           "description": "Gas denominator for this chain",
-          "type": "string"
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetEntry"
+            }
+          ]
         },
         "max_gas_balance": {
           "description": "Upper bound of gas tokens expected after the swap",
@@ -63,9 +67,13 @@
             }
           ]
         },
-        "swap_denom": {
+        "swap_asset": {
           "description": "Denominator of the asset that will be used for swap to the gas asset",
-          "type": "string"
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetEntry"
+            }
+          ]
         }
       },
       "additionalProperties": false
