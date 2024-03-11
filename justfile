@@ -54,8 +54,7 @@ juno-local:
 wasm:
   #!/usr/bin/env bash
 
-  # Don't delete cw_vault
-  # rm -rf ./artifacts/*.wasm
+  rm -rf ./artifacts/*.wasm
 
   if [[ $(arch) == "arm64" ]]; then
     image="cosmwasm/optimizer-arm64"
@@ -85,10 +84,6 @@ wasm-f:
 # Generate the typescript client for the app contract
 ts-codegen: schema
   (cd packages/typescript && npm install && npm run codegen)
-
-# Publish the typescript sdk
-ts-publish: ts-codegen
-  (cd packages/typescript && npm publish --access public)
 
 # Generate the schemas for the app contract
 schema:

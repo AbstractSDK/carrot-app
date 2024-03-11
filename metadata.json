@@ -1,0 +1,10 @@
+{
+    "name": "Carrot App",
+    "description": "A smart-contract that helps you save digital carrots.",
+    "website": "",
+    "docs": "",
+    "type": "app",
+    "icon": "GiTrade",
+    "enabled": true
+  }
+  
