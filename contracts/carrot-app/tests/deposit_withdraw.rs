@@ -2,7 +2,7 @@ mod common;
 
 use crate::common::{create_position, setup_test_tube, USDC, USDT};
 use carrot_app::msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, PositionResponse};
-use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint256};
+use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_orch::{
     anyhow,
     osmosis_test_tube::osmosis_test_tube::{
@@ -37,8 +37,9 @@ fn deposit_lands() -> anyhow::Result<()> {
     // Do the deposit
     carrot_app.deposit(
         vec![coin(deposit_amount, USDT.to_owned())],
-        Uint256::zero(),
-        Uint256::zero(),
+        None,
+        None,
+        None,
     )?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
@@ -51,8 +52,9 @@ fn deposit_lands() -> anyhow::Result<()> {
     // Do the second deposit
     carrot_app.deposit(
         vec![coin(deposit_amount, USDT.to_owned())],
-        Uint256::zero(),
-        Uint256::zero(),
+        None,
+        None,
+        None,
     )?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
@@ -142,8 +144,9 @@ fn deposit_both_assets() -> anyhow::Result<()> {
 
     carrot_app.deposit(
         vec![coin(258, USDT.to_owned()), coin(234, USDC.to_owned())],
-        Uint256::zero(),
-        Uint256::zero(),
+        None,
+        None,
+        None,
     )?;
 
     Ok(())

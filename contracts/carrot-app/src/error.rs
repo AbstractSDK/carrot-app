@@ -70,4 +70,7 @@ pub enum AppError {
 
     #[error("Position already exists. Please withdraw all funds before creating a new position")]
     PositionExists {},
+
+    #[error("Operation exceeds max spread limit")]
+    MaxSpreadAssertion {},
 }

@@ -73,8 +73,9 @@ fn main() -> anyhow::Result<()> {
             funds: app_data.funds,
             asset0: app_data.asset0,
             asset1: app_data.asset1,
-            token_min_amount0: Uint256::zero(),
-            token_min_amount1: Uint256::zero(),
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
         }),
     };
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;
