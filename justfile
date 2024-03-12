@@ -85,10 +85,6 @@ wasm-f:
 ts-codegen: schema
   (cd packages/typescript && npm install && npm run codegen)
 
-# Publish the typescript sdk
-ts-publish: ts-codegen
-  (cd packages/typescript && npm publish --access public)
-
 # Generate the schemas for the app contract
 schema:
   cargo schema

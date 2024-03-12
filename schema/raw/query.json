@@ -19,10 +19,51 @@
     {
       "type": "object",
       "required": [
-        "count"
+        "balance"
       ],
       "properties": {
-        "count": {
+        "balance": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Get the claimable rewards that the position has accumulated. Returns [`AvailableRewardsResponse`]",
+      "type": "object",
+      "required": [
+        "available_rewards"
+      ],
+      "properties": {
+        "available_rewards": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "position"
+      ],
+      "properties": {
+        "position": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Get the status of the compounding logic of the application Returns [`CompoundStatusResponse`]",
+      "type": "object",
+      "required": [
+        "compound_status"
+      ],
+      "properties": {
+        "compound_status": {
           "type": "object",
           "additionalProperties": false
         }

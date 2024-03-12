@@ -1,6 +1,6 @@
 [package]
-name = "savings-app"
-version = "0.0.1"
+name = "carrot-app"
+version = "0.1.0"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
   "Adair <adair@abstract.money>",
@@ -38,6 +38,7 @@ interface = [
 schema = ["abstract-app/schema"]
 
 [dependencies]
+cw-utils = { version = "1.0.3" }
 cosmwasm-std = { version = "1.2" }
 cosmwasm-schema = { version = "1.2" }
 cw-controllers = { version = "1.0.1" }
@@ -47,12 +48,9 @@ schemars = "0.8"
 cw-asset = { version = "3.0" }
 
 abstract-app = { workspace = true }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
-  "stargate",
-] }
+abstract-sdk = { version = "0.21.0", features = ["stargate"] }
 # Dependencies for interface
 abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
-
 cw-orch = { workspace = true, optional = true }
 
 osmosis-std = { version = "0.21.0" }
@@ -64,12 +62,10 @@ abstract-interface = { workspace = true, features = ["daemon"] }
 prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
-savings-app = { path = ".", features = ["interface"] }
-abstract-testing = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract", branch = "main" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract", branch = "main", features = [
-  "test-utils",
-] }
+carrot-app = { path = ".", features = ["interface"] }
+abstract-testing = { version = "0.21.0" }
+abstract-client = { version = "0.21.0" }
+abstract-sdk = { version = "0.21.0", features = ["test-utils"] }
 speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"

@@ -15,9 +15,12 @@ abstract-client = { workspace = true }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
-env_logger = "0.10.0"
+env_logger = "0.11.2"
 log = "0.4.20"
 tonic = "0.10.0"
-savings-app = { path = "../contracts/savings-app", features = ["interface"] }
+carrot-app = { path = "../contracts/carrot-app", features = ["interface"] }
 clap = { version = "4", features = ["derive"] }
 humantime = "2.1.0"
+prometheus = "0.13.2"
+tokio = "1.26.0"
+warp = "0.3.6"

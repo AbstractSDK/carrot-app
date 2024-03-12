@@ -2,7 +2,6 @@ use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
-use cw_asset::AssetInfo;
 use cw_storage_plus::Item;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     ConcentratedliquidityQuerier, FullPositionBreakdown,
@@ -26,9 +25,9 @@ pub struct Config {
 #[cw_serde]
 pub struct AutocompoundRewardsConfig {
     /// Gas denominator for this chain
-    pub gas_denom: String,
+    pub gas_asset: AssetEntry,
     /// Denominator of the asset that will be used for swap to the gas asset
-    pub swap_denom: String,
+    pub swap_asset: AssetEntry,
     /// Reward amount
     pub reward: Uint128,
     /// If gas token balance falls below this bound a swap will be generated
@@ -53,12 +52,8 @@ impl AutocompoundRewardsConfig {
         );
 
         // Check swap asset has pairing into gas asset
-        let gas_asset =
-            AssetInfo::Native(self.gas_denom.clone()).resolve(&deps.querier, ans_host)?;
-        let swap_asset =
-            AssetInfo::Native(self.swap_denom.clone()).resolve(&deps.querier, ans_host)?;
-
-        DexAssetPairing::new(gas_asset, swap_asset, dex_name).resolve(&deps.querier, ans_host)?;
+        DexAssetPairing::new(self.gas_asset.clone(), self.swap_asset.clone(), dex_name)
+            .resolve(&deps.querier, ans_host)?;
 
         Ok(())
     }
@@ -99,12 +94,7 @@ pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
 
     ConcentratedliquidityQuerier::new(&deps.querier)
         .position_by_id(position.position_id)
-        .map_err(|e| {
-            cosmwasm_std::StdError::generic_err(format!(
-                "Failed to query position by id: {}\n error: {e}",
-                position.position_id
-            ))
-        })?
+        .map_err(|e| AppError::UnableToQueryPosition(position.position_id, e))?
         .position
         .ok_or(AppError::NoPosition {})
 }

@@ -1,24 +1,22 @@
 use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
-    helpers::get_user,
+    error::AppError,
+    helpers::{get_balance, get_user},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
         assert_contract, get_osmosis_position, get_position, get_position_status, Config, CONFIG,
-        POSITION,
     },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
-use abstract_app::AppError;
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
-    to_json_binary, BankMsg, Coin, CosmosMsg, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
 };
-use cosmwasm_std::{Coins, Deps};
-use cw_asset::AssetInfo;
+use cw_asset::Asset;
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
@@ -39,19 +37,7 @@ pub fn execute_handler(
         AppExecuteMsg::CreatePosition(create_position_msg) => {
             create_position(deps, env, info, app, create_position_msg)
         }
-        AppExecuteMsg::Deposit {
-            funds,
-            token_min_amount0,
-            token_min_amount1,
-        } => deposit(
-            deps,
-            env,
-            info,
-            funds,
-            token_min_amount0,
-            token_min_amount1,
-            app,
-        ),
+        AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
@@ -63,51 +49,26 @@ fn create_position(
     env: Env,
     info: MessageInfo,
     app: App,
-    mut create_position_msg: CreatePositionMessage,
+    create_position_msg: CreatePositionMessage,
 ) -> AppResult {
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
-    let mut response = app.response("create_position");
     // We start by checking if there is already a position
-    let funds = create_position_msg.funds;
-    let funds_to_deposit = if POSITION.exists(deps.storage) {
-        let (withdraw_msg, withdraw_amount, total_amount, withdrawn_funds) =
-            _inner_withdraw(deps.as_ref(), &env, None, &app)?;
-
-        response = response
-            .add_message(withdraw_msg)
-            .add_attribute("withdraw_amount", withdraw_amount)
-            .add_attribute("total_amount", total_amount);
-
-        // We add the withdrawn funds to the input funds
-        let mut coins: Coins = funds.try_into()?;
-        for fund in withdrawn_funds {
-            coins.add(fund)?;
-        }
-        POSITION.remove(deps.storage);
-        coins.to_vec()
-    } else {
-        funds
+    if get_osmosis_position(deps.as_ref()).is_ok() {
+        return Err(AppError::PositionExists {});
+        // If the position still has incentives to claim, the user is able to override it
     };
 
-    create_position_msg.funds = funds_to_deposit;
     let (swap_messages, create_position_msg) =
         _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
 
-    Ok(response
+    Ok(app
+        .response("create_position")
         .add_messages(swap_messages)
         .add_submessage(create_position_msg))
 }
 
-fn deposit(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    funds: Vec<Coin>,
-    token_min_amount0: String,
-    token_min_amount1: String,
-    app: App,
-) -> AppResult {
+fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
     // Only the admin (manager contracts or account owner) + the smart contract can deposit
     app.admin
         .assert_admin(deps.as_ref(), &info.sender)
@@ -134,8 +95,8 @@ fn deposit(
             sender: user.to_string(),
             amount0: resulting_assets[0].amount.to_string(),
             amount1: resulting_assets[1].amount.to_string(),
-            token_min_amount0,
-            token_min_amount1,
+            token_min_amount0: "0".to_string(), // No min, this always works
+            token_min_amount1: "0".to_string(), // No min, this always works
         },
     );
 
@@ -156,7 +117,7 @@ fn withdraw(
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
     let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
-        _inner_withdraw(deps.as_ref(), &env, amount, &app)?;
+        _inner_withdraw(deps, &env, amount, &app)?;
 
     Ok(app
         .response("withdraw")
@@ -218,9 +179,6 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
             funds: rewards.into(),
-            // TODO: Should we have min_amounts autocompound in config?
-            token_min_amount0: "0".to_string(),
-            token_min_amount1: "0".to_string(),
         }))?,
         funds: vec![],
     });
@@ -255,12 +213,12 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 }
 
 fn _inner_withdraw(
-    deps: Deps,
+    deps: DepsMut,
     env: &Env,
     amount: Option<Uint128>,
     app: &App,
 ) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
-    let position = get_osmosis_position(deps)?;
+    let position = get_osmosis_position(deps.as_ref())?;
     let position_details = position.position.unwrap();
 
     let total_liquidity = position_details.liquidity.replace('.', "");
@@ -271,10 +229,10 @@ fn _inner_withdraw(
         // TODO: it's decimals inside contracts
         total_liquidity.clone()
     };
-    let user = get_user(deps, app)?;
+    let user = get_user(deps.as_ref(), app)?;
 
     // We need to execute withdraw on the user's behalf
-    let msg = app.auth_z(deps, Some(user.clone()))?.execute(
+    let msg = app.auth_z(deps.as_ref(), Some(user.clone()))?.execute(
         &env.contract.address,
         MsgWithdrawPosition {
             position_id: position_details.position_id,
@@ -326,17 +284,15 @@ pub(crate) fn _create_position(
         funds,
         asset0,
         asset1,
-        token_min_amount0,
-        token_min_amount1,
     } = create_position_msg;
 
     // With the current funds, we need to be able to create a position that makes sense
     // Therefore we swap the incoming funds to fit inside the future position
     let (swap_msgs, resulting_assets) =
         swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
-
     let sender = get_user(deps, app)?;
 
+    let tokens = cosmwasm_to_proto_coins(resulting_assets);
     let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
@@ -344,15 +300,15 @@ pub(crate) fn _create_position(
             sender: sender.to_string(),
             lower_tick,
             upper_tick,
-            tokens_provided: cosmwasm_to_proto_coins(resulting_assets),
-            token_min_amount0,
-            token_min_amount1,
+            tokens_provided: tokens,
+            token_min_amount0: "0".to_string(), // No min amount here
+            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
         },
     );
 
     Ok((
         swap_msgs,
-        SubMsg::reply_always(create_msg, CREATE_POSITION_ID),
+        SubMsg::reply_on_success(create_msg, CREATE_POSITION_ID),
     ))
 }
 
@@ -371,71 +327,57 @@ pub fn autocompound_executor_rewards(
     let user = position.owner;
 
     // Get user balance of gas denom
-    let user_gas_balance = deps
-        .querier
-        .query_balance(user.clone(), rewards_config.gas_denom.clone())?;
+    let gas_denom = rewards_config
+        .gas_asset
+        .resolve(&deps.querier, &app.ans_host(deps)?)?;
+    let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
 
     let mut rewards_messages = vec![];
 
     // If not enough gas coins - swap for some amount
-    if user_gas_balance.amount < rewards_config.min_gas_balance {
+    if user_gas_balance < rewards_config.min_gas_balance {
         // Get asset entries
         let dex = app.ans_dex(deps, OSMOSIS.to_string());
-        let ans_host = app.ans_host(deps)?;
-        let gas_asset = AssetInfo::Native(rewards_config.gas_denom.clone())
-            .resolve(&deps.querier, &ans_host)?;
-        let swap_asset = AssetInfo::Native(rewards_config.swap_denom.clone())
-            .resolve(&deps.querier, &ans_host)?;
 
         // Do reverse swap to find approximate amount we need to swap
-        let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance.amount;
+        let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;
         let simulate_swap_response = dex.simulate_swap(
-            AnsAsset::new(gas_asset.clone(), need_gas_coins),
-            swap_asset.clone(),
+            AnsAsset::new(rewards_config.gas_asset.clone(), need_gas_coins),
+            rewards_config.swap_asset.clone(),
         )?;
 
         // Get user balance of swap denom
-        let user_swap_balance = deps
-            .querier
-            .query_balance(user.clone(), rewards_config.swap_denom)?;
+        let user_swap_balance =
+            get_balance(rewards_config.swap_asset.clone(), deps, user.clone(), app)?;
 
         // Swap as much as available if not enough for max_gas_balance
-        let swap_amount = simulate_swap_response
-            .return_amount
-            .min(user_swap_balance.amount);
+        let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
 
         let msgs = swap_msg(
             deps,
             env,
-            AnsAsset::new(swap_asset, swap_amount),
-            gas_asset,
+            AnsAsset::new(rewards_config.swap_asset, swap_amount),
+            rewards_config.gas_asset,
             app,
         )?;
         rewards_messages.extend(msgs);
     }
 
-    let reward = Coin {
-        denom: rewards_config.gas_denom,
-        amount: rewards_config.reward,
-    };
+    let reward_asset = Asset::new(gas_denom, rewards_config.reward);
+    let msg_send = reward_asset.transfer_msg(env.contract.address.to_string())?;
+
     // To avoid giving general `MsgSend` authorization to any address we do 2 sends here
     // 1) From user to the contract
     // 2) From contract to the executor
     // That way we can limit the `MsgSend` authorization to the contract address only.
-    let msg_send = BankMsg::Send {
-        to_address: env.contract.address.to_string(),
-        amount: vec![reward.clone()],
-    };
     let send_reward_to_contract_msg = app
         .auth_z(deps, Some(cosmwasm_std::Addr::unchecked(user)))?
         .execute(&env.contract.address, msg_send);
     rewards_messages.push(send_reward_to_contract_msg);
 
-    let send_reward_to_executor_msg = BankMsg::Send {
-        to_address: executor,
-        amount: vec![reward],
-    };
-    rewards_messages.push(send_reward_to_executor_msg.into());
+    let send_reward_to_executor_msg = reward_asset.transfer_msg(executor)?;
+
+    rewards_messages.push(send_reward_to_executor_msg);
 
     Ok(rewards_messages)
 }

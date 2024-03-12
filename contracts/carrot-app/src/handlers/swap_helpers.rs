@@ -88,7 +88,7 @@ pub(crate) fn tokens_to_swap(
     let x0_a1 = x0.amount * asset1.amount;
     let x1_a0 = x1.amount * asset0.amount;
 
-    let (offer_asset, ask_asset, resulting_balance) = if x0_a1 < x1_a0 {
+    let (offer_asset, ask_asset, mut resulting_balance) = if x0_a1 < x1_a0 {
         let numerator = x1_a0 - x0_a1;
         let denominator = asset0.amount + price * asset1.amount;
         let y1 = numerator / denominator;
@@ -129,6 +129,7 @@ pub(crate) fn tokens_to_swap(
         )
     };
 
+    resulting_balance.sort_by(|a, b| a.denom.cmp(&b.denom));
     // TODO, compute the resulting balance to be able to deposit back into the pool
     Ok((offer_asset, ask_asset, resulting_balance))
 }
@@ -183,8 +184,8 @@ mod tests {
                 },
                 autocompound_cooldown_seconds: Uint64::zero(),
                 autocompound_rewards_config: AutocompoundRewardsConfig {
-                    gas_denom: "foo".to_owned(),
-                    swap_denom: "bar".to_owned(),
+                    gas_asset: "foo".into(),
+                    swap_asset: "bar".into(),
                     reward: Uint128::zero(),
                     min_gas_balance: Uint128::zero(),
                     max_gas_balance: Uint128::new(1),

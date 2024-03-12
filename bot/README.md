@@ -1,6 +1,6 @@
 # Savings bot
 
-Savings bot allows to call autocompound method of all savings-app users
+The savings bot is an executable that calls the autocompound method of all carrot-app users.
 
 ## Installation
 
@@ -10,12 +10,10 @@ To install savings-bot run this command:
 cargo install --path savings-bot
 ```
 
-## Automation
+## Run the Bot
 
-Cron daemon could be used for automation of this tool, example of crontab entry:
+To run the bot you provide the executable with the following arguments:
 
 ```bash
-0 0 * * * $HOME/.cargo/bin/savings-bot
+savings-bot --fcd "1h" --acd "1d"
 ```
-
-This will run savings bot daily at 00:00.
