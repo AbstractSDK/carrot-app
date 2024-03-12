@@ -277,8 +277,7 @@ fn _inner_withdraw(
 /// This function creates a position for the user,
 /// 1. Swap the indicated funds to match the asset0/asset1 ratio and deposit as much as possible in the pool for the given parameters
 /// 2. Create a new position
-/// 3. This create a reply that stores the created position id inside the contract storage
-/// Description.
+/// 3. Store position id from create position response
 ///
 /// * `lower_tick` - Concentrated liquidity pool parameter
 /// * `upper_tick` - Concentrated liquidity pool parameter
