@@ -13,7 +13,7 @@ use carrot_app::msg::{
 };
 use carrot_app::state::AutocompoundRewardsConfig;
 use common::REWARD_ASSET;
-use cosmwasm_std::{coin, coins, Uint128, Uint64};
+use cosmwasm_std::{coin, coins, Uint128, Uint256, Uint64};
 use cw_orch::{
     anyhow,
     osmosis_test_tube::osmosis_test_tube::{
@@ -240,6 +240,8 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
             funds: coins(100_000, USDC),
             asset0: coin(1_000_672_899, USDT),
             asset1: coin(10_000_000_000, USDC),
+            token_min_amount0: Uint256::zero(),
+            token_min_amount1: Uint256::zero(),
         }),
     };
 

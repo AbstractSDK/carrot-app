@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Uint128, Uint64};
+use cosmwasm_std::{Coin, Uint128, Uint256, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
@@ -34,8 +34,8 @@ pub struct CreatePositionMessage {
     pub asset0: Coin,
     pub asset1: Coin,
     // Slippage
-    pub token_min_amount0: String,
-    pub token_min_amount1: String,
+    pub token_min_amount0: Uint256,
+    pub token_min_amount1: Uint256,
 }
 
 /// App execute messages
@@ -48,8 +48,8 @@ pub enum AppExecuteMsg {
     /// Deposit funds onto the app
     Deposit {
         funds: Vec<Coin>,
-        token_min_amount0: String,
-        token_min_amount1: String,
+        token_min_amount0: Uint256,
+        token_min_amount1: Uint256,
     },
     /// Partial withdraw of the funds available on the app
     Withdraw { amount: Uint128 },

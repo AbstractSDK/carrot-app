@@ -10,7 +10,7 @@ use abstract_sdk::core::manager::{self, ModuleInstallConfig};
 use carrot_app::contract::APP_ID;
 use carrot_app::msg::{AppInstantiateMsg, CreatePositionMessage};
 use carrot_app::state::AutocompoundRewardsConfig;
-use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
+use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint256, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
 use cw_orch::{
@@ -213,6 +213,8 @@ pub fn create_position<Chain: CwEnv>(
             funds,
             asset0,
             asset1,
+            token_min_amount0: Uint256::zero(),
+            token_min_amount1: Uint256::zero(),
         })
         .into(),
         None,
@@ -327,6 +329,8 @@ pub fn setup_test_tube(
         funds: coins(100_000, USDT),
         asset0: coin(1_000_000, USDT),
         asset1: coin(1_000_000, USDC),
+        token_min_amount0: Uint256::zero(),
+        token_min_amount1: Uint256::zero(),
     });
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 
