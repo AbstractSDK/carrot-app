@@ -26,5 +26,6 @@ fn main() -> anyhow::Result<()> {
         .build()?;
 
     publisher.publish_app::<AppInterface<Daemon>>()?;
+    abstr.version_control().approve_any_abstract_modules()?;
     Ok(())
 }

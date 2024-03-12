@@ -9,7 +9,7 @@
   ],
   "properties": {
     "reward": {
-      "$ref": "#/definitions/Coin"
+      "$ref": "#/definitions/AssetBase_for_String"
     },
     "rewards_available": {
       "type": "boolean"
@@ -20,20 +20,61 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "Coin": {
+    "AssetBase_for_String": {
+      "description": "Represents a fungible asset with a known amount\n\nEach asset instance contains two values: `info`, which specifies the asset's type (CW20 or native), and its `amount`, which specifies the asset's amount.",
       "type": "object",
       "required": [
         "amount",
-        "denom"
+        "info"
       ],
       "properties": {
         "amount": {
-          "$ref": "#/definitions/Uint128"
+          "description": "Specifies the asset's amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
         },
-        "denom": {
-          "type": "string"
+        "info": {
+          "description": "Specifies the asset's type (CW20 or native)",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetInfoBase_for_String"
+            }
+          ]
         }
-      }
+      },
+      "additionalProperties": false
+    },
+    "AssetInfoBase_for_String": {
+      "description": "Represents the type of an fungible asset.\n\nEach **asset info** instance can be one of three variants:\n\n- Native SDK coins. To create an **asset info** instance of this type, provide the denomination. - CW20 tokens. To create an **asset info** instance of this type, provide the contract address.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "native"
+          ],
+          "properties": {
+            "native": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "cw20"
+          ],
+          "properties": {
+            "cw20": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "CompoundStatus": {
       "description": "Wether contract is ready for the compound",
