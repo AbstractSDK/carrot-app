@@ -45,7 +45,7 @@ pub fn execute_handler(
 }
 
 /// In this function, we want to create a new position for the user.
-/// This operation happens in multiple steps :
+/// This operation happens in multiple steps:
 /// 1. Withdraw a potential existing position and add the funds to the current position being created
 /// 2. Create a new position using the existing funds (if any) + the funds that the user wishes to deposit additionally
 fn create_position(
