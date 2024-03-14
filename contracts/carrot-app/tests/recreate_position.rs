@@ -240,6 +240,9 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
             funds: coins(100_000, USDC),
             asset0: coin(1_000_672_899, USDT),
             asset1: coin(10_000_000_000, USDC),
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
         }),
     };
 

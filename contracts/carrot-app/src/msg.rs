@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Uint128, Uint64};
+use cosmwasm_std::{Coin, Decimal, Uint128, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
@@ -33,6 +33,10 @@ pub struct CreatePositionMessage {
     /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
     pub asset0: Coin,
     pub asset1: Coin,
+    // Slippage
+    pub max_spread: Option<Decimal>,
+    pub belief_price0: Option<Decimal>,
+    pub belief_price1: Option<Decimal>,
 }
 
 /// App execute messages
@@ -43,7 +47,12 @@ pub enum AppExecuteMsg {
     /// Create the initial liquidity position
     CreatePosition(CreatePositionMessage),
     /// Deposit funds onto the app
-    Deposit { funds: Vec<Coin> },
+    Deposit {
+        funds: Vec<Coin>,
+        max_spread: Option<Decimal>,
+        belief_price0: Option<Decimal>,
+        belief_price1: Option<Decimal>,
+    },
     /// Partial withdraw of the funds available on the app
     Withdraw { amount: Uint128 },
     /// Withdraw everything that is on the app
@@ -101,7 +110,7 @@ pub struct PositionResponse {
 pub struct CompoundStatusResponse {
     pub status: CompoundStatus,
     pub reward: AssetBase<String>,
-    // TODO: Contract can't query authz, should this check be done by bot instead?
+    // Wether user have enough balance to reward or can swap
     pub rewards_available: bool,
 }
 

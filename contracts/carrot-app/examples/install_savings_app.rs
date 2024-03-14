@@ -1,7 +1,7 @@
 #![allow(unused)]
 use abstract_app::objects::{AccountId, AssetEntry};
 use abstract_client::AbstractClient;
-use cosmwasm_std::{Coin, Uint128, Uint64};
+use cosmwasm_std::{Coin, Uint128, Uint256, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
@@ -73,6 +73,9 @@ fn main() -> anyhow::Result<()> {
             funds: app_data.funds,
             asset0: app_data.asset0,
             asset1: app_data.asset1,
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
         }),
     };
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;

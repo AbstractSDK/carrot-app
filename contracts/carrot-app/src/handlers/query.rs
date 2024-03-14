@@ -3,12 +3,14 @@ use abstract_app::{
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Coin, Decimal, Deps, Env};
+use cosmwasm_std::{ensure, to_json_binary, Binary, Coin, Decimal, Deps, Env};
 use cw_asset::Asset;
 use osmosis_std::try_proto_to_cosmwasm_coins;
 
 use crate::{
     contract::{App, AppResult, OSMOSIS},
+    error::AppError,
+    handlers::swap_helpers::DEFAULT_SLIPPAGE,
     helpers::{get_balance, get_user},
     msg::{
         AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
@@ -114,7 +116,14 @@ fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> 
     })
 }
 
-pub fn query_price(deps: Deps, funds: &[Coin], app: &App) -> AppResult<Decimal> {
+pub fn query_price(
+    deps: Deps,
+    funds: &[Coin],
+    app: &App,
+    max_spread: Option<Decimal>,
+    belief_price0: Option<Decimal>,
+    belief_price1: Option<Decimal>,
+) -> AppResult<Decimal> {
     let config = CONFIG.load(deps.storage)?;
 
     let amount0 = funds
@@ -135,14 +144,28 @@ pub fn query_price(deps: Deps, funds: &[Coin], app: &App) -> AppResult<Decimal> 
             config.pool_config.asset1,
         )?;
 
-        Decimal::from_ratio(amount0, simulation_result.return_amount)
+        let price = Decimal::from_ratio(amount0, simulation_result.return_amount);
+        if let Some(belief_price) = belief_price1 {
+            ensure!(
+                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+                AppError::MaxSpreadAssertion { price }
+            );
+        }
+        price
     } else {
         let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset1, amount1),
             config.pool_config.asset0,
         )?;
 
-        Decimal::from_ratio(simulation_result.return_amount, amount1)
+        let price = Decimal::from_ratio(simulation_result.return_amount, amount1);
+        if let Some(belief_price) = belief_price0 {
+            ensure!(
+                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+                AppError::MaxSpreadAssertion { price }
+            );
+        }
+        price
     };
 
     Ok(price)

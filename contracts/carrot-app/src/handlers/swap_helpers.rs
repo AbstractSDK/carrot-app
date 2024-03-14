@@ -3,6 +3,7 @@ use abstract_dex_adapter::{msg::GenerateMessagesResponse, DexInterface};
 use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 const MAX_SPREAD_PERCENT: u64 = 20;
+pub const DEFAULT_SLIPPAGE: Decimal = Decimal::permille(5);
 
 use crate::{
     contract::{App, AppResult, OSMOSIS},
@@ -134,6 +135,7 @@ pub(crate) fn tokens_to_swap(
     Ok((offer_asset, ask_asset, resulting_balance))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn swap_to_enter_position(
     deps: Deps,
     env: &Env,
@@ -141,8 +143,11 @@ pub fn swap_to_enter_position(
     app: &App,
     asset0: Coin,
     asset1: Coin,
+    max_spread: Option<Decimal>,
+    belief_price0: Option<Decimal>,
+    belief_price1: Option<Decimal>,
 ) -> AppResult<(Vec<CosmosMsg>, Vec<Coin>)> {
-    let price = query_price(deps, &funds, app)?;
+    let price = query_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
     let (offer_asset, ask_asset, resulting_assets) =
         tokens_to_swap(deps, funds, asset0, asset1, price)?;
 

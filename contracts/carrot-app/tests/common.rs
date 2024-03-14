@@ -213,6 +213,9 @@ pub fn create_position<Chain: CwEnv>(
             funds,
             asset0,
             asset1,
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
         })
         .into(),
         None,
@@ -327,6 +330,9 @@ pub fn setup_test_tube(
         funds: coins(100_000, USDT),
         asset0: coin(1_000_000, USDT),
         asset1: coin(1_000_000, USDC),
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
     });
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 

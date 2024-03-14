@@ -14,7 +14,8 @@ use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
+    WasmMsg,
 };
 use cw_asset::Asset;
 use osmosis_std::{
@@ -37,7 +38,21 @@ pub fn execute_handler(
         AppExecuteMsg::CreatePosition(create_position_msg) => {
             create_position(deps, env, info, app, create_position_msg)
         }
-        AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
+        AppExecuteMsg::Deposit {
+            funds,
+            max_spread,
+            belief_price0,
+            belief_price1,
+        } => deposit(
+            deps,
+            env,
+            info,
+            funds,
+            max_spread,
+            belief_price0,
+            belief_price1,
+            app,
+        ),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
@@ -72,7 +87,17 @@ fn create_position(
         .add_submessage(create_position_msg))
 }
 
-fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
+#[allow(clippy::too_many_arguments)]
+fn deposit(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    funds: Vec<Coin>,
+    max_spread: Option<Decimal>,
+    belief_price0: Option<Decimal>,
+    belief_price1: Option<Decimal>,
+    app: App,
+) -> AppResult {
     // Only the admin (manager contracts or account owner) + the smart contract can deposit
     app.admin
         .assert_admin(deps.as_ref(), &info.sender)
@@ -87,8 +112,17 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
     // When depositing, we start by adapting the available funds to the expected pool funds ratio
     // We do so by computing the swap information
 
-    let (swap_msgs, resulting_assets) =
-        swap_to_enter_position(deps.as_ref(), &env, funds, &app, asset0, asset1)?;
+    let (swap_msgs, resulting_assets) = swap_to_enter_position(
+        deps.as_ref(),
+        &env,
+        funds,
+        &app,
+        asset0,
+        asset1,
+        max_spread,
+        belief_price0,
+        belief_price1,
+    )?;
 
     let user = get_user(deps.as_ref(), &app)?;
 
@@ -99,8 +133,8 @@ fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: Ap
             sender: user.to_string(),
             amount0: resulting_assets[0].amount.to_string(),
             amount1: resulting_assets[1].amount.to_string(),
-            token_min_amount0: "0".to_string(), // No min, this always works
-            token_min_amount1: "0".to_string(), // No min, this always works
+            token_min_amount0: "0".to_string(),
+            token_min_amount1: "0".to_string(),
         },
     );
 
@@ -183,6 +217,9 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
             funds: rewards.into(),
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
         }))?,
         funds: vec![],
     });
@@ -303,11 +340,23 @@ pub(crate) fn _create_position(
         funds,
         asset0,
         asset1,
+        max_spread,
+        belief_price0,
+        belief_price1,
     } = create_position_msg;
 
     // 1. Swap the assets
-    let (swap_msgs, resulting_assets) =
-        swap_to_enter_position(deps, env, funds, app, asset0, asset1)?;
+    let (swap_msgs, resulting_assets) = swap_to_enter_position(
+        deps,
+        env,
+        funds,
+        app,
+        asset0,
+        asset1,
+        max_spread,
+        belief_price0,
+        belief_price1,
+    )?;
     let sender = get_user(deps, app)?;
 
     // 2. Create a position
@@ -320,8 +369,8 @@ pub(crate) fn _create_position(
             lower_tick,
             upper_tick,
             tokens_provided: tokens,
-            token_min_amount0: "0".to_string(), // No min amount here
-            token_min_amount1: "0".to_string(), // No min amount, we want to deposit whatever we can
+            token_min_amount0: "0".to_string(),
+            token_min_amount1: "0".to_string(),
         },
     );
 
