@@ -72,5 +72,5 @@ pub enum AppError {
     PositionExists {},
 
     #[error("Operation exceeds max spread limit, price: {price}")]
-    MaxSpreadAssertion {price: Decimal},
+    MaxSpreadAssertion { price: Decimal },
 }
