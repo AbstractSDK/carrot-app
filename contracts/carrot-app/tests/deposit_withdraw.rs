@@ -62,7 +62,6 @@ fn deposit_lands() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    dbg!(sum);
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
     Ok(())
 }
@@ -196,5 +195,66 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
     assert!(position_not_found
         .to_string()
         .contains("position not found"));
+    Ok(())
+}
+
+#[test]
+fn deposit_slippage() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    let deposit_amount = 5_000;
+    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
+    // Create position
+    create_position(
+        &carrot_app,
+        coins(deposit_amount, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
+
+    // Do the deposit of asset0 with incorrect belief_price1
+    let e = carrot_app
+        .deposit(
+            vec![coin(deposit_amount, USDT.to_owned())],
+            None,
+            Some(Decimal::zero()),
+            None,
+        )
+        .unwrap_err();
+    assert!(e.to_string().contains("exceeds max spread limit"));
+
+    // Do the deposit of asset1 with incorrect belief_price0
+    let e = carrot_app
+        .deposit(
+            vec![coin(deposit_amount, USDC.to_owned())],
+            Some(Decimal::zero()),
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert!(e.to_string().contains("exceeds max spread limit"));
+
+    // Do the deposits of asset0 with correct belief_price
+    carrot_app.deposit(
+        vec![coin(deposit_amount, USDT.to_owned())],
+        None,
+        Some(Decimal::one()),
+        Some(Decimal::percent(10)),
+    )?;
+    // Do the deposits of asset1 with correct belief_price
+    carrot_app.deposit(
+        vec![coin(deposit_amount, USDT.to_owned())],
+        Some(Decimal::one()),
+        None,
+        Some(Decimal::percent(10)),
+    )?;
+
+    // Check almost everything landed
+    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
     Ok(())
 }

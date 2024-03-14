@@ -148,7 +148,7 @@ pub fn query_price(
         if let Some(belief_price) = belief_price1 {
             ensure!(
                 belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion {}
+                AppError::MaxSpreadAssertion { price }
             );
         }
         price
@@ -162,7 +162,7 @@ pub fn query_price(
         if let Some(belief_price) = belief_price0 {
             ensure!(
                 belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion {}
+                AppError::MaxSpreadAssertion { price }
             );
         }
         price

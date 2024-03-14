@@ -1,7 +1,7 @@
 use abstract_app::abstract_sdk::AbstractSdkError;
 use abstract_app::AppError as AbstractAppError;
 use abstract_app::{abstract_core::AbstractError, objects::ans_host::AnsHostError};
-use cosmwasm_std::{Coin, StdError};
+use cosmwasm_std::{Coin, Decimal, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
 use cw_utils::ParseReplyError;
@@ -71,6 +71,6 @@ pub enum AppError {
     #[error("Position already exists. Please withdraw all funds before creating a new position")]
     PositionExists {},
 
-    #[error("Operation exceeds max spread limit")]
-    MaxSpreadAssertion {},
+    #[error("Operation exceeds max spread limit, price: {price}")]
+    MaxSpreadAssertion {price: Decimal},
 }
