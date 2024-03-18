@@ -35,14 +35,14 @@ pub fn execute_handler(
     msg: AppExecuteMsg,
 ) -> AppResult {
     match msg {
-        /// Create a position for a supercharged liquidity pool
-        /// Example: A user wants to create a liquidity position with 1000USDC and 1000USDT within a specifc range
+        // Create a position for a supercharged liquidity pool
+        // Example: A user wants to create a liquidity position with 1000USDC and 1000USDT within a specifc range
         AppExecuteMsg::CreatePosition(create_position_msg) => {
             create_position(deps, env, info, app, create_position_msg)
         }
-        /// This adds funds to an already existing position
-        /// Example: A user who has already a position with 1000USDC and 1000USDT would like to add 200USDC and 200USDT
-        /// This function is Permissioned
+        // This adds funds to an already existing position
+        // Example: A user who has already a position with 1000USDC and 1000USDT would like to add 200USDC and 200USDT
+        // This function is Permissioned
         AppExecuteMsg::Deposit {
             funds,
             max_spread,
