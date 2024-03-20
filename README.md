@@ -21,9 +21,13 @@ This contract does not hold custody of the funds, instead it gets the authz perm
 
 ## Entrypoints
 
+### Instantiation
+
+During the contract
+
 ### Execute Messages
 
-- CreatePosition: Creates a position in the liquidity pool
+- CreatePosition: Creates a position in the liquidity pool, the liquidity pool id is set during the contract instantiation.
 - Deposit: Deposits funds into the pool
 - Withdraw: Withdraws a specified amount of funds from the pool
 - WithdrawAll: Withdraws all funds from the pool
