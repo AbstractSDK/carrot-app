@@ -11,5 +11,5 @@ abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", ta
 abstract-client = { version = "0.21.0" }
 
 
-[patch.crates-io]
-osmosis-test-tube = { path = "../test-tube/packages/osmosis-test-tube" }
+# [patch.crates-io]
+# osmosis-test-tube = { path = "../test-tube/packages/osmosis-test-tube" }

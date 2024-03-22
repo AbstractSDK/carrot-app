@@ -46,8 +46,8 @@ fn create_position(
 
     // 2. Create a position
     let tokens = cosmwasm_to_proto_coins(funds);
-    let msg = app.executor(deps).execute_with_reply(
-        vec![AccountAction::from_vec(vec![MsgCreatePosition {
+    let msg = app.executor(deps).execute_with_reply_and_data(
+        MsgCreatePosition {
             pool_id: params.pool_id,
             sender: proxy_addr.to_string(),
             lower_tick: params.lower_tick,
@@ -55,7 +55,8 @@ fn create_position(
             tokens_provided: tokens,
             token_min_amount0: "0".to_string(),
             token_min_amount1: "0".to_string(),
-        }])],
+        }
+        .into(),
         ReplyOn::Success,
         OSMOSIS_CREATE_POSITION_REPLY_ID,
     )?;
