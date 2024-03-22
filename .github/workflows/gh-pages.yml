@@ -2,7 +2,7 @@ name: framwork-gh-pages-deploy
 
 on:
   push:
-    branches: [main]
+    branches: [katarina/docs ]
     paths:
       - "docs/**"
     tags:
