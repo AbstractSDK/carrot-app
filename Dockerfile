@@ -32,4 +32,4 @@ RUN mkdir ~/.cw-orchestrator
 RUN echo "{}" > ~/.cw-orchestrator/state.json
 
 # Command to run the binary
-CMD ["./prod", "--fcd", "1d", "--acd", "1h"]
+CMD ["./prod", "--fcd", "1d", "--acd", "1h", "--grpcs", "https://grpc.osmosis.zone:443"]
