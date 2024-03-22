@@ -10,7 +10,6 @@ use cosmos_sdk_proto::{
 use cw_orch::{
     anyhow,
     daemon::{queriers::Authz, Daemon},
-    environment::TxHandler,
     prelude::*,
 };
 use log::{log, Level};
@@ -38,8 +37,6 @@ use abstract_app::{
     abstract_interface::VCQueryFns,
     objects::module::{ModuleInfo, ModuleStatus},
 };
-
-use std::iter::Extend;
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
