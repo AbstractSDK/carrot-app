@@ -7,9 +7,11 @@ use abstract_app::objects::module::ModuleInfo;
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_dex_adapter::DEX_ADAPTER_ID;
 use abstract_sdk::core::manager::{self, ModuleInstallConfig};
-use carrot_app::contract::APP_ID;
-use carrot_app::msg::{AppInstantiateMsg, CreatePositionMessage};
-use carrot_app::state::AutocompoundRewardsConfig;
+use carrot_app::contract::{APP_ID, OSMOSIS};
+use carrot_app::msg::AppInstantiateMsg;
+use carrot_app::state::{AutocompoundConfig, AutocompoundRewardsConfig};
+use carrot_app::yield_sources::yield_type::{ConcentratedPoolParams, YieldType};
+use carrot_app::yield_sources::{BalanceStrategy, BalanceStrategyElement, YieldSource};
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
@@ -64,7 +66,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     chain: Chain,
     pool_id: u64,
     gas_pool_id: u64,
-    create_position: Option<CreatePositionMessage>,
+    initial_deposit: Option<Vec<Coin>>,
 ) -> anyhow::Result<Application<Chain, carrot_app::AppInterface<Chain>>> {
     let asset0 = USDT.to_owned();
     let asset1 = USDC.to_owned();
@@ -114,66 +116,39 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // The savings app
     publisher.publish_app::<carrot_app::contract::interface::AppInterface<Chain>>()?;
 
-    let create_position_on_init = create_position.is_some();
     let init_msg = AppInstantiateMsg {
-        pool_id,
         // 5 mins
-        autocompound_cooldown_seconds: Uint64::new(300),
-        autocompound_rewards_config: AutocompoundRewardsConfig {
-            gas_asset: AssetEntry::new(REWARD_ASSET),
-            swap_asset: AssetEntry::new(USDC),
-            reward: Uint128::new(1000),
-            min_gas_balance: Uint128::new(2000),
-            max_gas_balance: Uint128::new(10000),
+        autocompound_config: AutocompoundConfig {
+            cooldown_seconds: Uint64::new(300),
+            rewards: AutocompoundRewardsConfig {
+                gas_asset: AssetEntry::new(REWARD_ASSET),
+                swap_asset: AssetEntry::new(USDC),
+                reward: Uint128::new(1000),
+                min_gas_balance: Uint128::new(2000),
+                max_gas_balance: Uint128::new(10000),
+            },
         },
-        create_position,
+        balance_strategy: BalanceStrategy(vec![BalanceStrategyElement {
+            yield_source: YieldSource {
+                expected_tokens: vec![
+                    (USDT.to_string(), Decimal::percent(50)),
+                    (USDC.to_string(), Decimal::percent(50)),
+                ],
+                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                    pool_id,
+                    lower_tick: INITIAL_LOWER_TICK,
+                    upper_tick: INITIAL_UPPER_TICK,
+                    position_id: 0,
+                }),
+            },
+            share: Decimal::one(),
+        }]),
+        deposit: initial_deposit,
+        dex: OSMOSIS.to_string(),
     };
-    // If we create position on instantiate - give auth
-    let carrot_app = if create_position_on_init {
-        // TODO: We can't get account factory or module factory objects from the client.
-        // get Account id of the upcoming sub-account
-        let next_local_account_id = client.next_local_account_id()?;
 
-        let savings_app_addr = client
-            .module_instantiate2_address::<carrot_app::AppInterface<Chain>>(&AccountId::local(
-                next_local_account_id,
-            ))?;
-
-        // Give all authzs and create subaccount with app in single tx
-        let mut msgs = give_authorizations_msgs(&client, savings_app_addr)?;
-        let create_sub_account_message = Any {
-            type_url: MsgExecuteContract::TYPE_URL.to_owned(),
-            value: MsgExecuteContract {
-                sender: chain.sender().to_string(),
-                contract: publisher.account().manager()?.to_string(),
-                msg: to_json_vec(&manager::ExecuteMsg::CreateSubAccount {
-                    name: "bob".to_owned(),
-                    description: None,
-                    link: None,
-                    base_asset: None,
-                    namespace: None,
-                    install_modules: vec![
-                        ModuleInstallConfig::new(ModuleInfo::from_id_latest(DEX_ADAPTER_ID)?, None),
-                        ModuleInstallConfig::new(
-                            ModuleInfo::from_id_latest(APP_ID)?,
-                            Some(to_json_binary(&init_msg)?),
-                        ),
-                    ],
-                    account_id: Some(next_local_account_id),
-                })?,
-                funds: vec![],
-            }
-            .to_proto_bytes(),
-        };
-        msgs.push(create_sub_account_message);
-        let _ = chain.commit_any::<MsgGrantResponse>(msgs, None)?;
-
-        // Now get Application struct
-        let account = client.account_from(AccountId::local(next_local_account_id))?;
-        account.application::<carrot_app::AppInterface<Chain>>()?
-    } else {
-        // We install the carrot-app
-        let carrot_app: Application<Chain, carrot_app::AppInterface<Chain>> =
+    // We install the carrot-app
+    let carrot_app: Application<Chain, carrot_app::AppInterface<Chain>> =
         publisher
             .account()
             .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<Chain>>(
@@ -181,8 +156,6 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 Empty {},
                 &[],
             )?;
-        carrot_app
-    };
     // We update authorized addresses on the adapter for the app
     dex_adapter.execute(
         &abstract_dex_adapter::msg::ExecuteMsg::Base(
@@ -198,29 +171,6 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     )?;
 
     Ok(carrot_app)
-}
-
-pub fn create_position<Chain: CwEnv>(
-    app: &Application<Chain, carrot_app::AppInterface<Chain>>,
-    funds: Vec<Coin>,
-    asset0: Coin,
-    asset1: Coin,
-) -> anyhow::Result<Chain::Response> {
-    app.execute(
-        &carrot_app::msg::AppExecuteMsg::CreatePosition(CreatePositionMessage {
-            lower_tick: INITIAL_LOWER_TICK,
-            upper_tick: INITIAL_UPPER_TICK,
-            funds,
-            asset0,
-            asset1,
-            max_spread: None,
-            belief_price0: None,
-            belief_price1: None,
-        })
-        .into(),
-        None,
-    )
-    .map_err(Into::into)
 }
 
 pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
@@ -322,107 +272,10 @@ pub fn setup_test_tube(
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let create_position_msg = create_position.then(||
+    let initial_deposit = create_position.then(||
         // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
-        CreatePositionMessage {
-        lower_tick: INITIAL_LOWER_TICK,
-        upper_tick: INITIAL_UPPER_TICK,
-        funds: coins(100_000, USDT),
-        asset0: coin(1_000_000, USDT),
-        asset1: coin(1_000_000, USDC),
-            max_spread: None,
-            belief_price0: None,
-            belief_price1: None,
-    });
-    let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
+        vec![coin(1_000_000, USDT),coin(1_000_000, USDC)]);
+    let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, initial_deposit)?;
 
-    // Give authorizations if not given already
-    if !create_position {
-        let client = AbstractClient::new(chain)?;
-        give_authorizations(&client, carrot_app.addr_str()?)?;
-    }
     Ok((pool_id, carrot_app))
-}
-
-pub fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
-    client: &AbstractClient<Chain>,
-    savings_app_addr: impl Into<String>,
-) -> Result<Vec<Any>, anyhow::Error> {
-    let dex_fee_account = client.account_from(AccountId::local(0))?;
-    let dex_fee_addr = dex_fee_account.proxy()?.to_string();
-    let chain = client.environment().clone();
-
-    let authorization_urls = [
-        MsgCreatePosition::TYPE_URL,
-        MsgSwapExactAmountIn::TYPE_URL,
-        MsgAddToPosition::TYPE_URL,
-        MsgWithdrawPosition::TYPE_URL,
-        MsgCollectIncentives::TYPE_URL,
-        MsgCollectSpreadRewards::TYPE_URL,
-    ]
-    .map(ToOwned::to_owned);
-    let savings_app_addr: String = savings_app_addr.into();
-    let granter = chain.sender().to_string();
-    let grantee = savings_app_addr.clone();
-
-    let dex_spend_limit = vec![
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: USDC.to_owned(),
-            amount: LOTS.to_string(),
-        },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: USDT.to_owned(),
-            amount: LOTS.to_string(),
-        },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: REWARD_DENOM.to_owned(),
-            amount: LOTS.to_string(),
-        }];
-    let dex_fee_authorization = Any {
-        value: MsgGrant {
-            granter: chain.sender().to_string(),
-            grantee: grantee.clone(),
-            grant: Some(Grant {
-                authorization: Some(
-                    SendAuthorization {
-                        spend_limit: dex_spend_limit,
-                        allow_list: vec![dex_fee_addr, savings_app_addr],
-                    }
-                    .to_any(),
-                ),
-                expiration: None,
-            }),
-        }
-        .encode_to_vec(),
-        type_url: MsgGrant::TYPE_URL.to_owned(),
-    };
-
-    let msgs: Vec<Any> = authorization_urls
-        .into_iter()
-        .map(|msg| Any {
-            value: MsgGrant {
-                granter: granter.clone(),
-                grantee: grantee.clone(),
-                grant: Some(Grant {
-                    authorization: Some(GenericAuthorization { msg }.to_any()),
-                    expiration: None,
-                }),
-            }
-            .encode_to_vec(),
-            type_url: MsgGrant::TYPE_URL.to_owned(),
-        })
-        .chain(iter::once(dex_fee_authorization))
-        .collect();
-    Ok(msgs)
-}
-
-pub fn give_authorizations<Chain: CwEnv + Stargate>(
-    client: &AbstractClient<Chain>,
-    savings_app_addr: impl Into<String>,
-) -> Result<(), anyhow::Error> {
-    let msgs = give_authorizations_msgs(client, savings_app_addr)?;
-    client
-        .environment()
-        .commit_any::<MsgGrantResponse>(msgs, None)?;
-    Ok(())
 }

@@ -1,23 +1,48 @@
+use std::collections::HashMap;
+
 use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
+use cosmwasm_std::{
+    ensure, Addr, Coin, Decimal, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64,
+};
 use cw_storage_plus::Item;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     ConcentratedliquidityQuerier, FullPositionBreakdown,
 };
 
+use crate::yield_sources::osmosis_cl_pool::OsmosisPosition;
+use crate::yield_sources::BalanceStrategy;
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
 pub const CONFIG: Item<Config> = Item::new("config");
-pub const POSITION: Item<Position> = Item::new("position");
+pub const POSITION: Item<AutocompoundState> = Item::new("position");
 pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
+
+// TEMP VARIABLES FOR DEPOSITING INTO ONE STRATEGY
+pub const TEMP_CURRENT_COIN: Item<Coin> = Item::new("temp_current_coins");
+pub const TEMP_EXPECTED_SWAP_COIN: Item<Uint128> = Item::new("temp_expected_swap_coin");
+pub const TEMP_DEPOSIT_COINS: Item<Vec<Coin>> = Item::new("temp_deposit_coins");
+
+// Storage for each yield source
+pub const OSMOSIS_POSITION: Item<OsmosisPosition> = Item::new("osmosis_cl_position");
 
 #[cw_serde]
 pub struct Config {
-    pub pool_config: PoolConfig,
-    pub autocompound_cooldown_seconds: Uint64,
-    pub autocompound_rewards_config: AutocompoundRewardsConfig,
+    pub balance_strategy: BalanceStrategy,
+    pub autocompound_config: AutocompoundConfig,
+    pub dex: String,
+}
+
+/// General auto-compound parameters.
+/// Includes the cool down and the technical funds config
+#[cw_serde]
+pub struct AutocompoundConfig {
+    /// Seconds to wait before autocompound is incentivized.
+    /// Allows the user to configure when the auto-compound happens
+    pub cooldown_seconds: Uint64,
+    /// Configuration of rewards to the address who helped to execute autocompound
+    pub rewards: AutocompoundRewardsConfig,
 }
 
 /// Configuration on how rewards should be distributed
@@ -68,6 +93,21 @@ pub struct PoolConfig {
     pub asset1: AssetEntry,
 }
 
+pub fn compute_total_value(
+    funds: &[Coin],
+    exchange_rates: &HashMap<String, Decimal>,
+) -> AppResult<Uint128> {
+    funds
+        .iter()
+        .map(|c| {
+            let exchange_rate = exchange_rates
+                .get(&c.denom)
+                .ok_or(AppError::NoExchangeRate(c.denom.clone()))?;
+            Ok(c.amount * *exchange_rate)
+        })
+        .sum()
+}
+
 pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
     if info.sender == env.contract.address {
         Ok(())
@@ -77,29 +117,11 @@ pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
 }
 
 #[cw_serde]
-pub struct Position {
-    pub owner: Addr,
-    pub position_id: u64,
+pub struct AutocompoundState {
     pub last_compound: Timestamp,
 }
 
-pub fn get_position(deps: Deps) -> AppResult<Position> {
-    POSITION
-        .load(deps.storage)
-        .map_err(|_| AppError::NoPosition {})
-}
-
-pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
-    let position = get_position(deps)?;
-
-    ConcentratedliquidityQuerier::new(&deps.querier)
-        .position_by_id(position.position_id)
-        .map_err(|e| AppError::UnableToQueryPosition(position.position_id, e))?
-        .position
-        .ok_or(AppError::NoPosition {})
-}
-
-pub fn get_position_status(
+pub fn get_autocompound_status(
     storage: &dyn Storage,
     env: &Env,
     cooldown_seconds: u64,

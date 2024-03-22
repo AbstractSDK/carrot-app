@@ -73,4 +73,19 @@ pub enum AppError {
 
     #[error("Operation exceeds max spread limit, price: {price}")]
     MaxSpreadAssertion { price: Decimal },
+
+    #[error(
+        "The given strategy is not valid, the sum of share : {} is not 1",
+        share_sum
+    )]
+    InvalidStrategySum { share_sum: Decimal },
+
+    #[error("The given strategy is not valid, there must be at least one element")]
+    InvalidEmptyStrategy {},
+
+    #[error("Exchange Rate not given for {0}")]
+    NoExchangeRate(String),
+
+    #[error("Deposited total value is zero")]
+    NoDeposit {},
 }
