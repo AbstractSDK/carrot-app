@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# Run your custom script here
+
 echo "Running entrypoint script..."
 
 if [ -n "$GRPC_URL" ]; then
