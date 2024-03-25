@@ -208,7 +208,6 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let resp: CompoundStatusResponse = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee
-    // To discuss if we really need it?
 
     if resp.rewards_available {
         // Execute autocompound
@@ -254,22 +253,27 @@ mod utils {
         // Check if authz is indeed given
         let authz_querier: Authz = daemon.querier();
         let authz_grantee = contract_addr.to_string();
-        let generic_authorizations: Vec<GenericAuthorization> = daemon
+
+        let grants = daemon
             .rt_handle
             .block_on(async {
                 authz_querier
                     ._grants(
                         granter.to_string(),
                         authz_grantee.clone(),
-                        GenericAuthorization::TYPE_URL.to_string(),
+                        // Get every authorization
+                        "".to_owned(),
                         None,
                     )
                     .await
             })?
-            .grants
-            .into_iter()
-            .map(|grant| GenericAuthorization::decode(&*grant.authorization.unwrap().value))
-            .collect::<Result<_, _>>()?;
+            .grants;
+        let generic_authorizations: Vec<GenericAuthorization> = grants
+            .iter()
+            .filter_map(|grant| {
+                GenericAuthorization::decode(&*grant.authorization.clone().unwrap().value).ok()
+            })
+            .collect();
         // Check all generic authorizations are in place
         for &authorization_url in AUTHORIZATION_URLS {
             if !generic_authorizations.contains(&GenericAuthorization {
@@ -283,17 +287,13 @@ mod utils {
         if !generic_authorizations.contains(&GenericAuthorization {
             msg: MsgSend::TYPE_URL.to_owned(),
         }) {
-            let send_authorizations = daemon.rt_handle.block_on(async {
-                authz_querier
-                    ._grants(
-                        granter.to_string(),
-                        authz_grantee,
-                        SendAuthorization::TYPE_URL.to_string(),
-                        None,
-                    )
-                    .await
-            })?;
-            if send_authorizations.grants.is_empty() {
+            let send_authorizations: Vec<SendAuthorization> = grants
+                .iter()
+                .filter_map(|grant| {
+                    SendAuthorization::decode(&*grant.authorization.clone().unwrap().value).ok()
+                })
+                .collect();
+            if send_authorizations.is_empty() {
                 return Ok(false);
             }
         }
