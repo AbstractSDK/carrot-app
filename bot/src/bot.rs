@@ -93,7 +93,7 @@ impl Metrics {
         .unwrap();
         let contract_instances_to_autocompound = IntGauge::new(
             "carrot_app_bot_contract_instances_to_autocompound",
-            "Number of instances that are eligible tobe compounded",
+            "Number of instances that are eligible to be compounded",
         )
         .unwrap();
         registry.register(Box::new(fetch_count.clone())).unwrap();
@@ -192,7 +192,7 @@ impl Bot {
         self.metrics
             .fetch_instances_count
             .set(fetch_instances_count as i64);
-        self.contract_instances_to_ac = contract_instances_to_autocompound.clone();
+        self.contract_instances_to_ac.clone_from(&contract_instances_to_autocompound);
         self.metrics
             .contract_instances_to_autocompound
             .set(contract_instances_to_autocompound.len() as i64);
