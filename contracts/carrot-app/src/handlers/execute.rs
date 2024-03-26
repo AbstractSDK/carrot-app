@@ -4,7 +4,7 @@ use crate::{
     handlers::query::query_balance,
     msg::{AppExecuteMsg, ExecuteMsg},
     state::{assert_contract, get_autocompound_status, Config, CONFIG},
-    yield_sources::BalanceStrategy,
+    yield_sources::{BalanceStrategy, ExpectedToken},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
@@ -27,7 +27,10 @@ pub fn execute_handler(
     msg: AppExecuteMsg,
 ) -> AppResult {
     match msg {
-        AppExecuteMsg::Deposit { funds } => deposit(deps, env, info, funds, app),
+        AppExecuteMsg::Deposit {
+            funds,
+            yield_sources_params,
+        } => deposit(deps, env, info, funds, yield_sources_params, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, amount, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
         AppExecuteMsg::Rebalance { strategy } => rebalance(deps, env, info, strategy, app),
@@ -50,15 +53,23 @@ pub fn execute_handler(
     }
 }
 
-fn deposit(deps: DepsMut, env: Env, info: MessageInfo, funds: Vec<Coin>, app: App) -> AppResult {
+fn deposit(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    funds: Vec<Coin>,
+    yield_source_params: Option<Vec<Option<Vec<ExpectedToken>>>>,
+    app: App,
+) -> AppResult {
     // Only the admin (manager contracts or account owner) can deposit as well as the contract itself
     app.admin
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
 
-    let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, &app)?;
-    deps.api
-        .debug(&format!("All deposit messages {:?}", deposit_msgs));
+    let yield_source_params = yield_source_params
+        .unwrap_or_else(|| vec![None; query_strategy(deps.as_ref()).unwrap().strategy.0.len()]);
+
+    let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
 
     Ok(app.response("deposit").add_messages(deposit_msgs))
 }
@@ -103,25 +114,23 @@ fn rebalance(
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
 
+    let strategy = query_strategy(deps.as_ref())?.strategy;
     // We withdraw all rewards from protocols
-    let (rewards, collect_rewards_msgs): (Vec<Vec<Coin>>, Vec<ExecutorMsg>) =
-        query_strategy(deps.as_ref())?
-            .strategy
-            .0
-            .into_iter()
-            .map(|s| {
-                let (rewards, raw_msgs) =
-                    s.yield_source.ty.withdraw_rewards(deps.as_ref(), &app)?;
+    let (rewards, collect_rewards_msgs): (Vec<Vec<Coin>>, Vec<ExecutorMsg>) = strategy
+        .0
+        .into_iter()
+        .map(|s| {
+            let (rewards, raw_msgs) = s.yield_source.ty.withdraw_rewards(deps.as_ref(), &app)?;
 
-                Ok::<_, AppError>((
-                    rewards,
-                    app.executor(deps.as_ref())
-                        .execute(vec![AccountAction::from_vec(raw_msgs)])?,
-                ))
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .unzip();
+            Ok::<_, AppError>((
+                rewards,
+                app.executor(deps.as_ref())
+                    .execute(vec![AccountAction::from_vec(raw_msgs)])?,
+            ))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .unzip();
 
     let all_rewards: Vec<Coin> = rewards.into_iter().flatten().collect();
     // If there are no rewards, we can't do anything
@@ -134,6 +143,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
             funds: all_rewards,
+            yield_sources_params: None,
         }))?,
         funds: vec![],
     });
@@ -171,6 +181,7 @@ pub fn _inner_deposit(
     deps: Deps,
     env: &Env,
     funds: Vec<Coin>,
+    yield_source_params: Vec<Option<Vec<ExpectedToken>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     // We determine the value of all tokens that will be used inside this function
@@ -184,11 +195,23 @@ pub fn _inner_deposit(
                 s.yield_source
                     .expected_tokens
                     .into_iter()
-                    .map(|(denom, _)| denom)
+                    .map(|ExpectedToken { denom, share: _ }| denom)
             })
             .chain(funds.iter().map(|f| f.denom.clone())),
         app,
     )?;
+
+    // We correct the strategy if specified in parameters
+    let mut current_strategy_status = query_strategy(deps)?.strategy;
+    current_strategy_status
+        .0
+        .iter_mut()
+        .zip(yield_source_params)
+        .for_each(|(strategy, params)| {
+            if let Some(param) = params {
+                strategy.yield_source.expected_tokens = param;
+            }
+        });
 
     let deposit_strategies = query_strategy(deps)?
         .strategy

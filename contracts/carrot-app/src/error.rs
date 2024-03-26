@@ -91,4 +91,7 @@ pub enum AppError {
 
     #[error("Wrong yield type when executing internal operations")]
     WrongYieldType {},
+
+    #[error("Invalid strategy format, check shares and parameters")]
+    InvalidStrategy {},
 }

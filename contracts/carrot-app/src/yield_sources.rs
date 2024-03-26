@@ -23,14 +23,14 @@ use self::yield_type::YieldType;
 #[cw_serde]
 pub struct YieldSource {
     /// This id (denom, share)
-    pub expected_tokens: Vec<(String, Decimal)>,
+    pub expected_tokens: Vec<ExpectedToken>,
     pub ty: YieldType,
 }
 
 impl YieldSource {
     pub fn check(&self) -> AppResult<()> {
         // First we check the share sums the 100
-        let share_sum: Decimal = self.expected_tokens.iter().map(|e| e.1).sum();
+        let share_sum: Decimal = self.expected_tokens.iter().map(|e| e.share).sum();
         ensure_eq!(
             share_sum,
             Decimal::one(),
@@ -42,8 +42,32 @@ impl YieldSource {
         );
 
         // Then we check every yield strategy underneath
+
+        match &self.ty {
+            YieldType::ConcentratedLiquidityPool(_) => {
+                // A valid CL pool strategy is for 2 assets
+                ensure_eq!(self.expected_tokens.len(), 2, AppError::InvalidStrategy {});
+            }
+            YieldType::Mars(denom) => {
+                // We verify there is only one element in the shares vector
+                ensure_eq!(self.expected_tokens.len(), 1, AppError::InvalidStrategy {});
+                // We verify the first element correspond to the mars deposit denom
+                ensure_eq!(
+                    &self.expected_tokens[0].denom,
+                    denom,
+                    AppError::InvalidStrategy {}
+                );
+            }
+        }
+
         Ok(())
     }
+}
+
+#[cw_serde]
+pub struct ExpectedToken {
+    pub denom: String,
+    pub share: Decimal,
 }
 
 // Related to balance strategies
@@ -102,7 +126,7 @@ impl BalanceStrategy {
                     .yield_source
                     .expected_tokens
                     .iter()
-                    .map(|(denom, share)| B {
+                    .map(|ExpectedToken { denom, share }| B {
                         denom: denom.clone(),
                         raw_funds: Uint128::zero(),
                         remaining_amount: share * source.share * total_value,
@@ -121,7 +145,7 @@ impl BalanceStrategy {
                     .expected_tokens
                     .iter()
                     .zip(status.iter_mut())
-                    .find(|((denom, _share), _status)| this_coin.denom.eq(denom))
+                    .find(|(ExpectedToken { denom, share: _ }, _status)| this_coin.denom.eq(denom))
                     .map(|(_, status)| status);
 
                 if let Some(status) = this_denom_status {

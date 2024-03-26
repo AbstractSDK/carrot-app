@@ -5,7 +5,7 @@ use cw_asset::AssetBase;
 use crate::{
     contract::App,
     state::AutocompoundConfig,
-    yield_sources::{yield_type::YieldType, BalanceStrategy, OneDepositStrategy},
+    yield_sources::{yield_type::YieldType, BalanceStrategy, ExpectedToken, OneDepositStrategy},
 };
 
 // This is used for type safety and re-exporting the contract endpoint structs.
@@ -34,7 +34,15 @@ pub enum AppExecuteMsg {
     /// Those funds will be distributed between yield sources according to the current strategy
     /// TODO : for now only send stable coins that have the same value as USD
     /// More tokens can be included when the oracle adapter is live
-    Deposit { funds: Vec<Coin> },
+    Deposit {
+        funds: Vec<Coin>,
+        /// This is additional paramters used to change the funds repartition when doing an additional deposit
+        /// This is not used for a first deposit into a strategy that hasn't changed for instance
+        /// This is an options because this is not mandatory
+        /// The vector then has option inside of it because we might not want to change parameters for all strategies
+        /// We might not use a vector but use a (usize, Vec<ExpectedToken>) instead to avoid having to pass a full vector everytime
+        yield_sources_params: Option<Vec<Option<Vec<ExpectedToken>>>>,
+    },
     /// Partial withdraw of the funds available on the app
     /// If amount is omitted, withdraws everything that is on the app
     Withdraw { amount: Option<Uint128> },
@@ -105,6 +113,7 @@ pub struct AvailableRewardsResponse {
 #[cw_serde]
 pub struct AssetsBalanceResponse {
     pub balances: Vec<Coin>,
+    pub total_value: Uint128,
 }
 
 #[cw_serde]

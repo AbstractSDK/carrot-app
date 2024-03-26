@@ -11,7 +11,9 @@ use carrot_app::contract::{APP_ID, OSMOSIS};
 use carrot_app::msg::AppInstantiateMsg;
 use carrot_app::state::{AutocompoundConfig, AutocompoundRewardsConfig};
 use carrot_app::yield_sources::yield_type::{ConcentratedPoolParams, YieldType};
-use carrot_app::yield_sources::{BalanceStrategy, BalanceStrategyElement, YieldSource};
+use carrot_app::yield_sources::{
+    BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
+};
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
@@ -131,8 +133,14 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         balance_strategy: BalanceStrategy(vec![BalanceStrategyElement {
             yield_source: YieldSource {
                 expected_tokens: vec![
-                    (USDT.to_string(), Decimal::percent(50)),
-                    (USDC.to_string(), Decimal::percent(50)),
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
                 ],
                 ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                     pool_id,

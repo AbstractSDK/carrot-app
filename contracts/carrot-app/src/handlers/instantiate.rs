@@ -28,6 +28,7 @@ pub fn instantiate_handler(
         .rewards
         .check(deps.as_ref(), &msg.dex, ans.host())?;
 
+    let strategy_len = msg.balance_strategy.0.len();
     let config: Config = Config {
         dex: msg.dex,
         balance_strategy: msg.balance_strategy,
@@ -39,7 +40,8 @@ pub fn instantiate_handler(
 
     // If provided - do an initial deposit
     if let Some(funds) = msg.deposit {
-        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, &app)?;
+        let deposit_msgs =
+            _inner_deposit(deps.as_ref(), &env, funds, vec![None; strategy_len], &app)?;
 
         response = response.add_messages(deposit_msgs);
     }

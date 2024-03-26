@@ -1,10 +1,11 @@
 use crate::contract::{App, AppResult};
+use crate::error::AppError;
 use abstract_app::traits::AccountIdentification;
 use abstract_app::{
     objects::{AnsAsset, AssetEntry},
     traits::AbstractNameService,
 };
-use cosmwasm_std::{Coin, CosmosMsg, Deps, SubMsg, Uint128};
+use cosmwasm_std::{ensure_eq, Coin, CosmosMsg, Decimal, Deps, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 pub fn deposit(deps: Deps, denom: String, amount: Uint128, app: &App) -> AppResult<Vec<SubMsg>> {
@@ -52,6 +53,16 @@ pub fn withdraw_rewards(
 ) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
     // Mars doesn't have rewards, it's automatically auto-compounded
     Ok((vec![], vec![]))
+}
+
+/// This computes the current shares between assets in the position
+/// For mars, there is no share, the yield strategy is for 1 asset only
+/// So we just return the given share (which should be valid)
+pub fn current_share(
+    deps: Deps,
+    shares: Vec<(String, Decimal)>,
+) -> AppResult<Vec<(String, Decimal)>> {
+    Ok(shares)
 }
 
 pub fn user_deposit(deps: Deps, denom: String, app: &App) -> AppResult<Uint128> {

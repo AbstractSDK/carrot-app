@@ -6,7 +6,7 @@ use abstract_app::{
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env};
+use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
 use cw_asset::Asset;
 
 use crate::{
@@ -96,16 +96,20 @@ fn query_config(deps: Deps) -> AppResult<Config> {
 
 pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
     let mut funds = Coins::default();
+    let mut total_value = Uint128::zero();
     query_strategy(deps)?.strategy.0.iter().try_for_each(|s| {
         let deposit_value = s.yield_source.ty.user_deposit(deps, app)?;
         for fund in deposit_value {
-            funds.add(fund)?;
+            let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+            funds.add(fund.clone())?;
+            total_value += fund.amount * exchange_rate;
         }
         Ok::<_, AppError>(())
     })?;
 
     Ok(AssetsBalanceResponse {
         balances: funds.into(),
+        total_value,
     })
 }
 

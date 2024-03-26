@@ -6,9 +6,8 @@ use abstract_interface::Abstract;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
-        osmosis_cl_pool::OsmosisPosition,
         yield_type::{ConcentratedPoolParams, YieldType},
-        BalanceStrategy, BalanceStrategyElement, YieldSource,
+        BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
     },
     AppInterface,
 };
@@ -55,7 +54,7 @@ fn deposit_lands() -> anyhow::Result<()> {
     )?;
 
     // Do the deposit
-    carrot_app.deposit(deposit_coins.clone())?;
+    carrot_app.deposit(deposit_coins.clone(), None)?;
     // Check almost everything landed
     let balances_after = query_balances(&carrot_app)?;
     assert!(balances_before < balances_after);
@@ -66,7 +65,7 @@ fn deposit_lands() -> anyhow::Result<()> {
         deposit_coins.clone(),
     )?;
     // Do the second deposit
-    let response = carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())])?;
+    let response = carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())], None)?;
     // Check almost everything landed
     let balances_after_second = query_balances(&carrot_app)?;
     assert!(balances_after < balances_after_second);
@@ -88,7 +87,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     let deposit_coins = coins(deposit_amount, USDT.to_owned());
     let proxy_addr = carrot_app.account().proxy()?;
     chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
-    carrot_app.deposit(deposit_coins)?;
+    carrot_app.deposit(deposit_coins, None)?;
 
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_withdraw = chain
@@ -147,7 +146,7 @@ fn deposit_multiple_assets() -> anyhow::Result<()> {
     let proxy_addr = carrot_app.account().proxy()?;
     let deposit_coins = vec![coin(234, USDC.to_owned()), coin(258, USDT.to_owned())];
     chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
-    carrot_app.deposit(deposit_coins)?;
+    carrot_app.deposit(deposit_coins, None)?;
 
     Ok(())
 }
@@ -160,8 +159,14 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 expected_tokens: vec![
-                    (USDT.to_string(), Decimal::percent(50)),
-                    (USDC.to_string(), Decimal::percent(50)),
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
                 ],
                 ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                     pool_id,
@@ -175,8 +180,14 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 expected_tokens: vec![
-                    (USDT.to_string(), Decimal::percent(50)),
-                    (USDC.to_string(), Decimal::percent(50)),
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
                 ],
                 ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                     pool_id,
@@ -199,7 +210,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
     )?;
-    carrot_app.deposit(deposit_coins)?;
+    carrot_app.deposit(deposit_coins, None)?;
     let balances_after = query_balances(&carrot_app)?;
 
     let slippage = Decimal::percent(4);

@@ -8,7 +8,6 @@ use cosmwasm_std::{
 };
 use cw_storage_plus::Item;
 
-use crate::yield_sources::yield_type::YieldType;
 use crate::yield_sources::BalanceStrategy;
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 

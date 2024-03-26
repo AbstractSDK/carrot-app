@@ -5,7 +5,7 @@ use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
         yield_type::{ConcentratedPoolParams, YieldType},
-        BalanceStrategy, BalanceStrategyElement, YieldSource,
+        BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
     },
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
@@ -21,8 +21,14 @@ fn rebalance_fails() -> anyhow::Result<()> {
             BalanceStrategyElement {
                 yield_source: YieldSource {
                     expected_tokens: vec![
-                        (USDT.to_string(), Decimal::percent(50)),
-                        (USDC.to_string(), Decimal::percent(50)),
+                        ExpectedToken {
+                            denom: USDT.to_string(),
+                            share: Decimal::percent(50),
+                        },
+                        ExpectedToken {
+                            denom: USDC.to_string(),
+                            share: Decimal::percent(50),
+                        },
                     ],
                     ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                         pool_id: 7,
@@ -36,8 +42,14 @@ fn rebalance_fails() -> anyhow::Result<()> {
             BalanceStrategyElement {
                 yield_source: YieldSource {
                     expected_tokens: vec![
-                        (USDT.to_string(), Decimal::percent(50)),
-                        (USDC.to_string(), Decimal::percent(50)),
+                        ExpectedToken {
+                            denom: USDT.to_string(),
+                            share: Decimal::percent(50),
+                        },
+                        ExpectedToken {
+                            denom: USDC.to_string(),
+                            share: Decimal::percent(50),
+                        },
                     ],
                     ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                         pool_id: 7,
@@ -64,8 +76,14 @@ fn rebalance_success() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 expected_tokens: vec![
-                    (USDT.to_string(), Decimal::percent(50)),
-                    (USDC.to_string(), Decimal::percent(50)),
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
                 ],
                 ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                     pool_id: 7,
@@ -79,8 +97,14 @@ fn rebalance_success() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 expected_tokens: vec![
-                    (USDT.to_string(), Decimal::percent(50)),
-                    (USDC.to_string(), Decimal::percent(50)),
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
                 ],
                 ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
                     pool_id: 7,

@@ -17,9 +17,6 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
         )));
     };
 
-    deps.api
-        .debug(&format!("Inside create position reply : {:x?}", b));
-
     let parsed = cw_utils::parse_execute_response_data(&b)?;
 
     // Parse create position response

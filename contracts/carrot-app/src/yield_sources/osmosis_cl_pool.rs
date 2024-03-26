@@ -3,14 +3,13 @@ use std::str::FromStr;
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    handlers::swap_helpers::DEFAULT_SLIPPAGE,
+    handlers::{query::query_exchange_rate, swap_helpers::DEFAULT_SLIPPAGE},
     replies::{OSMOSIS_ADD_TO_POSITION_REPLY_ID, OSMOSIS_CREATE_POSITION_REPLY_ID},
     state::CONFIG,
 };
 use abstract_app::{objects::AnsAsset, traits::AccountIdentification};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::Execution;
-use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{ensure, Coin, Coins, CosmosMsg, Decimal, Deps, Env, ReplyOn, SubMsg, Uint128};
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
@@ -63,8 +62,6 @@ fn create_position(
         OSMOSIS_CREATE_POSITION_REPLY_ID,
     )?;
 
-    deps.api.debug("Created position messages");
-
     Ok(vec![msg])
 }
 
@@ -104,9 +101,6 @@ fn raw_deposit(
         cosmwasm_std::ReplyOn::Success,
         OSMOSIS_ADD_TO_POSITION_REPLY_ID,
     )?;
-
-    deps.api
-        .debug(&format!("Add to position message {:?}", funds));
 
     Ok(vec![deposit_msg])
 }
@@ -203,6 +197,67 @@ pub fn withdraw_rewards(
     }
 
     Ok((rewards.to_vec(), msgs))
+}
+
+/// This computes the current shares between assets in the position
+/// For osmosis, it fetches the position and returns the current asset value ratio between assets
+/// This will be called everytime when analyzing the current strategy, even if the position doesn't exist
+/// This function should not error if the position doesn't exist
+pub fn current_share(
+    deps: Deps,
+    shares: Vec<(String, Decimal)>,
+    params: &ConcentratedPoolParams,
+    app: &App,
+) -> AppResult<Vec<(String, Decimal)>> {
+    let position_id = if let Some(position_id) = params.position_id {
+        position_id
+    } else {
+        // No position ? --> We return the target strategy
+        return Ok(shares);
+    };
+
+    let position = if let Ok(position) = get_osmosis_position_by_id(deps, position_id) {
+        position
+    } else {
+        // No position ? --> We return the target strategy
+        return Ok(shares);
+    };
+
+    let (denom0, value0) = if let Some(asset) = position.asset0 {
+        let exchange_rate = query_exchange_rate(deps, asset.denom.clone(), app)?;
+        let value = Uint128::from_str(&asset.amount)? * exchange_rate;
+        (Some(asset.denom), value)
+    } else {
+        (None, Uint128::zero())
+    };
+
+    let (denom1, value1) = if let Some(asset) = position.asset1 {
+        let exchange_rate = query_exchange_rate(deps, asset.denom.clone(), app)?;
+        let value = Uint128::from_str(&asset.amount)? * exchange_rate;
+        (Some(asset.denom), value)
+    } else {
+        (None, Uint128::zero())
+    };
+
+    let total_value = value0 + value1;
+    // No value ? --> We return the target strategy
+    // This should be unreachable
+    if total_value.is_zero() {
+        return Ok(shares);
+    }
+
+    if denom0.is_none() {
+        // If the first denom has no coins, all the value is in the second denom
+        Ok(vec![(denom1.unwrap(), Decimal::one())])
+    } else if denom1.is_none() {
+        // If the second denom has no coins, all the value is in the first denom
+        Ok(vec![(denom0.unwrap(), Decimal::one())])
+    } else {
+        Ok(vec![
+            (denom0.unwrap(), Decimal::from_ratio(value0, total_value)),
+            (denom1.unwrap(), Decimal::from_ratio(value1, total_value)),
+        ])
+    }
 }
 
 pub fn user_deposit(
