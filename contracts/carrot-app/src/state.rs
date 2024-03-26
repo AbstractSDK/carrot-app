@@ -7,11 +7,8 @@ use cosmwasm_std::{
     ensure, Addr, Coin, Decimal, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64,
 };
 use cw_storage_plus::Item;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
-    ConcentratedliquidityQuerier, FullPositionBreakdown,
-};
 
-use crate::yield_sources::osmosis_cl_pool::OsmosisPosition;
+use crate::yield_sources::yield_type::YieldType;
 use crate::yield_sources::BalanceStrategy;
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
@@ -23,9 +20,7 @@ pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
 pub const TEMP_CURRENT_COIN: Item<Coin> = Item::new("temp_current_coins");
 pub const TEMP_EXPECTED_SWAP_COIN: Item<Uint128> = Item::new("temp_expected_swap_coin");
 pub const TEMP_DEPOSIT_COINS: Item<Vec<Coin>> = Item::new("temp_deposit_coins");
-
-// Storage for each yield source
-pub const OSMOSIS_POSITION: Item<OsmosisPosition> = Item::new("osmosis_cl_position");
+pub const TEMP_CURRENT_YIELD: Item<usize> = Item::new("temp_current_yield_type");
 
 #[cw_serde]
 pub struct Config {

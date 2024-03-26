@@ -13,7 +13,7 @@ use crate::{
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
-use abstract_sdk::features::AbstractNameService;
+use abstract_sdk::{features::AbstractNameService, AccountAction, Execution, ExecutorMsg};
 use cosmwasm_std::{
     to_json_binary, wasm_execute, Coin, Coins, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo,
     StdError, SubMsg, Uint128, WasmMsg,
@@ -50,15 +50,17 @@ pub fn execute_handler(
         AppExecuteMsg::DepositOneStrategy {
             swap_strategy,
             yield_type,
-        } => deposit_one_strategy(deps, env, info, swap_strategy, yield_type, app),
+            yield_index,
+        } => deposit_one_strategy(deps, env, info, swap_strategy, yield_index, yield_type, app),
         AppExecuteMsg::ExecuteOneDepositSwapStep {
             asset_in,
             denom_out,
             expected_amount,
         } => execute_one_deposit_step(deps, env, info, asset_in, denom_out, expected_amount, app),
-        AppExecuteMsg::FinalizeDeposit { yield_type } => {
-            execute_finalize_deposit(deps, env, info, yield_type, app)
-        }
+        AppExecuteMsg::FinalizeDeposit {
+            yield_type,
+            yield_index,
+        } => execute_finalize_deposit(deps, env, info, yield_type, yield_index, app),
     }
 }
 
@@ -221,7 +223,8 @@ pub fn _inner_deposit(
                 .iter()
                 .map(|s| s.yield_source.ty.clone()),
         )
-        .map(|(strategy, yield_type)| strategy.deposit_msgs(env, yield_type))
+        .enumerate()
+        .map(|(index, (strategy, yield_type))| strategy.deposit_msgs(env, index, yield_type))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(deposit_msgs)
@@ -232,7 +235,7 @@ fn _inner_withdraw(
     _env: &Env,
     value: Option<Uint128>,
     app: &App,
-) -> AppResult<Vec<CosmosMsg>> {
+) -> AppResult<Vec<ExecutorMsg>> {
     // We need to select the share of each investment that needs to be withdrawn
     let withdraw_share = value
         .map(|value| {
@@ -268,13 +271,19 @@ fn _inner_withdraw(
                     Ok::<_, AppError>(this_withdraw_amount)
                 })
                 .transpose()?;
-            s.yield_source
+            let raw_msg = s
+                .yield_source
                 .ty
-                .withdraw(deps.as_ref(), this_withdraw_amount, app)
+                .withdraw(deps.as_ref(), this_withdraw_amount, app)?;
+
+            Ok::<_, AppError>(
+                app.executor(deps.as_ref())
+                    .execute(vec![AccountAction::from_vec(raw_msg)])?,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(withdraw_msgs.into_iter().flatten().collect())
+    Ok(withdraw_msgs.into_iter().collect())
 }
 
 // /// Sends autocompound rewards to the executor.

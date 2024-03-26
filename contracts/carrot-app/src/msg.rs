@@ -47,6 +47,7 @@ pub enum AppExecuteMsg {
     DepositOneStrategy {
         swap_strategy: OneDepositStrategy,
         yield_type: YieldType,
+        yield_index: usize,
     },
     /// Execute one Deposit Swap Step
     ExecuteOneDepositSwapStep {
@@ -55,7 +56,10 @@ pub enum AppExecuteMsg {
         expected_amount: Uint128,
     },
     /// Finalize the deposit after all swaps are executed
-    FinalizeDeposit { yield_type: YieldType },
+    FinalizeDeposit {
+        yield_type: YieldType,
+        yield_index: usize,
+    },
 }
 
 /// App query messages

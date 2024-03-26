@@ -5,11 +5,23 @@ resolver = "2"
 
 [workspace.dependencies]
 cw-orch = "0.20.1"
+
 abstract-app = { version = "0.21.0" }
 abstract-interface = { version = "0.21.0" }
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0" }
 abstract-client = { version = "0.21.0" }
+abstract-testing = { version = "0.21.0" }
+abstract-sdk = { version = "0.21.0", features = ["stargate"] }
 
 
-# [patch.crates-io]
-# osmosis-test-tube = { path = "../test-tube/packages/osmosis-test-tube" }
+[patch.crates-io]
+osmosis-test-tube = { path = "../test-tube/packages/osmosis-test-tube" }
+
+
+# This was added to account for the fix data forwaring in the proxy contract
+abstract-app = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-testing = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-core = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git" }

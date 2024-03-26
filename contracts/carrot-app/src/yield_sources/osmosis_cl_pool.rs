@@ -3,8 +3,8 @@ use std::str::FromStr;
 use crate::{
     contract::{App, AppResult},
     error::AppError,
+    handlers::query::query_strategy,
     replies::{OSMOSIS_ADD_TO_POSITION_REPLY_ID, OSMOSIS_CREATE_POSITION_REPLY_ID},
-    state::OSMOSIS_POSITION,
 };
 use abstract_app::traits::AccountIdentification;
 use abstract_sdk::{AccountAction, Execution};
@@ -66,17 +66,35 @@ fn create_position(
     Ok(vec![msg])
 }
 
-fn raw_deposit(deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
-    let pool = get_osmosis_position(deps)?;
+fn raw_deposit(
+    deps: Deps,
+    funds: Vec<Coin>,
+    app: &App,
+    position_id: u64,
+) -> AppResult<Vec<SubMsg>> {
+    let pool = get_osmosis_position_by_id(deps, position_id)?;
     let position = pool.position.unwrap();
 
     let proxy_addr = app.account_base(deps)?.proxy;
+
+    // We need to make sure the amounts are in the right order
+    // We assume the funds vector has 2 coins associated
+    let (amount0, amount1) = match pool
+        .asset0
+        .map(|c| c.denom == funds[0].denom)
+        .or(pool.asset1.map(|c| c.denom == funds[1].denom))
+    {
+        Some(true) => (funds[0].amount, funds[1].amount), // we already had the right order
+        Some(false) => (funds[1].amount, funds[0].amount), // we had the wrong order
+        None => return Err(AppError::NoPosition {}), // A position has to exist in order to execute this function. This should be unreachable
+    };
+
     let deposit_msg = app.executor(deps).execute_with_reply_and_data(
         MsgAddToPosition {
             position_id: position.position_id,
             sender: proxy_addr.to_string(),
-            amount0: funds[0].amount.to_string(),
-            amount1: funds[1].amount.to_string(),
+            amount0: amount0.to_string(),
+            amount1: amount1.to_string(),
             token_min_amount0: "0".to_string(),
             token_min_amount1: "0".to_string(),
         }
@@ -85,29 +103,42 @@ fn raw_deposit(deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>
         OSMOSIS_ADD_TO_POSITION_REPLY_ID,
     )?;
 
+    deps.api
+        .debug(&format!("Add to position message {:?}", funds));
+
     Ok(vec![deposit_msg])
 }
 
 pub fn deposit(
     deps: Deps,
-    env: &Env,
+    _env: &Env,
     params: ConcentratedPoolParams,
     funds: Vec<Coin>,
     app: &App,
 ) -> AppResult<Vec<SubMsg>> {
     // We verify there is a position stored
-    let osmosis_position = OSMOSIS_POSITION.may_load(deps.storage)?;
-    if let Some(position) = osmosis_position {
+
+    let osmosis_position = params
+        .position_id
+        .map(|position_id| get_osmosis_position_by_id(deps, position_id));
+
+    if let Some(Ok(_)) = osmosis_position {
         // We just deposit
-        raw_deposit(deps, funds, app)
+        raw_deposit(deps, funds, app, params.position_id.unwrap())
     } else {
         // We need to create a position
         create_position(deps, params, funds, app)
     }
 }
 
-pub fn withdraw(deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec<CosmosMsg>> {
-    let position = get_osmosis_position(deps)?;
+pub fn withdraw(
+    deps: Deps,
+    amount: Option<Uint128>,
+    app: &App,
+    params: ConcentratedPoolParams,
+) -> AppResult<Vec<CosmosMsg>> {
+    let position =
+        get_osmosis_position_by_id(deps, params.position_id.ok_or(AppError::NoPosition {})?)?;
     let position_details = position.position.unwrap();
 
     let total_liquidity = position_details.liquidity.replace('.', "");
@@ -129,8 +160,13 @@ pub fn withdraw(deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec
     .into()])
 }
 
-pub fn user_deposit(deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
-    let position = get_osmosis_position(deps)?;
+pub fn user_deposit(
+    deps: Deps,
+    _app: &App,
+    params: ConcentratedPoolParams,
+) -> AppResult<Vec<Coin>> {
+    let position =
+        get_osmosis_position_by_id(deps, params.position_id.ok_or(AppError::NoPosition {})?)?;
 
     Ok([
         try_proto_to_cosmwasm_coins(position.asset0)?,
@@ -142,22 +178,32 @@ pub fn user_deposit(deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
 }
 
 /// Returns an amount representing a user's liquidity
-pub fn user_liquidity(deps: Deps, _app: &App) -> AppResult<Uint128> {
-    let position = get_osmosis_position(deps)?;
+pub fn user_liquidity(
+    deps: Deps,
+    _app: &App,
+    params: ConcentratedPoolParams,
+) -> AppResult<Uint128> {
+    let position =
+        get_osmosis_position_by_id(deps, params.position_id.ok_or(AppError::NoPosition {})?)?;
     let total_liquidity = position.position.unwrap().liquidity.replace('.', "");
 
     Ok(Uint128::from_str(&total_liquidity)?)
 }
 
-pub fn user_rewards(deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
-    let pool = get_osmosis_position(deps)?;
+pub fn user_rewards(
+    deps: Deps,
+    _app: &App,
+    params: ConcentratedPoolParams,
+) -> AppResult<Vec<Coin>> {
+    let position =
+        get_osmosis_position_by_id(deps, params.position_id.ok_or(AppError::NoPosition {})?)?;
 
     let mut rewards = cosmwasm_std::Coins::default();
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
+    for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
         rewards.add(coin)?;
     }
 
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
+    for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
         rewards.add(coin)?;
     }
 
@@ -224,18 +270,13 @@ pub struct OsmosisPosition {
     pub position_id: u64,
 }
 
-pub fn get_position(deps: Deps) -> AppResult<OsmosisPosition> {
-    OSMOSIS_POSITION
-        .load(deps.storage)
-        .map_err(|_| AppError::NoPosition {})
-}
-
-pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
-    let position = get_position(deps)?;
-
+pub fn get_osmosis_position_by_id(
+    deps: Deps,
+    position_id: u64,
+) -> AppResult<FullPositionBreakdown> {
     ConcentratedliquidityQuerier::new(&deps.querier)
-        .position_by_id(position.position_id)
-        .map_err(|e| AppError::UnableToQueryPosition(position.position_id, e))?
+        .position_by_id(position_id)
+        .map_err(|e| AppError::UnableToQueryPosition(position_id, e))?
         .position
         .ok_or(AppError::NoPosition {})
 }

@@ -1,9 +1,12 @@
 mod common;
 
 use crate::common::{setup_test_tube, USDC, USDT};
+use abstract_client::Application;
+use abstract_interface::Abstract;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::osmosis_cl_pool::OsmosisPosition,
+    AppInterface,
 };
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_orch::{
@@ -16,6 +19,21 @@ use cw_orch::{
 };
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
 
+fn query_balances<Chain: CwEnv>(
+    carrot_app: &Application<Chain, AppInterface<Chain>>,
+) -> anyhow::Result<Uint128> {
+    let balance = carrot_app.balance();
+    if balance.is_err() {
+        return Ok(Uint128::zero());
+    }
+    let sum = balance?
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+
+    Ok(sum)
+}
+
 #[test]
 fn deposit_lands() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
@@ -26,6 +44,8 @@ fn deposit_lands() -> anyhow::Result<()> {
     // We should add funds to the account proxy
     let deposit_coins = coins(deposit_amount, USDT.to_owned());
     let mut chain = carrot_app.get_chain().clone();
+
+    let balances_before = query_balances(&carrot_app)?;
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
@@ -34,22 +54,23 @@ fn deposit_lands() -> anyhow::Result<()> {
     // Do the deposit
     carrot_app.deposit(deposit_coins.clone())?;
     // Check almost everything landed
-    let balance: AssetsBalanceResponse = carrot_app.balance()?;
-    let sum = balance
-        .balances
-        .iter()
-        .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 2);
+    let balances_after = query_balances(&carrot_app)?;
+    assert!(balances_before < balances_after);
 
+    // Add some more funds
+    chain.add_balance(
+        carrot_app.account().proxy()?.to_string(),
+        deposit_coins.clone(),
+    )?;
     // Do the second deposit
-    carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())])?;
+    let response = carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())])?;
     // Check almost everything landed
-    let balance: AssetsBalanceResponse = carrot_app.balance()?;
-    let sum = balance
-        .balances
-        .iter()
-        .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
+    let balances_after_second = query_balances(&carrot_app)?;
+    assert!(balances_after < balances_after_second);
+
+    // We assert the deposit response is an add to position and not a create position
+    response.event_attr_value("add_to_position", "new_position_id")?;
+
     Ok(())
 }
 
@@ -57,19 +78,24 @@ fn deposit_lands() -> anyhow::Result<()> {
 fn withdraw_position() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let mut chain = carrot_app.get_chain().clone();
 
-    carrot_app.deposit(coins(10_000, USDT.to_owned()))?;
+    // Add some more funds
+    let deposit_amount = 10_000;
+    let deposit_coins = coins(deposit_amount, USDT.to_owned());
+    let proxy_addr = carrot_app.account().proxy()?;
+    chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
+    carrot_app.deposit(deposit_coins)?;
 
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(&proxy_addr, Some(USDT.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(&proxy_addr, Some(USDC.to_owned()))?
         .pop()
         .unwrap();
 
@@ -80,12 +106,12 @@ fn withdraw_position() -> anyhow::Result<()> {
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(&proxy_addr, Some(USDT.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(&proxy_addr, Some(USDC.to_owned()))?
         .pop()
         .unwrap();
 
@@ -114,7 +140,11 @@ fn withdraw_position() -> anyhow::Result<()> {
 fn deposit_multiple_assets() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    carrot_app.deposit(vec![coin(258, USDT.to_owned()), coin(234, USDC.to_owned())])?;
+    let mut chain = carrot_app.get_chain().clone();
+    let proxy_addr = carrot_app.account().proxy()?;
+    let deposit_coins = vec![coin(234, USDC.to_owned()), coin(258, USDT.to_owned())];
+    chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
+    carrot_app.deposit(deposit_coins)?;
 
     Ok(())
 }

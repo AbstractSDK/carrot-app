@@ -37,8 +37,8 @@ impl YieldType {
         app: &App,
     ) -> AppResult<Vec<CosmosMsg>> {
         match self {
-            YieldType::ConcentratedLiquidityPool(_params) => {
-                osmosis_cl_pool::withdraw(deps, amount, app)
+            YieldType::ConcentratedLiquidityPool(params) => {
+                osmosis_cl_pool::withdraw(deps, amount, app, params)
             }
             YieldType::Mars(denom) => mars::withdraw(deps, denom, amount, app),
         }
@@ -46,8 +46,8 @@ impl YieldType {
 
     pub fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         match self {
-            YieldType::ConcentratedLiquidityPool(_params) => {
-                osmosis_cl_pool::user_deposit(deps, app)
+            YieldType::ConcentratedLiquidityPool(params) => {
+                osmosis_cl_pool::user_deposit(deps, app, params.clone())
             }
             YieldType::Mars(denom) => Ok(coins(
                 mars::user_deposit(deps, denom.clone(), app)?.into(),
@@ -58,8 +58,8 @@ impl YieldType {
 
     pub fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         match self {
-            YieldType::ConcentratedLiquidityPool(_params) => {
-                osmosis_cl_pool::user_rewards(deps, app)
+            YieldType::ConcentratedLiquidityPool(params) => {
+                osmosis_cl_pool::user_rewards(deps, app, params.clone())
             }
             YieldType::Mars(denom) => mars::user_rewards(deps, denom.clone(), app),
         }
@@ -67,8 +67,8 @@ impl YieldType {
 
     pub fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
         match self {
-            YieldType::ConcentratedLiquidityPool(_params) => {
-                osmosis_cl_pool::user_liquidity(deps, app)
+            YieldType::ConcentratedLiquidityPool(params) => {
+                osmosis_cl_pool::user_liquidity(deps, app, params.clone())
             }
             YieldType::Mars(denom) => mars::user_liquidity(deps, denom.clone(), app),
         }
@@ -80,5 +80,5 @@ pub struct ConcentratedPoolParams {
     pub pool_id: u64,
     pub lower_tick: i64,
     pub upper_tick: i64,
-    pub position_id: u64,
+    pub position_id: Option<u64>,
 }

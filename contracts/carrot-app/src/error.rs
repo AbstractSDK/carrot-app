@@ -88,4 +88,7 @@ pub enum AppError {
 
     #[error("Deposited total value is zero")]
     NoDeposit {},
+
+    #[error("Wrong yield type when executing internal operations")]
+    WrongYieldType {},
 }

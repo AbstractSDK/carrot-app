@@ -5,8 +5,9 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePositi
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    state::OSMOSIS_POSITION,
-    yield_sources::osmosis_cl_pool::OsmosisPosition,
+    handlers::{internal::save_strategy, query::query_strategy},
+    state::TEMP_CURRENT_YIELD,
+    yield_sources::{osmosis_cl_pool::OsmosisPosition, yield_type::YieldType},
 };
 
 pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -> AppResult {
@@ -15,6 +16,7 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
             "Failed to create position",
         )));
     };
+
     deps.api
         .debug(&format!("Inside create position reply : {:x?}", b));
 
@@ -24,10 +26,20 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
     let response: MsgCreatePositionResponse = parsed.data.clone().unwrap_or_default().try_into()?;
 
     // We save the position
-    let position = OsmosisPosition {
-        position_id: response.position_id,
+    let current_position_index = TEMP_CURRENT_YIELD.load(deps.storage)?;
+    let mut strategy = query_strategy(deps.as_ref())?;
+
+    let current_yield = strategy.strategy.0.get_mut(current_position_index).unwrap();
+
+    current_yield.yield_source.ty = match current_yield.yield_source.ty.clone() {
+        YieldType::ConcentratedLiquidityPool(mut position) => {
+            position.position_id = Some(response.position_id);
+            YieldType::ConcentratedLiquidityPool(position.clone())
+        }
+        YieldType::Mars(_) => return Err(AppError::WrongYieldType {}),
     };
-    OSMOSIS_POSITION.save(deps.storage, &position)?;
+
+    save_strategy(deps, strategy.strategy)?;
 
     Ok(app
         .response("create_position_reply")

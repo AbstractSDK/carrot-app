@@ -4,13 +4,15 @@ use crate::{
     helpers::{add_funds, get_proxy_balance},
     msg::{AppExecuteMsg, ExecuteMsg},
     replies::REPLY_AFTER_SWAPS_STEP,
-    state::{CONFIG, TEMP_CURRENT_COIN, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN},
-    yield_sources::{yield_type::YieldType, DepositStep, OneDepositStrategy},
+    state::{
+        CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN,
+    },
+    yield_sources::{yield_type::YieldType, BalanceStrategy, DepositStep, OneDepositStrategy},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::AbstractNameService;
-use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, MessageInfo, SubMsg, Uint128};
+use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, MessageInfo, StdError, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use super::query::query_exchange_rate;
@@ -20,6 +22,7 @@ pub fn deposit_one_strategy(
     env: Env,
     info: MessageInfo,
     strategy: OneDepositStrategy,
+    yield_index: usize,
     yield_type: YieldType,
     app: App,
 ) -> AppResult {
@@ -66,7 +69,10 @@ pub fn deposit_one_strategy(
     // Finalize and execute the deposit
     let last_step = wasm_execute(
         env.contract.address.clone(),
-        &ExecuteMsg::Module(AppExecuteMsg::FinalizeDeposit { yield_type }),
+        &ExecuteMsg::Module(AppExecuteMsg::FinalizeDeposit {
+            yield_type,
+            yield_index,
+        }),
         vec![],
     )?;
 
@@ -122,6 +128,7 @@ pub fn execute_finalize_deposit(
     env: Env,
     info: MessageInfo,
     yield_type: YieldType,
+    yield_index: usize,
     app: App,
 ) -> AppResult {
     if info.sender != env.contract.address {
@@ -129,7 +136,18 @@ pub fn execute_finalize_deposit(
     }
     let available_deposit_coins = TEMP_DEPOSIT_COINS.load(deps.storage)?;
 
+    TEMP_CURRENT_YIELD.save(deps.storage, &yield_index)?;
+
     let msgs = yield_type.deposit(deps.as_ref(), &env, available_deposit_coins, &app)?;
 
     Ok(app.response("one-deposit-step").add_submessages(msgs))
+}
+
+pub fn save_strategy(deps: DepsMut, strategy: BalanceStrategy) -> AppResult<()> {
+    CONFIG.update(deps.storage, |mut config| {
+        config.balance_strategy = strategy;
+        Ok::<_, StdError>(config)
+    })?;
+
+    Ok(())
 }

@@ -245,13 +245,19 @@ impl From<Vec<Vec<DepositStep>>> for OneDepositStrategy {
 }
 
 impl OneDepositStrategy {
-    pub fn deposit_msgs(&self, env: &Env, yield_type: YieldType) -> AppResult<CosmosMsg> {
+    pub fn deposit_msgs(
+        &self,
+        env: &Env,
+        yield_index: usize,
+        yield_type: YieldType,
+    ) -> AppResult<CosmosMsg> {
         // For each strategy, we send a message on the contract to execute it
         Ok(wasm_execute(
             env.contract.address.clone(),
             &ExecuteMsg::Module(AppExecuteMsg::DepositOneStrategy {
                 swap_strategy: self.clone(),
                 yield_type,
+                yield_index,
             }),
             vec![],
         )?

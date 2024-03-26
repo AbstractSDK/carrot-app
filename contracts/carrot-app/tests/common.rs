@@ -138,7 +138,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
-                    position_id: 0,
+                    position_id: None,
                 }),
             },
             share: Decimal::one(),
