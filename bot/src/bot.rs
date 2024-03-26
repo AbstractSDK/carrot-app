@@ -192,7 +192,8 @@ impl Bot {
         self.metrics
             .fetch_instances_count
             .set(fetch_instances_count as i64);
-        self.contract_instances_to_ac.clone_from(&contract_instances_to_autocompound);
+        self.contract_instances_to_ac
+            .clone_from(&contract_instances_to_autocompound);
         self.metrics
             .contract_instances_to_autocompound
             .set(contract_instances_to_autocompound.len() as i64);
@@ -224,7 +225,6 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
 
     if resp.rewards_available {
         // Execute autocompound
-        let daemon = daemon.rebuild().authz_granter(address).build()?;
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
             &[],
