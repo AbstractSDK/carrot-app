@@ -62,8 +62,6 @@ impl AutocompoundRewardsConfig {
 #[cw_serde]
 pub struct PoolConfig {
     pub pool_id: u64,
-    pub token0: String,
-    pub token1: String,
     pub asset0: AssetEntry,
     pub asset1: AssetEntry,
 }

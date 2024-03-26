@@ -1,5 +1,6 @@
 mod common;
 
+use crate::common::incentives::Incentives;
 use crate::common::{
     create_position, setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC, USDT,
 };
@@ -10,15 +11,48 @@ use carrot_app::msg::{
 };
 use cosmwasm_std::{coin, coins, Uint128};
 use cw_asset::AssetBase;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::Account;
+use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Module};
 use cw_orch::{anyhow, prelude::*};
+use osmosis_std::shim::Timestamp;
+use osmosis_std::types::cosmos::base::v1beta1;
+use osmosis_std::types::osmosis::incentives::MsgCreateGauge;
+use osmosis_std::types::osmosis::lockup::{LockQueryType, QueryCondition};
 
 #[test]
 fn check_autocompound() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (pool_id, carrot_app) = setup_test_tube(false)?;
 
     let chain = carrot_app.get_chain().clone();
 
+    // Add incentive
+    {
+        let test_tube = chain.app.borrow();
+        let time = test_tube.get_block_timestamp().plus_seconds(5);
+        let incentives = Incentives::new(&*test_tube);
+        let _ = incentives.create_gauge(
+            MsgCreateGauge {
+                is_perpetual: false,
+                owner: chain.sender.address(),
+                distribute_to: Some(QueryCondition {
+                    lock_query_type: LockQueryType::NoLock.into(),
+                    denom: "".to_owned(),
+                    duration: None,
+                    timestamp: None,
+                }),
+                coins: vec![v1beta1::Coin {
+                    denom: GAS_DENOM.to_owned(),
+                    amount: "100000000".to_owned(),
+                }],
+                start_time: Some(Timestamp {
+                    seconds: time.seconds() as i64,
+                    nanos: time.subsec_nanos() as i32,
+                }),
+                num_epochs_paid_over: 10,
+                pool_id,
+            },
+            &chain.sender,
+        )?;
+    }
     // Create position
     create_position(
         &carrot_app,
@@ -49,6 +83,10 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Check it has some rewards to autocompound first
     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
     assert!(!rewards.available_rewards.is_empty());
+    assert!(rewards
+        .available_rewards
+        .iter()
+        .any(|c| c.denom == GAS_DENOM));
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
@@ -94,7 +132,7 @@ fn check_autocompound() -> anyhow::Result<()> {
 
 #[test]
 fn stranger_autocompound() -> anyhow::Result<()> {
-    let (_, carrot_app) = setup_test_tube(false)?;
+    let (pool_id, carrot_app) = setup_test_tube(false)?;
 
     let mut chain = carrot_app.get_chain().clone();
     let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
@@ -107,6 +145,35 @@ fn stranger_autocompound() -> anyhow::Result<()> {
         coin(1_000_000, USDC.to_owned()),
     )?;
 
+    // Add incentive
+    {
+        let test_tube = chain.app.borrow();
+        let time = test_tube.get_block_timestamp().plus_seconds(5);
+        let incentives = Incentives::new(&*test_tube);
+        let _ = incentives.create_gauge(
+            MsgCreateGauge {
+                is_perpetual: false,
+                owner: chain.sender.address(),
+                distribute_to: Some(QueryCondition {
+                    lock_query_type: LockQueryType::NoLock.into(),
+                    denom: "".to_owned(),
+                    duration: None,
+                    timestamp: None,
+                }),
+                coins: vec![v1beta1::Coin {
+                    denom: GAS_DENOM.to_owned(),
+                    amount: "100000000".to_owned(),
+                }],
+                start_time: Some(Timestamp {
+                    seconds: time.seconds() as i64,
+                    nanos: time.subsec_nanos() as i32,
+                }),
+                num_epochs_paid_over: 10,
+                pool_id,
+            },
+            &chain.sender,
+        )?;
+    }
     // Do some swaps
     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
     let abs = Abstract::load_from(chain.clone())?;
@@ -130,6 +197,10 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     // Check it has some rewards to autocompound first
     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
     assert!(!rewards.available_rewards.is_empty());
+    assert!(rewards
+        .available_rewards
+        .iter()
+        .any(|c| c.denom == GAS_DENOM));
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;

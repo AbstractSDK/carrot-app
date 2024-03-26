@@ -125,15 +125,28 @@ pub fn query_price(
     belief_price1: Option<Decimal>,
 ) -> AppResult<Decimal> {
     let config = CONFIG.load(deps.storage)?;
+    let ans_host = app.ans_host(deps)?;
+
+    // We know it's native denom for osmosis pool
+    let token0 = config
+        .pool_config
+        .asset0
+        .resolve(&deps.querier, &ans_host)?
+        .inner();
+    let token1 = config
+        .pool_config
+        .asset1
+        .resolve(&deps.querier, &ans_host)?
+        .inner();
 
     let amount0 = funds
         .iter()
-        .find(|c| c.denom == config.pool_config.token0)
+        .find(|c| c.denom == token0)
         .map(|c| c.amount)
         .unwrap_or_default();
     let amount1 = funds
         .iter()
-        .find(|c| c.denom == config.pool_config.token1)
+        .find(|c| c.denom == token1)
         .map(|c| c.amount)
         .unwrap_or_default();
 

@@ -181,8 +181,13 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 
     // If there are external incentives, claim them.
     if !position.claimable_incentives.is_empty() {
+        let asset0_denom = position.asset0.unwrap().denom;
+        let asset1_denom = position.asset1.unwrap().denom;
+
         for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
-            rewards.add(coin)?;
+            if coin.denom == asset0_denom || coin.denom == asset1_denom {
+                rewards.add(coin)?;
+            }
         }
         collect_rewards_msgs.push(authz.execute(
             &env.contract.address,
