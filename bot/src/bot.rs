@@ -66,6 +66,7 @@ struct Metrics {
     fetch_instances_count: IntGauge,
     autocompounded_count: IntCounter,
     autocompounded_error_count: IntCounter,
+    contract_instances_to_autocompound: IntGauge,
 }
 
 impl Metrics {
@@ -90,6 +91,11 @@ impl Metrics {
             "Number of times autocompounding errored",
         )
         .unwrap();
+        let contract_instances_to_autocompound = IntGauge::new(
+            "carrot_app_bot_contract_instances_to_autocompound",
+            "Number of instances that are eligible tobe compounded",
+        )
+        .unwrap();
         registry.register(Box::new(fetch_count.clone())).unwrap();
         registry
             .register(Box::new(fetch_instances_count.clone()))
@@ -100,11 +106,15 @@ impl Metrics {
         registry
             .register(Box::new(autocompounded_error_count.clone()))
             .unwrap();
+        registry
+            .register(Box::new(contract_instances_to_autocompound.clone()))
+            .unwrap();
         Self {
             fetch_count,
             fetch_instances_count,
             autocompounded_count,
             autocompounded_error_count,
+            contract_instances_to_autocompound,
         }
     }
 }
@@ -182,7 +192,10 @@ impl Bot {
         self.metrics
             .fetch_instances_count
             .set(fetch_instances_count as i64);
-        self.contract_instances_to_ac = contract_instances_to_autocompound;
+        self.contract_instances_to_ac = contract_instances_to_autocompound.clone();
+        self.metrics
+            .contract_instances_to_autocompound
+            .set(contract_instances_to_autocompound.len() as i64);
         Ok(())
     }
 
