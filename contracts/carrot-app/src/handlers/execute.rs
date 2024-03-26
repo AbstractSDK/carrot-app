@@ -10,14 +10,12 @@ use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{AccountAction, Execution, ExecutorMsg, TransferInterface};
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, StdError, SubMsg,
-    Uint128, WasmMsg,
+    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, Uint128, WasmMsg,
 };
-use std::collections::HashMap;
 
 use super::{
     internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step},
-    query::{query_exchange_rate, query_strategy},
+    query::{query_all_exchange_rates, query_exchange_rate, query_strategy},
     swap_helpers::swap_msg,
 };
 
@@ -177,27 +175,21 @@ pub fn _inner_deposit(
 ) -> AppResult<Vec<CosmosMsg>> {
     // We determine the value of all the tokens that were received with USD
 
-    let all_strategy_exchange_rates = query_strategy(deps)?.strategy.0.into_iter().flat_map(|s| {
-        s.yield_source
-            .expected_tokens
+    let exchange_rates = query_all_exchange_rates(
+        deps,
+        query_strategy(deps)?
+            .strategy
+            .0
             .into_iter()
-            .map(|(denom, _)| {
-                Ok::<_, AppError>((
-                    denom.clone(),
-                    query_exchange_rate(deps, denom.clone(), app)?,
-                ))
+            .flat_map(|s| {
+                s.yield_source
+                    .expected_tokens
+                    .into_iter()
+                    .map(|(denom, _)| denom)
             })
-    });
-    let exchange_rates = funds
-        .iter()
-        .map(|f| {
-            Ok::<_, AppError>((
-                f.denom.clone(),
-                query_exchange_rate(deps, f.denom.clone(), app)?,
-            ))
-        })
-        .chain(all_strategy_exchange_rates)
-        .collect::<Result<HashMap<_, _>, _>>()?;
+            .chain(funds.iter().map(|f| f.denom.clone())),
+        app,
+    )?;
 
     let deposit_strategies = query_strategy(deps)?
         .strategy
