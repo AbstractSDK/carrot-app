@@ -44,6 +44,15 @@ impl YieldType {
         }
     }
 
+    pub fn withdraw_rewards(self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+        match self {
+            YieldType::ConcentratedLiquidityPool(params) => {
+                osmosis_cl_pool::withdraw_rewards(deps, params, app)
+            }
+            YieldType::Mars(denom) => mars::withdraw_rewards(deps, denom, app),
+        }
+    }
+
     pub fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         match self {
             YieldType::ConcentratedLiquidityPool(params) => {

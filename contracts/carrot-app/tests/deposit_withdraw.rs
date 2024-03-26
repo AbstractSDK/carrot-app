@@ -5,9 +5,14 @@ use abstract_client::Application;
 use abstract_interface::Abstract;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
-    yield_sources::osmosis_cl_pool::OsmosisPosition,
+    yield_sources::{
+        osmosis_cl_pool::OsmosisPosition,
+        yield_type::{ConcentratedPoolParams, YieldType},
+        BalanceStrategy, BalanceStrategyElement, YieldSource,
+    },
     AppInterface,
 };
+use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_orch::{
     anyhow,
@@ -38,10 +43,8 @@ fn query_balances<Chain: CwEnv>(
 fn deposit_lands() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
-
     // We should add funds to the account proxy
+    let deposit_amount = 5_000;
     let deposit_coins = coins(deposit_amount, USDT.to_owned());
     let mut chain = carrot_app.get_chain().clone();
 
@@ -146,6 +149,64 @@ fn deposit_multiple_assets() -> anyhow::Result<()> {
     chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
     carrot_app.deposit(deposit_coins)?;
 
+    Ok(())
+}
+
+#[test]
+fn deposit_multiple_positions() -> anyhow::Result<()> {
+    let (pool_id, carrot_app) = setup_test_tube(false)?;
+
+    let new_strat = BalanceStrategy(vec![
+        BalanceStrategyElement {
+            yield_source: YieldSource {
+                expected_tokens: vec![
+                    (USDT.to_string(), Decimal::percent(50)),
+                    (USDC.to_string(), Decimal::percent(50)),
+                ],
+                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                    pool_id,
+                    lower_tick: INITIAL_LOWER_TICK,
+                    upper_tick: INITIAL_UPPER_TICK,
+                    position_id: None,
+                }),
+            },
+            share: Decimal::percent(50),
+        },
+        BalanceStrategyElement {
+            yield_source: YieldSource {
+                expected_tokens: vec![
+                    (USDT.to_string(), Decimal::percent(50)),
+                    (USDC.to_string(), Decimal::percent(50)),
+                ],
+                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                    pool_id,
+                    lower_tick: 2 * INITIAL_LOWER_TICK,
+                    upper_tick: 2 * INITIAL_UPPER_TICK,
+                    position_id: None,
+                }),
+            },
+            share: Decimal::percent(50),
+        },
+    ]);
+    carrot_app.rebalance(new_strat.clone())?;
+
+    let deposit_amount = 5_000;
+    let deposit_coins = coins(deposit_amount, USDT.to_owned());
+    let mut chain = carrot_app.get_chain().clone();
+
+    let balances_before = query_balances(&carrot_app)?;
+    chain.add_balance(
+        carrot_app.account().proxy()?.to_string(),
+        deposit_coins.clone(),
+    )?;
+    carrot_app.deposit(deposit_coins)?;
+    let balances_after = query_balances(&carrot_app)?;
+
+    let slippage = Decimal::percent(4);
+    assert!(
+        balances_after
+            > balances_before + (Uint128::from(deposit_amount) * (Decimal::one() - slippage))
+    );
     Ok(())
 }
 

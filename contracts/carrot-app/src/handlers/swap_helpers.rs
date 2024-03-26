@@ -7,11 +7,10 @@ pub const DEFAULT_SLIPPAGE: Decimal = Decimal::permille(5);
 
 use crate::{
     contract::{App, AppResult, OSMOSIS},
-    helpers::get_user,
     state::CONFIG,
 };
 
-use super::query::query_price;
+// use super::query::query_price;
 
 pub(crate) fn swap_msg(
     deps: Deps,
@@ -19,149 +18,145 @@ pub(crate) fn swap_msg(
     offer_asset: AnsAsset,
     ask_asset: AssetEntry,
     app: &App,
-) -> AppResult<Vec<CosmosMsg>> {
+) -> AppResult<Option<CosmosMsg>> {
     // Don't swap if not required
     if offer_asset.amount.is_zero() {
-        return Ok(vec![]);
+        return Ok(None);
     }
-    let sender = get_user(deps, app)?;
 
     let dex = app.ans_dex(deps, OSMOSIS.to_string());
-    let trigger_swap_msg: GenerateMessagesResponse = dex.generate_swap_messages(
+    let swap_msg = dex.swap(
         offer_asset,
         ask_asset,
         Some(Decimal::percent(MAX_SPREAD_PERCENT)),
         None,
-        sender.clone(),
     )?;
-    let authz = app.auth_z(deps, Some(sender))?;
 
-    Ok(trigger_swap_msg
-        .messages
-        .into_iter()
-        .map(|m| authz.execute(&env.contract.address, m))
-        .collect())
+    Ok(Some(swap_msg))
 }
 
-pub(crate) fn tokens_to_swap(
-    deps: Deps,
-    amount_to_swap: Vec<Coin>,
-    asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
-    asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle,
-    price: Decimal, // Relative price (when swapping amount0 for amount1, equals amount0/amount1)
-) -> AppResult<(AnsAsset, AssetEntry, Vec<Coin>)> {
-    let config = CONFIG.load(deps.storage)?;
+// pub(crate) fn tokens_to_swap(
+//     deps: Deps,
+//     amount_to_swap: Vec<Coin>,
+//     asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
+//     asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle,
+//     price: Decimal, // Relative price (when swapping amount0 for amount1, equals amount0/amount1)
+// ) -> AppResult<(AnsAsset, AssetEntry, Vec<Coin>)> {
+//     let config = CONFIG.load(deps.storage)?;
 
-    let x0 = amount_to_swap
-        .iter()
-        .find(|c| c.denom == asset0.denom)
-        .cloned()
-        .unwrap_or(Coin {
-            denom: asset0.denom,
-            amount: Uint128::zero(),
-        });
-    let x1 = amount_to_swap
-        .iter()
-        .find(|c| c.denom == asset1.denom)
-        .cloned()
-        .unwrap_or(Coin {
-            denom: asset1.denom,
-            amount: Uint128::zero(),
-        });
+//     let x0 = amount_to_swap
+//         .iter()
+//         .find(|c| c.denom == asset0.denom)
+//         .cloned()
+//         .unwrap_or(Coin {
+//             denom: asset0.denom,
+//             amount: Uint128::zero(),
+//         });
+//     let x1 = amount_to_swap
+//         .iter()
+//         .find(|c| c.denom == asset1.denom)
+//         .cloned()
+//         .unwrap_or(Coin {
+//             denom: asset1.denom,
+//             amount: Uint128::zero(),
+//         });
 
-    // We will swap on the pool to get the right coin ratio
+//     // We will swap on the pool to get the right coin ratio
 
-    // We have x0 and x1 to deposit. Let p (or price) be the price of asset1 (the number of asset0 you get for 1 unit of asset1)
-    // In order to deposit, you need to have X0 and X1 such that X0/X1 = A0/A1 where A0 and A1 are the current liquidity inside the position
-    // That is equivalent to X0*A1 = X1*A0
-    // We need to find how much to swap.
-    // If x0*A1 < x1*A0, we need to have more x0 to balance the swap --> so we need to send some of x1 to swap (lets say we wend y1 to swap)
-    // So   X1 = x1-y1
-    //      X0 = x0 + price*y1
-    // Therefore, the following equation needs to be true
-    // (x0 + price*y1)*A1 = (x1-y1)*A0 or y1 = (x1*a0 - x0*a1)/(a0 + p*a1)
-    // If x0*A1 > x1*A0, we need to have more x1 to balance the swap --> so we need to send some of x0 to swap (lets say we wend y0 to swap)
-    // So   X0 = x0-y0
-    //      X1 = x1 + y0/price
-    // Therefore, the following equation needs to be true
-    // (x0-y0)*A1 = (x1 + y0/price)*A0 or y0 = (x0*a1 - x1*a0)/(a1 + a0/p)
+//     // We have x0 and x1 to deposit. Let p (or price) be the price of asset1 (the number of asset0 you get for 1 unit of asset1)
+//     // In order to deposit, you need to have X0 and X1 such that X0/X1 = A0/A1 where A0 and A1 are the current liquidity inside the position
+//     // That is equivalent to X0*A1 = X1*A0
+//     // We need to find how much to swap.
+//     // If x0*A1 < x1*A0, we need to have more x0 to balance the swap --> so we need to send some of x1 to swap (lets say we wend y1 to swap)
+//     // So   X1 = x1-y1
+//     //      X0 = x0 + price*y1
+//     // Therefore, the following equation needs to be true
+//     // (x0 + price*y1)*A1 = (x1-y1)*A0 or y1 = (x1*a0 - x0*a1)/(a0 + p*a1)
+//     // If x0*A1 > x1*A0, we need to have more x1 to balance the swap --> so we need to send some of x0 to swap (lets say we wend y0 to swap)
+//     // So   X0 = x0-y0
+//     //      X1 = x1 + y0/price
+//     // Therefore, the following equation needs to be true
+//     // (x0-y0)*A1 = (x1 + y0/price)*A0 or y0 = (x0*a1 - x1*a0)/(a1 + a0/p)
 
-    let x0_a1 = x0.amount * asset1.amount;
-    let x1_a0 = x1.amount * asset0.amount;
+//     let x0_a1 = x0.amount * asset1.amount;
+//     let x1_a0 = x1.amount * asset0.amount;
 
-    let (offer_asset, ask_asset, mut resulting_balance) = if x0_a1 < x1_a0 {
-        let numerator = x1_a0 - x0_a1;
-        let denominator = asset0.amount + price * asset1.amount;
-        let y1 = numerator / denominator;
+//     let (offer_asset, ask_asset, mut resulting_balance) = if x0_a1 < x1_a0 {
+//         let numerator = x1_a0 - x0_a1;
+//         let denominator = asset0.amount + price * asset1.amount;
+//         let y1 = numerator / denominator;
 
-        (
-            AnsAsset::new(config.pool_config.asset1, y1),
-            config.pool_config.asset0,
-            vec![
-                Coin {
-                    amount: x0.amount + price * y1,
-                    denom: x0.denom,
-                },
-                Coin {
-                    amount: x1.amount - y1,
-                    denom: x1.denom,
-                },
-            ],
-        )
-    } else {
-        let numerator = x0_a1 - x1_a0;
-        let denominator =
-            asset1.amount + Decimal::from_ratio(asset0.amount, 1u128) / price * Uint128::one();
-        let y0 = numerator / denominator;
+//         (
+//             AnsAsset::new(config.pool_config.asset1, y1),
+//             config.pool_config.asset0,
+//             vec![
+//                 Coin {
+//                     amount: x0.amount + price * y1,
+//                     denom: x0.denom,
+//                 },
+//                 Coin {
+//                     amount: x1.amount - y1,
+//                     denom: x1.denom,
+//                 },
+//             ],
+//         )
+//     } else {
+//         let numerator = x0_a1 - x1_a0;
+//         let denominator =
+//             asset1.amount + Decimal::from_ratio(asset0.amount, 1u128) / price * Uint128::one();
+//         let y0 = numerator / denominator;
 
-        (
-            AnsAsset::new(config.pool_config.asset0, numerator / denominator),
-            config.pool_config.asset1,
-            vec![
-                Coin {
-                    amount: x0.amount - y0,
-                    denom: x0.denom,
-                },
-                Coin {
-                    amount: x1.amount + Decimal::from_ratio(y0, 1u128) / price * Uint128::one(),
-                    denom: x1.denom,
-                },
-            ],
-        )
-    };
+//         (
+//             AnsAsset::new(config.pool_config.asset0, numerator / denominator),
+//             config.pool_config.asset1,
+//             vec![
+//                 Coin {
+//                     amount: x0.amount - y0,
+//                     denom: x0.denom,
+//                 },
+//                 Coin {
+//                     amount: x1.amount + Decimal::from_ratio(y0, 1u128) / price * Uint128::one(),
+//                     denom: x1.denom,
+//                 },
+//             ],
+//         )
+//     };
 
-    resulting_balance.sort_by(|a, b| a.denom.cmp(&b.denom));
-    // TODO, compute the resulting balance to be able to deposit back into the pool
-    Ok((offer_asset, ask_asset, resulting_balance))
-}
+//     resulting_balance.sort_by(|a, b| a.denom.cmp(&b.denom));
+//     // TODO, compute the resulting balance to be able to deposit back into the pool
+//     Ok((offer_asset, ask_asset, resulting_balance))
+// }
 
-#[allow(clippy::too_many_arguments)]
-pub fn swap_to_enter_position(
-    deps: Deps,
-    env: &Env,
-    funds: Vec<Coin>,
-    app: &App,
-    asset0: Coin,
-    asset1: Coin,
-    max_spread: Option<Decimal>,
-    belief_price0: Option<Decimal>,
-    belief_price1: Option<Decimal>,
-) -> AppResult<(Vec<CosmosMsg>, Vec<Coin>)> {
-    let price = query_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
-    let (offer_asset, ask_asset, resulting_assets) =
-        tokens_to_swap(deps, funds, asset0, asset1, price)?;
+// #[allow(clippy::too_many_arguments)]
+// pub fn swap_to_enter_position(
+//     deps: Deps,
+//     env: &Env,
+//     funds: Vec<Coin>,
+//     app: &App,
+//     asset0: Coin,
+//     asset1: Coin,
+//     max_spread: Option<Decimal>,
+//     belief_price0: Option<Decimal>,
+//     belief_price1: Option<Decimal>,
+// ) -> AppResult<(Vec<CosmosMsg>, Vec<Coin>)> {
+//     let price = query_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
+//     let (offer_asset, ask_asset, resulting_assets) =
+//         tokens_to_swap(deps, funds, asset0, asset1, price)?;
 
-    Ok((
-        swap_msg(deps, env, offer_asset, ask_asset, app)?,
-        resulting_assets,
-    ))
-}
+//     Ok((
+//         swap_msg(deps, env, offer_asset, ask_asset, app)?,
+//         resulting_assets,
+//     ))
+// }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::state::{AutocompoundRewardsConfig, Config, PoolConfig};
+    use crate::{
+        state::{AutocompoundRewardsConfig, Config, PoolConfig},
+        yield_sources::BalanceStrategy,
+    };
     use cosmwasm_std::{coin, coins, testing::mock_dependencies, DepsMut, Uint64};
     pub const DEPOSIT_TOKEN: &str = "USDC";
     pub const TOKEN0: &str = "USDT";
@@ -180,20 +175,17 @@ mod tests {
         CONFIG.save(
             deps.storage,
             &Config {
-                pool_config: PoolConfig {
-                    pool_id: 45,
-                    token0: TOKEN0.to_string(),
-                    token1: TOKEN1.to_string(),
-                    asset0: AssetEntry::new(TOKEN0),
-                    asset1: AssetEntry::new(TOKEN1),
-                },
-                autocompound_cooldown_seconds: Uint64::zero(),
-                autocompound_rewards_config: AutocompoundRewardsConfig {
-                    gas_asset: "foo".into(),
-                    swap_asset: "bar".into(),
-                    reward: Uint128::zero(),
-                    min_gas_balance: Uint128::zero(),
-                    max_gas_balance: Uint128::new(1),
+                dex: OSMOSIS.to_string(),
+                balance_strategy: BalanceStrategy(vec![]),
+                autocompound_config: crate::state::AutocompoundConfig {
+                    cooldown_seconds: Uint64::zero(),
+                    rewards: AutocompoundRewardsConfig {
+                        gas_asset: "foo".into(),
+                        swap_asset: "bar".into(),
+                        reward: Uint128::zero(),
+                        min_gas_balance: Uint128::zero(),
+                        max_gas_balance: Uint128::new(1),
+                    },
                 },
             },
         )?;

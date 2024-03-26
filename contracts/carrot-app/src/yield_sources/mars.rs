@@ -45,6 +45,15 @@ pub fn withdraw(
     Ok(vec![])
 }
 
+pub fn withdraw_rewards(
+    deps: Deps,
+    denom: String,
+    app: &App,
+) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    // Mars doesn't have rewards, it's automatically auto-compounded
+    Ok((vec![], vec![]))
+}
+
 pub fn user_deposit(deps: Deps, denom: String, app: &App) -> AppResult<Uint128> {
     let ans = app.name_service(deps);
     let ans_fund = ans.query(&AssetInfo::native(denom))?;

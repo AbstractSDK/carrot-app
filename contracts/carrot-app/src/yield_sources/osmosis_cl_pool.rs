@@ -3,18 +3,17 @@ use std::str::FromStr;
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    handlers::query::query_strategy,
     replies::{OSMOSIS_ADD_TO_POSITION_REPLY_ID, OSMOSIS_CREATE_POSITION_REPLY_ID},
 };
 use abstract_app::traits::AccountIdentification;
-use abstract_sdk::{AccountAction, Execution};
+use abstract_sdk::Execution;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, CosmosMsg, Deps, Env, ReplyOn, SubMsg, Uint128};
+use cosmwasm_std::{Coin, Coins, CosmosMsg, Deps, Env, ReplyOn, SubMsg, Uint128};
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
-        ConcentratedliquidityQuerier, FullPositionBreakdown, MsgAddToPosition, MsgCreatePosition,
-        MsgWithdrawPosition,
+        ConcentratedliquidityQuerier, FullPositionBreakdown, MsgAddToPosition,
+        MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition, MsgWithdrawPosition,
     },
 };
 
@@ -158,6 +157,49 @@ pub fn withdraw(
         liquidity_amount: liquidity_amount.clone(),
     }
     .into()])
+}
+
+pub fn withdraw_rewards(
+    deps: Deps,
+    params: ConcentratedPoolParams,
+    app: &App,
+) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    let position =
+        get_osmosis_position_by_id(deps, params.position_id.ok_or(AppError::NoPosition {})?)?;
+    let position_details = position.position.unwrap();
+
+    let user = app.account_base(deps)?.proxy;
+    let mut rewards = Coins::default();
+    let mut msgs: Vec<CosmosMsg> = vec![];
+    // If there are external incentives, claim them.
+    if !position.claimable_incentives.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
+            rewards.add(coin)?;
+        }
+        msgs.push(
+            MsgCollectIncentives {
+                position_ids: vec![position_details.position_id],
+                sender: user.to_string(),
+            }
+            .into(),
+        );
+    }
+
+    // If there is income from swap fees, claim them.
+    if !position.claimable_spread_rewards.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
+            rewards.add(coin)?;
+        }
+        msgs.push(
+            MsgCollectSpreadRewards {
+                position_ids: vec![position_details.position_id],
+                sender: position_details.address.clone(),
+            }
+            .into(),
+        )
+    }
+
+    Ok((rewards.to_vec(), msgs))
 }
 
 pub fn user_deposit(
