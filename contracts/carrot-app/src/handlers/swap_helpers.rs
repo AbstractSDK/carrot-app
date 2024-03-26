@@ -10,8 +10,6 @@ use crate::{
     state::CONFIG,
 };
 
-// use super::query::query_price;
-
 pub(crate) fn swap_msg(
     deps: Deps,
     env: &Env,
@@ -139,7 +137,7 @@ pub(crate) fn swap_msg(
 //     belief_price0: Option<Decimal>,
 //     belief_price1: Option<Decimal>,
 // ) -> AppResult<(Vec<CosmosMsg>, Vec<Coin>)> {
-//     let price = query_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
+//     let price = query_swap_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
 //     let (offer_asset, ask_asset, resulting_assets) =
 //         tokens_to_swap(deps, funds, asset0, asset1, price)?;
 

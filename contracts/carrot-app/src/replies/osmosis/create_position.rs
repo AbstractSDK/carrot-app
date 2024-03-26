@@ -7,7 +7,7 @@ use crate::{
     error::AppError,
     handlers::{internal::save_strategy, query::query_strategy},
     state::TEMP_CURRENT_YIELD,
-    yield_sources::{osmosis_cl_pool::OsmosisPosition, yield_type::YieldType},
+    yield_sources::yield_type::YieldType,
 };
 
 pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -> AppResult {

@@ -173,8 +173,7 @@ pub fn _inner_deposit(
     funds: Vec<Coin>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
-    // We determine the value of all the tokens that were received with USD
-
+    // We determine the value of all tokens that will be used inside this function
     let exchange_rates = query_all_exchange_rates(
         deps,
         query_strategy(deps)?

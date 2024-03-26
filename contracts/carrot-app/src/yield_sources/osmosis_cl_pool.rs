@@ -3,12 +3,15 @@ use std::str::FromStr;
 use crate::{
     contract::{App, AppResult},
     error::AppError,
+    handlers::swap_helpers::DEFAULT_SLIPPAGE,
     replies::{OSMOSIS_ADD_TO_POSITION_REPLY_ID, OSMOSIS_CREATE_POSITION_REPLY_ID},
+    state::CONFIG,
 };
-use abstract_app::traits::AccountIdentification;
+use abstract_app::{objects::AnsAsset, traits::AccountIdentification};
+use abstract_dex_adapter::DexInterface;
 use abstract_sdk::Execution;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, Coins, CosmosMsg, Deps, Env, ReplyOn, SubMsg, Uint128};
+use cosmwasm_std::{ensure, Coin, Coins, CosmosMsg, Decimal, Deps, Env, ReplyOn, SubMsg, Uint128};
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
@@ -252,64 +255,47 @@ pub fn user_rewards(
     Ok(rewards.into())
 }
 
-// pub fn query_price(
-//     deps: Deps,
-//     funds: &[Coin],
-//     app: &App,
-//     max_spread: Option<Decimal>,
-//     belief_price0: Option<Decimal>,
-//     belief_price1: Option<Decimal>,
-// ) -> AppResult<Decimal> {
-//     let config = CONFIG.load(deps.storage)?;
+pub fn query_swap_price(
+    deps: Deps,
+    app: &App,
+    max_spread: Option<Decimal>,
+    belief_price0: Option<Decimal>,
+    belief_price1: Option<Decimal>,
+    asset0: AnsAsset,
+    asset1: AnsAsset,
+) -> AppResult<Decimal> {
+    let config = CONFIG.load(deps.storage)?;
 
-//     let amount0 = funds
-//         .iter()
-//         .find(|c| c.denom == config.pool_config.token0)
-//         .map(|c| c.amount)
-//         .unwrap_or_default();
-//     let amount1 = funds
-//         .iter()
-//         .find(|c| c.denom == config.pool_config.token1)
-//         .map(|c| c.amount)
-//         .unwrap_or_default();
+    // We take the biggest amount and simulate a swap for the corresponding asset
+    let price = if asset0.amount > asset1.amount {
+        let simulation_result = app
+            .ans_dex(deps, config.dex.clone())
+            .simulate_swap(asset0.clone(), asset1.name)?;
 
-//     // We take the biggest amount and simulate a swap for the corresponding asset
-//     let price = if amount0 > amount1 {
-//         let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
-//             AnsAsset::new(config.pool_config.asset0, amount0),
-//             config.pool_config.asset1,
-//         )?;
+        let price = Decimal::from_ratio(asset0.amount, simulation_result.return_amount);
+        if let Some(belief_price) = belief_price1 {
+            ensure!(
+                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+                AppError::MaxSpreadAssertion { price }
+            );
+        }
+        price
+    } else {
+        let simulation_result = app
+            .ans_dex(deps, config.dex.clone())
+            .simulate_swap(asset1.clone(), asset0.name)?;
 
-//         let price = Decimal::from_ratio(amount0, simulation_result.return_amount);
-//         if let Some(belief_price) = belief_price1 {
-//             ensure!(
-//                 belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-//                 AppError::MaxSpreadAssertion { price }
-//             );
-//         }
-//         price
-//     } else {
-//         let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
-//             AnsAsset::new(config.pool_config.asset1, amount1),
-//             config.pool_config.asset0,
-//         )?;
+        let price = Decimal::from_ratio(simulation_result.return_amount, asset1.amount);
+        if let Some(belief_price) = belief_price0 {
+            ensure!(
+                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+                AppError::MaxSpreadAssertion { price }
+            );
+        }
+        price
+    };
 
-//         let price = Decimal::from_ratio(simulation_result.return_amount, amount1);
-//         if let Some(belief_price) = belief_price0 {
-//             ensure!(
-//                 belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-//                 AppError::MaxSpreadAssertion { price }
-//             );
-//         }
-//         price
-//     };
-
-//     Ok(price)
-// }
-
-#[cw_serde]
-pub struct OsmosisPosition {
-    pub position_id: u64,
+    Ok(price)
 }
 
 pub fn get_osmosis_position_by_id(
