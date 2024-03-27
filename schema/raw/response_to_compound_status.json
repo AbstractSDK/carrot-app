@@ -3,16 +3,24 @@
   "title": "CompoundStatusResponse",
   "type": "object",
   "required": [
-    "reward",
-    "rewards_available",
+    "autocompound_reward",
+    "autocompound_reward_available",
+    "pool_rewards",
     "status"
   ],
   "properties": {
-    "reward": {
+    "autocompound_reward": {
       "$ref": "#/definitions/AssetBase_for_String"
     },
-    "rewards_available": {
+    "autocompound_reward_available": {
+      "description": "Wether user have enough balance to reward or can swap to get enough",
       "type": "boolean"
+    },
+    "pool_rewards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Coin"
+      }
     },
     "status": {
       "$ref": "#/definitions/CompoundStatus"
@@ -75,6 +83,21 @@
           "additionalProperties": false
         }
       ]
+    },
+    "Coin": {
+      "type": "object",
+      "required": [
+        "amount",
+        "denom"
+      ],
+      "properties": {
+        "amount": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "denom": {
+          "type": "string"
+        }
+      }
     },
     "CompoundStatus": {
       "description": "Wether contract is ready for the compound",
