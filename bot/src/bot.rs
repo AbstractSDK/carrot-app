@@ -1,6 +1,6 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
 use carrot_app::{
-    msg::{AppExecuteMsg, AvailableRewardsResponse, CompoundStatusResponse, ExecuteMsg},
+    msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
     AppInterface,
 };
 use cosmos_sdk_proto::{
@@ -220,12 +220,11 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     app.set_address(address);
     use carrot_app::AppQueryMsgFns;
     let resp: CompoundStatusResponse = app.compound_status()?;
-    let pool_rewards: AvailableRewardsResponse = app.available_rewards()?;
 
     // TODO: ensure rewards > tx fee
 
     // Ensure there is rewards and pool rewards not empty
-    if resp.rewards_available && !pool_rewards.available_rewards.is_empty() {
+    if resp.autocompound_reward_available && !resp.pool_rewards.is_empty() {
         // Execute autocompound
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
