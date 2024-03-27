@@ -159,7 +159,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
     let new_strat = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     (USDT.to_string(), Decimal::percent(50)),
                     (USDC.to_string(), Decimal::percent(50)),
                 ],
@@ -174,7 +174,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     (USDT.to_string(), Decimal::percent(50)),
                     (USDC.to_string(), Decimal::percent(50)),
                 ],

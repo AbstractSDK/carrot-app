@@ -23,21 +23,21 @@ use self::yield_type::YieldType;
 #[cw_serde]
 pub struct YieldSource {
     /// This id (denom, share)
-    pub expected_tokens: Vec<(String, Decimal)>,
+    pub asset_distribution: Vec<(String, Decimal)>,
     pub ty: YieldType,
 }
 
 impl YieldSource {
     pub fn check(&self) -> AppResult<()> {
         // First we check the share sums the 100
-        let share_sum: Decimal = self.expected_tokens.iter().map(|e| e.1).sum();
+        let share_sum: Decimal = self.asset_distribution.iter().map(|e| e.1).sum();
         ensure_eq!(
             share_sum,
             Decimal::one(),
             AppError::InvalidStrategySum { share_sum }
         );
         ensure!(
-            !self.expected_tokens.is_empty(),
+            !self.asset_distribution.is_empty(),
             AppError::InvalidEmptyStrategy {}
         );
 
@@ -100,7 +100,7 @@ impl BalanceStrategy {
             .map(|source| {
                 source
                     .yield_source
-                    .expected_tokens
+                    .asset_distribution
                     .iter()
                     .map(|(denom, share)| B {
                         denom: denom.clone(),
@@ -118,7 +118,7 @@ impl BalanceStrategy {
                 // Find the share for the specific denom inside the strategy
                 let this_denom_status = strategy
                     .yield_source
-                    .expected_tokens
+                    .asset_distribution
                     .iter()
                     .zip(status.iter_mut())
                     .find(|((denom, _share), _status)| this_coin.denom.eq(denom))

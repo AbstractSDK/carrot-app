@@ -16,7 +16,7 @@ pub fn mock_strategy() -> BalanceStrategy {
     BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     (LUNA.to_string(), Decimal::percent(30)),
                     (OSMOSIS.to_string(), Decimal::percent(10)),
                     (STARGAZE.to_string(), Decimal::percent(60)),
@@ -27,7 +27,7 @@ pub fn mock_strategy() -> BalanceStrategy {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![(NEUTRON.to_string(), Decimal::percent(100))],
+                asset_distribution: vec![(NEUTRON.to_string(), Decimal::percent(100))],
                 ty: YieldType::Mars("usdc".to_string()),
             },
             share: Decimal::percent(67),
@@ -40,14 +40,14 @@ fn bad_strategy_check_empty() -> cw_orch::anyhow::Result<()> {
     let strategy = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![],
+                asset_distribution: vec![],
                 ty: YieldType::Mars("usdc".to_string()),
             },
             share: Decimal::percent(33),
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![],
+                asset_distribution: vec![],
                 ty: YieldType::Mars("usdc".to_string()),
             },
             share: Decimal::percent(67),
@@ -64,14 +64,14 @@ fn bad_strategy_check_sum() -> cw_orch::anyhow::Result<()> {
     let strategy = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![(NEUTRON.to_string(), Decimal::percent(100))],
+                asset_distribution: vec![(NEUTRON.to_string(), Decimal::percent(100))],
                 ty: YieldType::Mars("usdc".to_string()),
             },
             share: Decimal::percent(33),
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![(NEUTRON.to_string(), Decimal::percent(100))],
+                asset_distribution: vec![(NEUTRON.to_string(), Decimal::percent(100))],
                 ty: YieldType::Mars("usdc".to_string()),
             },
             share: Decimal::percent(66),
@@ -88,7 +88,7 @@ fn bad_strategy_check_sum_inner() -> cw_orch::anyhow::Result<()> {
     let strategy = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     (NEUTRON.to_string(), Decimal::percent(33)),
                     (NEUTRON.to_string(), Decimal::percent(66)),
                 ],
@@ -98,7 +98,7 @@ fn bad_strategy_check_sum_inner() -> cw_orch::anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![(NEUTRON.to_string(), Decimal::percent(100))],
+                asset_distribution: vec![(NEUTRON.to_string(), Decimal::percent(100))],
                 ty: YieldType::Mars("usdc".to_string()),
             },
             share: Decimal::percent(67),

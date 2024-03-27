@@ -182,7 +182,7 @@ pub fn _inner_deposit(
             .into_iter()
             .flat_map(|s| {
                 s.yield_source
-                    .expected_tokens
+                    .asset_distribution
                     .into_iter()
                     .map(|(denom, _)| denom)
             })
