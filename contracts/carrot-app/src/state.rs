@@ -9,7 +9,7 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
 
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
-pub const CONFIG: Item<Config> = Item::new("config");
+pub const CONFIG: Item<Config> = Item::new("config2");
 pub const POSITION: Item<Position> = Item::new("position");
 pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
 
