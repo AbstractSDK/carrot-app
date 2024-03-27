@@ -34,6 +34,7 @@ interface = [
   "dep:cw-orch",
   "abstract-app/interface-macro",
   "abstract-dex-adapter/interface",
+  "abstract-money-market-adapter/interface",
 ]
 schema = ["abstract-app/schema"]
 
@@ -52,7 +53,9 @@ abstract-sdk = { workspace = true }
 
 # Dependencies for interface
 abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
+abstract-money-market-adapter = { workspace = true, features = ["mars"] }
 cw-orch = { workspace = true, optional = true }
+abstract-money-market-standard = { workspace = true }
 
 osmosis-std = { version = "0.21.0" }
 prost = { version = "0.12.3" }

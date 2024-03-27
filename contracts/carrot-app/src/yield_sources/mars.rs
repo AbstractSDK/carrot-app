@@ -5,20 +5,23 @@ use abstract_app::{
     objects::{AnsAsset, AssetEntry},
     traits::AbstractNameService,
 };
+use abstract_money_market_adapter::msg::MoneyMarketQueryMsg;
+use abstract_money_market_adapter::MoneyMarketInterface;
 use cosmwasm_std::{ensure_eq, Coin, CosmosMsg, Decimal, Deps, SubMsg, Uint128};
 use cw_asset::AssetInfo;
+
+use abstract_money_market_standard::query::MoneyMarketAnsQuery;
+
+pub const MARS_MONEY_MARKET: &str = "mars";
 
 pub fn deposit(deps: Deps, denom: String, amount: Uint128, app: &App) -> AppResult<Vec<SubMsg>> {
     let ans = app.name_service(deps);
     let ans_fund = ans.query(&AssetInfo::native(denom))?;
 
-    // TODO after MM Adapter is merged
-    // Ok(vec![app
-    //     .ans_money_market(deps)?
-    //     .deposit(AnsAsset::new(ans_fund, amount))?
-    //     .into()])
-
-    Ok(vec![])
+    Ok(vec![SubMsg::new(
+        app.ans_money_market(deps, MARS_MONEY_MARKET.to_string())
+            .deposit(AnsAsset::new(ans_fund, amount))?,
+    )])
 }
 
 pub fn withdraw(
@@ -37,13 +40,10 @@ pub fn withdraw(
 
     let ans_fund = ans.query(&AssetInfo::native(denom))?;
 
-    // TODO after MM Adapter is merged
-    // Ok(vec![app
-    //     .ans_money_market(deps)?
-    //     .withdraw(AnsAsset::new(ans_fund, amount))?
-    //     .into()])
-
-    Ok(vec![])
+    Ok(vec![app
+        .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
+        .withdraw(AnsAsset::new(ans_fund, amount))?
+        .into()])
 }
 
 pub fn withdraw_rewards(
@@ -55,27 +55,20 @@ pub fn withdraw_rewards(
     Ok((vec![], vec![]))
 }
 
-/// This computes the current shares between assets in the position
-/// For mars, there is no share, the yield strategy is for 1 asset only
-/// So we just return the given share (which should be valid)
-pub fn current_share(
-    deps: Deps,
-    shares: Vec<(String, Decimal)>,
-) -> AppResult<Vec<(String, Decimal)>> {
-    Ok(shares)
-}
-
 pub fn user_deposit(deps: Deps, denom: String, app: &App) -> AppResult<Uint128> {
     let ans = app.name_service(deps);
-    let ans_fund = ans.query(&AssetInfo::native(denom))?;
+    let asset = ans.query(&AssetInfo::native(denom))?;
     let user = app.account_base(deps)?.proxy;
 
-    // TODO after MM Adapter is merged
-    // Ok(app
-    //     .ans_money_market(deps)?
-    //     .user_deposit(user, ans_fund)?
-    //     .into())
-    Ok(Uint128::zero())
+    Ok(app
+        .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
+        .query(MoneyMarketQueryMsg::MoneyMarketAnsQuery {
+            query: MoneyMarketAnsQuery::UserDeposit {
+                user: user.to_string(),
+                asset,
+            },
+            money_market: MARS_MONEY_MARKET.to_string(),
+        })?)
 }
 
 /// Returns an amount representing a user's liquidity

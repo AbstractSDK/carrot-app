@@ -9,17 +9,22 @@ cw-orch = "0.20.1"
 abstract-app = { version = "0.21.0" }
 abstract-interface = { version = "0.21.0" }
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0" }
+abstract-money-market-adapter = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-money-market-standard = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-client = { version = "0.21.0" }
 abstract-testing = { version = "0.21.0" }
 abstract-sdk = { version = "0.21.0", features = ["stargate"] }
 
 
 [patch.crates-io]
+# This is included to avoid recompinling too much
 osmosis-test-tube = { path = "../test-tube/packages/osmosis-test-tube" }
 
 
-# This was added to account for the fix data forwaring in the proxy contract
+# This was added to account for the fix data forwaring in the proxy contract + moneymarket adapter
 abstract-app = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git" }
+abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-interface = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-client = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-testing = { git = "https://github.com/abstractsdk/abstract.git" }
