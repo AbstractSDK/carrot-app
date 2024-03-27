@@ -60,20 +60,6 @@
           "additionalProperties": false
         },
         {
-          "description": "Get the claimable rewards that the position has accumulated. Returns [`AvailableRewardsResponse`]",
-          "type": "object",
-          "required": [
-            "available_rewards"
-          ],
-          "properties": {
-            "available_rewards": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        {
           "type": "object",
           "required": [
             "position"
@@ -87,7 +73,7 @@
           "additionalProperties": false
         },
         {
-          "description": "Get the status of the compounding logic of the application Returns [`CompoundStatusResponse`]",
+          "description": "Get the status of the compounding logic of the application and pool rewards Returns [`CompoundStatusResponse`]",
           "type": "object",
           "required": [
             "compound_status"

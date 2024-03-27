@@ -223,7 +223,8 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
 
     // TODO: ensure rewards > tx fee
 
-    if resp.rewards_available {
+    // Ensure there is rewards and pool rewards not empty
+    if resp.autocompound_reward_available && !resp.pool_rewards.is_empty() {
         // Execute autocompound
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),

@@ -182,8 +182,6 @@ mod tests {
             &Config {
                 pool_config: PoolConfig {
                     pool_id: 45,
-                    token0: TOKEN0.to_string(),
-                    token1: TOKEN1.to_string(),
                     asset0: AssetEntry::new(TOKEN0),
                     asset1: AssetEntry::new(TOKEN1),
                 },

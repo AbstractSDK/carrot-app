@@ -12,17 +12,13 @@ use crate::{
     error::AppError,
     handlers::swap_helpers::DEFAULT_SLIPPAGE,
     helpers::{get_balance, get_user},
-    msg::{
-        AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
-        PositionResponse,
-    },
+    msg::{AppQueryMsg, AssetsBalanceResponse, CompoundStatusResponse, PositionResponse},
     state::{get_osmosis_position, get_position_status, Config, CONFIG, POSITION},
 };
 
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
-        AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         AppQueryMsg::Position {} => to_json_binary(&query_position(deps)?),
         AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
@@ -72,10 +68,13 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         user_swap_balance > required_swap_amount
     };
 
+    let pool_rewards = query_rewards(deps, app)?;
+
     Ok(CompoundStatusResponse {
         status,
-        reward: reward.into(),
-        rewards_available,
+        autocompound_reward: reward.into(),
+        autocompound_reward_available: rewards_available,
+        pool_rewards,
     })
 }
 
@@ -88,6 +87,7 @@ fn query_position(deps: Deps) -> AppResult<PositionResponse> {
 fn query_config(deps: Deps) -> AppResult<Config> {
     Ok(CONFIG.load(deps.storage)?)
 }
+
 fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
     let pool = get_osmosis_position(deps)?;
 
@@ -99,7 +99,7 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
     })
 }
 
-fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> {
+fn query_rewards(deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
     let pool = get_osmosis_position(deps)?;
 
     let mut rewards = cosmwasm_std::Coins::default();
@@ -111,9 +111,7 @@ fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> 
         rewards.add(coin)?;
     }
 
-    Ok(AvailableRewardsResponse {
-        available_rewards: rewards.into(),
-    })
+    Ok(rewards.into())
 }
 
 pub fn query_price(
@@ -125,15 +123,28 @@ pub fn query_price(
     belief_price1: Option<Decimal>,
 ) -> AppResult<Decimal> {
     let config = CONFIG.load(deps.storage)?;
+    let ans_host = app.ans_host(deps)?;
+
+    // We know it's native denom for osmosis pool
+    let token0 = config
+        .pool_config
+        .asset0
+        .resolve(&deps.querier, &ans_host)?
+        .inner();
+    let token1 = config
+        .pool_config
+        .asset1
+        .resolve(&deps.querier, &ans_host)?
+        .inner();
 
     let amount0 = funds
         .iter()
-        .find(|c| c.denom == config.pool_config.token0)
+        .find(|c| c.denom == token0)
         .map(|c| c.amount)
         .unwrap_or_default();
     let amount1 = funds
         .iter()
-        .find(|c| c.denom == config.pool_config.token1)
+        .find(|c| c.denom == token1)
         .map(|c| c.amount)
         .unwrap_or_default();
 

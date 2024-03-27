@@ -83,9 +83,7 @@
       "required": [
         "asset0",
         "asset1",
-        "pool_id",
-        "token0",
-        "token1"
+        "pool_id"
       ],
       "properties": {
         "asset0": {
@@ -98,12 +96,6 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
-        },
-        "token0": {
-          "type": "string"
-        },
-        "token1": {
-          "type": "string"
         }
       },
       "additionalProperties": false
