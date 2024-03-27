@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use crate::{
     contract::AppResult,
     error::AppError,
+    helpers::close_to,
     msg::{AppExecuteMsg, ExecuteMsg},
     state::compute_total_value,
 };
@@ -31,9 +32,8 @@ impl YieldSource {
     pub fn check(&self) -> AppResult<()> {
         // First we check the share sums the 100
         let share_sum: Decimal = self.expected_tokens.iter().map(|e| e.share).sum();
-        ensure_eq!(
-            share_sum,
-            Decimal::one(),
+        ensure!(
+            close_to(Decimal::one(), share_sum),
             AppError::InvalidStrategySum { share_sum }
         );
         ensure!(
@@ -89,9 +89,8 @@ impl BalanceStrategy {
     pub fn check(&self) -> AppResult<()> {
         // First we check the share sums the 100
         let share_sum: Decimal = self.0.iter().map(|e| e.share).sum();
-        ensure_eq!(
-            share_sum,
-            Decimal::one(),
+        ensure!(
+            close_to(Decimal::one(), share_sum),
             AppError::InvalidStrategySum { share_sum }
         );
         ensure!(!self.0.is_empty(), AppError::InvalidEmptyStrategy {});

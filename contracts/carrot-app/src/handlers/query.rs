@@ -9,6 +9,7 @@ use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
 use cw_asset::Asset;
 
+use crate::yield_sources::{BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
@@ -28,6 +29,7 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
         AppQueryMsg::Strategy {} => to_json_binary(&query_strategy(deps)?),
         AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
         AppQueryMsg::RebalancePreview {} => todo!(),
+        AppQueryMsg::StrategyStatus {} => to_json_binary(&query_strategy_status(deps, app)?),
     }
     .map_err(Into::into)
 }
@@ -87,6 +89,76 @@ pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
 
     Ok(StrategyResponse {
         strategy: config.balance_strategy,
+    })
+}
+
+pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
+    let strategy = query_strategy(deps)?.strategy;
+    let exchange_rates = query_all_exchange_rates(
+        deps,
+        strategy.0.iter().flat_map(|s| {
+            s.yield_source
+                .expected_tokens
+                .iter()
+                .map(|ExpectedToken { denom, share: _ }| denom.clone())
+        }),
+        app,
+    )?;
+
+    // We get the value for each investment
+    let all_strategy_values = query_strategy(deps)?
+        .strategy
+        .0
+        .iter()
+        .map(|s| {
+            let user_deposit = s.yield_source.ty.user_deposit(deps, app)?;
+
+            // From this, we compute the shares within the investment
+            let each_value = user_deposit
+                .iter()
+                .map(|fund| {
+                    let exchange_rate = exchange_rates
+                        .get(&fund.denom)
+                        .ok_or(AppError::NoExchangeRate(fund.denom.clone()))?;
+
+                    Ok::<_, AppError>((fund.denom.clone(), *exchange_rate * fund.amount))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let total_value: Uint128 = each_value.iter().map(|(_denom, amount)| amount).sum();
+
+            let each_shares = each_value
+                .into_iter()
+                .map(|(denom, amount)| ExpectedToken {
+                    denom,
+                    share: Decimal::from_ratio(amount, total_value),
+                })
+                .collect::<Vec<_>>();
+
+            Ok::<_, AppError>((total_value, each_shares))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let all_strategies_value: Uint128 = all_strategy_values.iter().map(|(value, _)| value).sum();
+
+    // Finally, we dispatch the total_value to get investment shares
+    Ok(StrategyResponse {
+        strategy: BalanceStrategy(
+            strategy
+                .0
+                .into_iter()
+                .zip(all_strategy_values)
+                .map(
+                    |(original_strategy, (value, shares))| BalanceStrategyElement {
+                        yield_source: YieldSource {
+                            expected_tokens: shares,
+                            ty: original_strategy.yield_source.ty,
+                        },
+                        share: Decimal::from_ratio(value, all_strategies_value),
+                    },
+                )
+                .collect(),
+        ),
     })
 }
 

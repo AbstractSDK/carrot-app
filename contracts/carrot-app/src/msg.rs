@@ -88,10 +88,14 @@ pub enum AppQueryMsg {
     /// Returns [`CompoundStatusResponse`]
     #[returns(CompoundStatusResponse)]
     CompoundStatus {},
-    /// Returns the current strategy
+    /// Returns the current strategy as stored in the application
     /// Returns [`StrategyResponse`]
     #[returns(StrategyResponse)]
     Strategy {},
+    /// Returns the current funds distribution between all the strategies
+    /// Returns [`StrategyResponse`]
+    #[returns(StrategyResponse)]
+    StrategyStatus {},
     /// Returns a preview of the rebalance distribution
     /// Returns [`RebalancePreviewResponse`]
     #[returns(RebalancePreviewResponse)]

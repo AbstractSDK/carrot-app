@@ -10,7 +10,7 @@ use carrot_app::{
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
 use cosmwasm_std::Decimal;
-use cw_orch::{anyhow, prelude::*};
+use cw_orch::anyhow;
 
 #[test]
 fn rebalance_fails() -> anyhow::Result<()> {
