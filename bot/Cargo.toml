@@ -15,7 +15,6 @@ abstract-client = { workspace = true }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
-# For cw-optimizoor
 env_logger = { version = "0.11.3", default-features = false }
 log = "0.4.20"
 tonic = "0.10.0"

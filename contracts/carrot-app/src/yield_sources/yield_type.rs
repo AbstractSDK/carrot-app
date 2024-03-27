@@ -9,7 +9,7 @@ use super::{mars, osmosis_cl_pool};
 pub enum YieldType {
     /// For osmosis CL Pools, you need a pool id to do your deposit, and that's all
     ConcentratedLiquidityPool(ConcentratedPoolParams),
-    /// For Mars CL Pools, you just need to deposit in the RedBank
+    /// For Mars, you just need to deposit in the RedBank
     /// You need to indicate the denom of the funds you want to deposit
     Mars(String),
 }
