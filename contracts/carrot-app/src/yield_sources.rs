@@ -10,6 +10,7 @@ use crate::{
     contract::{App, AppResult},
     error::AppError,
     helpers::close_to,
+    yield_sources::yield_type::YieldTypeImplementation,
 };
 use abstract_app::traits::AbstractNameService;
 
@@ -20,8 +21,7 @@ use self::yield_type::YieldType;
 /// A type that allows routing to the right smart-contract integration internally
 #[cw_serde]
 pub struct YieldSource {
-    /// This id (denom, share)
-    pub asset_distribution: Vec<ExpectedToken>,
+    pub asset_distribution: Vec<AssetShare>,
     pub ty: YieldType,
 }
 
@@ -33,6 +33,7 @@ impl YieldSource {
             close_to(Decimal::one(), share_sum),
             AppError::InvalidStrategySum { share_sum }
         );
+        // We make sure that assets are associated with this strategy
         ensure!(
             !self.asset_distribution.is_empty(),
             AppError::InvalidEmptyStrategy {}
@@ -61,7 +62,7 @@ impl YieldSource {
                 );
                 params.check(deps)?;
             }
-            YieldType::Mars(denom) => {
+            YieldType::Mars(params) => {
                 // We verify there is only one element in the shares vector
                 ensure_eq!(
                     self.asset_distribution.len(),
@@ -70,10 +71,11 @@ impl YieldSource {
                 );
                 // We verify the first element correspond to the mars deposit denom
                 ensure_eq!(
-                    &self.asset_distribution[0].denom,
-                    denom,
+                    self.asset_distribution[0].denom,
+                    params.denom,
                     AppError::InvalidStrategy {}
                 );
+                params.check(deps)?;
             }
         }
 
@@ -88,8 +90,9 @@ impl YieldSource {
     }
 }
 
+/// This is used to express a share of tokens inside a strategy
 #[cw_serde]
-pub struct ExpectedToken {
+pub struct AssetShare {
     pub denom: String,
     pub share: Decimal,
 }
@@ -102,20 +105,10 @@ pub enum ShareType {
     Fixed,
 }
 
-// Related to balance strategies
+// This represents a balance strategy
+// This object is used for storing the current strategy, retrieving the actual strategy status or expressing a target strategy when depositing
 #[cw_serde]
 pub struct BalanceStrategy(pub Vec<BalanceStrategyElement>);
-
-#[cw_serde]
-pub struct BalanceStrategyElement {
-    pub yield_source: YieldSource,
-    pub share: Decimal,
-}
-impl BalanceStrategyElement {
-    pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
-        self.yield_source.check(deps, app)
-    }
-}
 
 impl BalanceStrategy {
     pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
@@ -141,5 +134,22 @@ impl BalanceStrategy {
             .iter()
             .flat_map(|s| s.yield_source.all_denoms())
             .collect()
+    }
+}
+
+impl From<Vec<BalanceStrategyElement>> for BalanceStrategy {
+    fn from(value: Vec<BalanceStrategyElement>) -> Self {
+        Self(value)
+    }
+}
+
+#[cw_serde]
+pub struct BalanceStrategyElement {
+    pub yield_source: YieldSource,
+    pub share: Decimal,
+}
+impl BalanceStrategyElement {
+    pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
+        self.yield_source.check(deps, app)
     }
 }

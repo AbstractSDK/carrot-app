@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::contract::{App, AppResult};
 use crate::error::AppError;
+use crate::handlers::query::query_exchange_rate;
 use abstract_app::traits::AccountIdentification;
 use abstract_app::{objects::AssetEntry, traits::AbstractNameService};
 use abstract_sdk::Resolve;
@@ -58,6 +59,16 @@ pub fn compute_total_value(
                 .get(&c.denom)
                 .ok_or(AppError::NoExchangeRate(c.denom.clone()))?;
             Ok(c.amount * *exchange_rate)
+        })
+        .sum()
+}
+
+pub fn compute_value(deps: Deps, funds: &[Coin], app: &App) -> AppResult<Uint128> {
+    funds
+        .iter()
+        .map(|c| {
+            let exchange_rate = query_exchange_rate(deps, c.denom.clone(), app)?;
+            Ok(c.amount * exchange_rate)
         })
         .sum()
 }

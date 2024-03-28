@@ -1,7 +1,8 @@
 use crate::{
+    autocompound::AutocompoundState,
     contract::{App, AppResult},
     msg::AppInstantiateMsg,
-    state::{AutocompoundState, Config, AUTOCOMPOUND_STATE, CONFIG},
+    state::{Config, AUTOCOMPOUND_STATE, CONFIG},
 };
 use abstract_app::abstract_sdk::{features::AbstractNameService, AbstractResponse};
 use cosmwasm_std::{DepsMut, Env, MessageInfo};

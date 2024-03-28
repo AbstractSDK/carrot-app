@@ -4,8 +4,8 @@ use crate::common::{setup_test_tube, USDC, USDT};
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
-        yield_type::{ConcentratedPoolParams, YieldType},
-        BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
+        osmosis_cl_pool::ConcentratedPoolParams, yield_type::YieldType, AssetShare,
+        BalanceStrategy, BalanceStrategyElement, YieldSource,
     },
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
@@ -21,11 +21,11 @@ fn rebalance_fails() -> anyhow::Result<()> {
             BalanceStrategyElement {
                 yield_source: YieldSource {
                     asset_distribution: vec![
-                        ExpectedToken {
+                        AssetShare {
                             denom: USDT.to_string(),
                             share: Decimal::percent(50),
                         },
-                        ExpectedToken {
+                        AssetShare {
                             denom: USDC.to_string(),
                             share: Decimal::percent(50),
                         },
@@ -42,11 +42,11 @@ fn rebalance_fails() -> anyhow::Result<()> {
             BalanceStrategyElement {
                 yield_source: YieldSource {
                     asset_distribution: vec![
-                        ExpectedToken {
+                        AssetShare {
                             denom: USDT.to_string(),
                             share: Decimal::percent(50),
                         },
-                        ExpectedToken {
+                        AssetShare {
                             denom: USDC.to_string(),
                             share: Decimal::percent(50),
                         },
@@ -76,11 +76,11 @@ fn rebalance_success() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },
@@ -97,11 +97,11 @@ fn rebalance_success() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },

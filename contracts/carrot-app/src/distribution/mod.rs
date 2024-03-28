@@ -12,5 +12,7 @@ pub mod withdraw;
 pub mod rewards;
 
 /// 4. Some queries are needed on certain structures for abstraction purposes
-///
 pub mod query;
+
+/// 4. Some queries are needed on certain structures for abstraction purposes
+pub mod rebalance;

@@ -3,76 +3,86 @@ use abstract_app::traits::AccountIdentification;
 use abstract_app::{objects::AnsAsset, traits::AbstractNameService};
 use abstract_money_market_adapter::msg::MoneyMarketQueryMsg;
 use abstract_money_market_adapter::MoneyMarketInterface;
-use cosmwasm_std::{Coin, CosmosMsg, Deps, SubMsg, Uint128};
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{coins, Coin, CosmosMsg, Deps, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use abstract_money_market_standard::query::MoneyMarketAnsQuery;
 
+use super::yield_type::YieldTypeImplementation;
+use super::ShareType;
+
 pub const MARS_MONEY_MARKET: &str = "mars";
 
-pub fn deposit(deps: Deps, denom: String, amount: Uint128, app: &App) -> AppResult<Vec<SubMsg>> {
-    let ans = app.name_service(deps);
-    let ans_fund = ans.query(&AssetInfo::native(denom))?;
-
-    Ok(vec![SubMsg::new(
-        app.ans_money_market(deps, MARS_MONEY_MARKET.to_string())
-            .deposit(AnsAsset::new(ans_fund, amount))?,
-    )])
+#[cw_serde]
+pub struct MarsDepositParams {
+    pub denom: String,
 }
+impl YieldTypeImplementation for MarsDepositParams {
+    fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+        let ans = app.name_service(deps);
+        let ans_fund = ans.query(&AssetInfo::native(self.denom))?;
 
-pub fn withdraw(
-    deps: Deps,
-    denom: String,
-    amount: Option<Uint128>,
-    app: &App,
-) -> AppResult<Vec<CosmosMsg>> {
-    let ans = app.name_service(deps);
+        Ok(vec![SubMsg::new(
+            app.ans_money_market(deps, MARS_MONEY_MARKET.to_string())
+                .deposit(AnsAsset::new(ans_fund, funds[0].amount))?,
+        )])
+    }
 
-    let amount = if let Some(amount) = amount {
-        amount
-    } else {
-        user_deposit(deps, denom.clone(), app)?
-    };
+    fn withdraw(self, deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec<CosmosMsg>> {
+        let ans = app.name_service(deps);
 
-    let ans_fund = ans.query(&AssetInfo::native(denom))?;
+        let amount = if let Some(amount) = amount {
+            amount
+        } else {
+            self.user_deposit(deps, app)?[0].amount
+        };
 
-    Ok(vec![app
-        .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
-        .withdraw(AnsAsset::new(ans_fund, amount))?])
-}
+        let ans_fund = ans.query(&AssetInfo::native(self.denom))?;
 
-pub fn withdraw_rewards(
-    _deps: Deps,
-    _denom: String,
-    _app: &App,
-) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
-    // Mars doesn't have rewards, it's automatically auto-compounded
-    Ok((vec![], vec![]))
-}
+        Ok(vec![app
+            .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
+            .withdraw(AnsAsset::new(ans_fund, amount))?])
+    }
 
-pub fn user_deposit(deps: Deps, denom: String, app: &App) -> AppResult<Uint128> {
-    let ans = app.name_service(deps);
-    let asset = ans.query(&AssetInfo::native(denom))?;
-    let user = app.account_base(deps)?.proxy;
+    fn withdraw_rewards(self, _deps: Deps, _app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+        // Mars doesn't have rewards, it's automatically auto-compounded
+        Ok((vec![], vec![]))
+    }
 
-    Ok(app
-        .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
-        .query(MoneyMarketQueryMsg::MoneyMarketAnsQuery {
-            query: MoneyMarketAnsQuery::UserDeposit {
-                user: user.to_string(),
-                asset,
-            },
-            money_market: MARS_MONEY_MARKET.to_string(),
-        })?)
-}
+    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+        let ans = app.name_service(deps);
+        let asset = ans.query(&AssetInfo::native(self.denom.clone()))?;
+        let user = app.account_base(deps)?.proxy;
 
-/// Returns an amount representing a user's liquidity
-pub fn user_liquidity(deps: Deps, denom: String, app: &App) -> AppResult<Uint128> {
-    user_deposit(deps, denom, app)
-}
+        let deposit: Uint128 = app
+            .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
+            .query(MoneyMarketQueryMsg::MoneyMarketAnsQuery {
+                query: MoneyMarketAnsQuery::UserDeposit {
+                    user: user.to_string(),
+                    asset,
+                },
+                money_market: MARS_MONEY_MARKET.to_string(),
+            })?;
 
-pub fn user_rewards(_deps: Deps, _denom: String, _app: &App) -> AppResult<Vec<Coin>> {
-    // No rewards, because mars is already auto-compounding
+        Ok(coins(deposit.u128(), self.denom.clone()))
+    }
 
-    Ok(vec![])
+    fn user_rewards(&self, _deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+        // No rewards, because mars is already auto-compounding
+
+        Ok(vec![])
+    }
+
+    fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
+        Ok(self.user_deposit(deps, app)?[0].amount)
+    }
+
+    fn share_type(&self) -> super::ShareType {
+        ShareType::Fixed
+    }
+
+    fn check(&self, _deps: Deps) -> AppResult<()> {
+        Ok(())
+    }
 }

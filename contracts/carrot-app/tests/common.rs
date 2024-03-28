@@ -2,13 +2,12 @@ use abstract_app::abstract_core::objects::{
     pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType,
 };
 use abstract_client::{AbstractClient, Application, Namespace};
+use carrot_app::autocompound::{AutocompoundConfig, AutocompoundRewardsConfig};
 use carrot_app::contract::OSMOSIS;
 use carrot_app::msg::AppInstantiateMsg;
-use carrot_app::state::{AutocompoundConfig, AutocompoundRewardsConfig};
-use carrot_app::yield_sources::yield_type::{ConcentratedPoolParams, YieldType};
-use carrot_app::yield_sources::{
-    BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
-};
+use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParams;
+use carrot_app::yield_sources::yield_type::YieldType;
+use carrot_app::yield_sources::{AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource};
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
@@ -125,11 +124,11 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         balance_strategy: BalanceStrategy(vec![BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },

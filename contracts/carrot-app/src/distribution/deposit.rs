@@ -6,7 +6,7 @@ use crate::{
     contract::{App, AppResult},
     handlers::query::query_all_exchange_rates,
     helpers::compute_total_value,
-    yield_sources::{yield_type::YieldType, BalanceStrategy, ExpectedToken},
+    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy},
 };
 
 use cosmwasm_schema::cw_serde;
@@ -23,7 +23,7 @@ impl BalanceStrategy {
     // 0 : Funds that are used for specific strategies. And remaining amounts to fill those strategies
     // 1 : Funds that are still available to fill those strategies
     // This is the algorithm that is implemented here
-    pub fn fill_sources(
+    fn fill_sources(
         &self,
         funds: Vec<Coin>,
         exchange_rates: &HashMap<String, Decimal>,
@@ -40,7 +40,7 @@ impl BalanceStrategy {
                     .yield_source
                     .asset_distribution
                     .iter()
-                    .map(|ExpectedToken { denom, share }| StrategyStatusElement {
+                    .map(|AssetShare { denom, share }| StrategyStatusElement {
                         denom: denom.clone(),
                         raw_funds: Uint128::zero(),
                         remaining_amount: share * source.share * total_value,
@@ -59,7 +59,7 @@ impl BalanceStrategy {
                     .asset_distribution
                     .iter()
                     .zip(status.iter_mut())
-                    .find(|(ExpectedToken { denom, share: _ }, _status)| this_coin.denom.eq(denom))
+                    .find(|(AssetShare { denom, share: _ }, _status)| this_coin.denom.eq(denom))
                     .map(|(_, status)| status);
 
                 if let Some(status) = this_denom_status {
@@ -79,7 +79,7 @@ impl BalanceStrategy {
         Ok((yield_source_status.into(), remaining_funds))
     }
 
-    pub fn fill_all(
+    fn fill_all(
         &self,
         deps: Deps,
         funds: Vec<Coin>,
@@ -115,7 +115,7 @@ impl BalanceStrategy {
     }
 
     /// Corrects the current strategy with some parameters passed by the user
-    pub fn correct_with(&mut self, params: Option<Vec<Option<Vec<ExpectedToken>>>>) {
+    pub fn correct_with(&mut self, params: Option<Vec<Option<Vec<AssetShare>>>>) {
         // We correct the strategy if specified in parameters
         let params = params.unwrap_or_else(|| vec![None; self.0.len()]);
 
@@ -131,7 +131,7 @@ impl BalanceStrategy {
 }
 
 #[cw_serde]
-pub struct StrategyStatusElement {
+struct StrategyStatusElement {
     pub denom: String,
     pub raw_funds: Uint128,
     pub remaining_amount: Uint128,
@@ -141,7 +141,7 @@ pub struct StrategyStatusElement {
 /// AFTER filling with unrelated coins
 /// Before filling with related coins
 #[cw_serde]
-pub struct StrategyStatus(pub Vec<Vec<StrategyStatusElement>>);
+struct StrategyStatus(pub Vec<Vec<StrategyStatusElement>>);
 
 impl From<Vec<Vec<StrategyStatusElement>>> for StrategyStatus {
     fn from(value: Vec<Vec<StrategyStatusElement>>) -> Self {

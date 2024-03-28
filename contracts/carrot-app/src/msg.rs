@@ -3,10 +3,10 @@ use cosmwasm_std::{Coin, Uint128, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
+    autocompound::AutocompoundConfig,
     contract::App,
     distribution::deposit::OneDepositStrategy,
-    state::AutocompoundConfig,
-    yield_sources::{yield_type::YieldType, BalanceStrategy, ExpectedToken},
+    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy},
 };
 
 // This is used for type safety and re-exporting the contract endpoint structs.
@@ -41,8 +41,8 @@ pub enum AppExecuteMsg {
         /// This is not used for a first deposit into a strategy that hasn't changed for instance
         /// This is an options because this is not mandatory
         /// The vector then has option inside of it because we might not want to change parameters for all strategies
-        /// We might not use a vector but use a (usize, Vec<ExpectedToken>) instead to avoid having to pass a full vector everytime
-        yield_sources_params: Option<Vec<Option<Vec<ExpectedToken>>>>,
+        /// We might not use a vector but use a (usize, Vec<AssetShare>) instead to avoid having to pass a full vector everytime
+        yield_sources_params: Option<Vec<Option<Vec<AssetShare>>>>,
     },
     /// Partial withdraw of the funds available on the app
     /// If amount is omitted, withdraws everything that is on the app

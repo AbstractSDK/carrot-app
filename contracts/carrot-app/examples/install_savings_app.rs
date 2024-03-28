@@ -11,9 +11,9 @@ use cw_orch::{
 use dotenv::dotenv;
 
 use carrot_app::{
+    autocompound::{AutocompoundConfig, AutocompoundRewardsConfig},
     contract::OSMOSIS,
     msg::AppInstantiateMsg,
-    state::{AutocompoundConfig, AutocompoundRewardsConfig},
     yield_sources::BalanceStrategy,
 };
 use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;

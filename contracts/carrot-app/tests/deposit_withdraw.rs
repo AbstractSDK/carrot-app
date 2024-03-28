@@ -5,8 +5,8 @@ use abstract_client::Application;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
-        yield_type::{ConcentratedPoolParams, YieldType},
-        BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
+        mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParams, yield_type::YieldType,
+        AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource,
     },
     AppInterface,
 };
@@ -150,11 +150,11 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },
@@ -171,11 +171,11 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },
@@ -220,11 +220,11 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },
@@ -241,11 +241,11 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         BalanceStrategyElement {
             yield_source: YieldSource {
                 asset_distribution: vec![
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
                     },
-                    ExpectedToken {
+                    AssetShare {
                         denom: USDC.to_string(),
                         share: Decimal::percent(50),
                     },
@@ -261,11 +261,13 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                asset_distribution: vec![ExpectedToken {
+                asset_distribution: vec![AssetShare {
                     denom: USDT.to_string(),
                     share: Decimal::percent(100),
                 }],
-                ty: YieldType::Mars(USDT.to_string()),
+                ty: YieldType::Mars(MarsDepositParams {
+                    denom: USDT.to_string(),
+                }),
             },
             share: Decimal::percent(0),
         },

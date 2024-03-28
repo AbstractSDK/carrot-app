@@ -9,7 +9,8 @@ use abstract_dex_adapter::DexInterface;
 use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
 use cw_asset::Asset;
 
-use crate::yield_sources::{BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource};
+use crate::autocompound::get_autocompound_status;
+use crate::yield_sources::BalanceStrategy;
 use crate::{
     contract::{App, AppResult},
     error::AppError,
@@ -18,7 +19,7 @@ use crate::{
         AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
         StrategyResponse,
     },
-    state::{get_autocompound_status, Config, CONFIG},
+    state::{Config, CONFIG},
 };
 
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -92,109 +93,12 @@ pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
     })
 }
 
-// Returns the target strategy for strategies
-// This includes querying the dynamic strategy if specified in the strategy options
-// This allows querying what actually needs to be deposited inside the strategy
-pub fn query_strategy_target(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
-    let strategy = query_strategy(deps)?.strategy;
-
-    Ok(StrategyResponse {
-        strategy: BalanceStrategy(
-            strategy
-                .0
-                .into_iter()
-                .map(|mut yield_source| {
-                    let shares = match yield_source.yield_source.ty.share_type() {
-                        crate::yield_sources::ShareType::Dynamic => {
-                            let (_total_value, shares) =
-                                query_dynamic_source_value(deps, &yield_source, app)?;
-                            shares
-                        }
-                        crate::yield_sources::ShareType::Fixed => {
-                            yield_source.yield_source.asset_distribution
-                        }
-                    };
-
-                    yield_source.yield_source.asset_distribution = shares;
-
-                    Ok::<_, AppError>(yield_source)
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-    })
-}
-
-/// Returns the current status of the full strategy. It returns shares reflecting the underlying positions
 pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
     let strategy = query_strategy(deps)?.strategy;
 
-    // We get the value for each investment and the shares within that investment
-    let all_strategy_values = query_strategy(deps)?
-        .strategy
-        .0
-        .iter()
-        .map(|s| query_dynamic_source_value(deps, s, app))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let all_strategies_value: Uint128 = all_strategy_values.iter().map(|(value, _)| value).sum();
-
-    // Finally, we dispatch the total_value to get investment shares
     Ok(StrategyResponse {
-        strategy: BalanceStrategy(
-            strategy
-                .0
-                .into_iter()
-                .zip(all_strategy_values)
-                .map(
-                    |(original_strategy, (value, shares))| BalanceStrategyElement {
-                        yield_source: YieldSource {
-                            asset_distribution: shares,
-                            ty: original_strategy.yield_source.ty,
-                        },
-                        share: Decimal::from_ratio(value, all_strategies_value),
-                    },
-                )
-                .collect(),
-        ),
+        strategy: strategy.query_current_status(deps, app)?,
     })
-}
-
-fn query_dynamic_source_value(
-    deps: Deps,
-    yield_source: &BalanceStrategyElement,
-    app: &App,
-) -> AppResult<(Uint128, Vec<ExpectedToken>)> {
-    // If there is no deposit
-    let user_deposit = match yield_source.yield_source.ty.user_deposit(deps, app) {
-        Ok(deposit) => deposit,
-        Err(_) => {
-            return Ok((
-                Uint128::zero(),
-                yield_source.yield_source.asset_distribution.clone(),
-            ))
-        }
-    };
-
-    // From this, we compute the shares within the investment
-    let each_value = user_deposit
-        .iter()
-        .map(|fund| {
-            let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
-
-            Ok::<_, AppError>((fund.denom.clone(), exchange_rate * fund.amount))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let total_value: Uint128 = each_value.iter().map(|(_denom, amount)| amount).sum();
-
-    let each_shares = each_value
-        .into_iter()
-        .map(|(denom, amount)| ExpectedToken {
-            denom,
-            share: Decimal::from_ratio(amount, total_value),
-        })
-        .collect::<Vec<_>>();
-    Ok((total_value, each_shares))
 }
 
 fn query_config(deps: Deps) -> AppResult<Config> {

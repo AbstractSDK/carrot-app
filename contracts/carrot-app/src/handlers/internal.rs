@@ -12,7 +12,7 @@ use crate::{
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::AbstractNameService;
-use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, MessageInfo, StdError, SubMsg, Uint128};
+use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, StdError, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use super::query::query_exchange_rate;
@@ -20,7 +20,6 @@ use super::query::query_exchange_rate;
 pub fn deposit_one_strategy(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
     strategy: OneDepositStrategy,
     yield_index: usize,
     yield_type: YieldType,
@@ -88,7 +87,6 @@ pub fn deposit_one_strategy(
 pub fn execute_one_deposit_step(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
     asset_in: Coin,
     denom_out: String,
     expected_amount: Uint128,
@@ -124,8 +122,6 @@ pub fn execute_one_deposit_step(
 
 pub fn execute_finalize_deposit(
     deps: DepsMut,
-    env: Env,
-    _info: MessageInfo,
     yield_type: YieldType,
     yield_index: usize,
     app: App,
@@ -134,7 +130,7 @@ pub fn execute_finalize_deposit(
 
     TEMP_CURRENT_YIELD.save(deps.storage, &yield_index)?;
 
-    let msgs = yield_type.deposit(deps.as_ref(), &env, available_deposit_coins, &app)?;
+    let msgs = yield_type.deposit(deps.as_ref(), available_deposit_coins, &app)?;
 
     Ok(app.response("one-deposit-step").add_submessages(msgs))
 }

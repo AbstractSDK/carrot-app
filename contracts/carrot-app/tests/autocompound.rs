@@ -1,14 +1,11 @@
 mod common;
 
-use crate::common::{setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC, USDT};
+use crate::common::{setup_test_tube, DEX_NAME, USDC, USDT};
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, AvailableRewardsResponse,
-    CompoundStatus, CompoundStatusResponse,
 };
-use cosmwasm_std::{coin, coins, Uint128};
-use cw_asset::AssetBase;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::Account;
+use cosmwasm_std::{coin, coins};
 use cw_orch::{anyhow, prelude::*};
 
 #[test]
