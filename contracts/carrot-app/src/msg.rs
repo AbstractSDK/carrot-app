@@ -1,10 +1,12 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Decimal, Uint128, Uint64};
+use cosmwasm_std::{Coin, Uint128, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
+    autocompound::AutocompoundConfig,
     contract::App,
-    state::{AutocompoundRewardsConfig, Position},
+    distribution::deposit::OneDepositStrategy,
+    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy},
 };
 
 // This is used for type safety and re-exporting the contract endpoint structs.
@@ -13,30 +15,15 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
-    /// Id of the pool used to get rewards
-    pub pool_id: u64,
-    /// Seconds to wait before autocompound is incentivized.
-    pub autocompound_cooldown_seconds: Uint64,
-    /// Configuration of rewards to the address who helped to execute autocompound
-    pub autocompound_rewards_config: AutocompoundRewardsConfig,
+    /// Strategy to use to dispatch the deposited funds
+    pub balance_strategy: BalanceStrategy,
+    /// Configuration of the aut-compounding procedure
+    pub autocompound_config: AutocompoundConfig,
+    /// Target dex to swap things on
+    pub dex: String,
     /// Create position with instantiation.
     /// Will not create position if omitted
-    pub create_position: Option<CreatePositionMessage>,
-}
-
-#[cosmwasm_schema::cw_serde]
-pub struct CreatePositionMessage {
-    pub lower_tick: i64,
-    pub upper_tick: i64,
-    // Funds to use to deposit on the account
-    pub funds: Vec<Coin>,
-    /// The two next fields indicate the token0/token1 ratio we want to deposit inside the current ticks
-    pub asset0: Coin,
-    pub asset1: Coin,
-    // Slippage
-    pub max_spread: Option<Decimal>,
-    pub belief_price0: Option<Decimal>,
-    pub belief_price1: Option<Decimal>,
+    pub deposit: Option<Vec<Coin>>,
 }
 
 /// App execute messages
@@ -44,21 +31,61 @@ pub struct CreatePositionMessage {
 #[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
-    /// Create the initial liquidity position
-    CreatePosition(CreatePositionMessage),
     /// Deposit funds onto the app
+    /// Those funds will be distributed between yield sources according to the current strategy
+    /// TODO : for now only send stable coins that have the same value as USD
+    /// More tokens can be included when the oracle adapter is live
     Deposit {
         funds: Vec<Coin>,
-        max_spread: Option<Decimal>,
-        belief_price0: Option<Decimal>,
-        belief_price1: Option<Decimal>,
+        /// This is additional paramters used to change the funds repartition when doing an additional deposit
+        /// This is not used for a first deposit into a strategy that hasn't changed for instance
+        /// This is an options because this is not mandatory
+        /// The vector then has option inside of it because we might not want to change parameters for all strategies
+        /// We might not use a vector but use a (usize, Vec<AssetShare>) instead to avoid having to pass a full vector everytime
+        yield_sources_params: Option<Vec<Option<Vec<AssetShare>>>>,
     },
     /// Partial withdraw of the funds available on the app
-    Withdraw { amount: Uint128 },
-    /// Withdraw everything that is on the app
-    WithdrawAll {},
+    /// If amount is omitted, withdraws everything that is on the app
+    Withdraw { amount: Option<Uint128> },
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},
+    /// Rebalances all investments according to a new balance strategy
+    UpdateStrategy { strategy: BalanceStrategy },
+
+    /// Only called by the contract internally   
+    Internal(InternalExecuteMsg),
+}
+
+#[cw_serde]
+#[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
+#[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
+pub enum InternalExecuteMsg {
+    DepositOneStrategy {
+        swap_strategy: OneDepositStrategy,
+        yield_type: YieldType,
+        yield_index: usize,
+    },
+    /// Execute one Deposit Swap Step
+    ExecuteOneDepositSwapStep {
+        asset_in: Coin,
+        denom_out: String,
+        expected_amount: Uint128,
+    },
+    /// Finalize the deposit after all swaps are executed
+    FinalizeDeposit {
+        yield_type: YieldType,
+        yield_index: usize,
+    },
+}
+impl From<InternalExecuteMsg>
+    for abstract_app::abstract_core::base::ExecuteMsg<
+        abstract_app::abstract_core::app::BaseExecuteMsg,
+        AppExecuteMsg,
+    >
+{
+    fn from(value: InternalExecuteMsg) -> Self {
+        Self::Module(AppExecuteMsg::Internal(value))
+    }
 }
 
 /// App query messages
@@ -75,12 +102,22 @@ pub enum AppQueryMsg {
     /// Returns [`AvailableRewardsResponse`]
     #[returns(AvailableRewardsResponse)]
     AvailableRewards {},
-    #[returns(PositionResponse)]
-    Position {},
     /// Get the status of the compounding logic of the application
     /// Returns [`CompoundStatusResponse`]
     #[returns(CompoundStatusResponse)]
     CompoundStatus {},
+    /// Returns the current strategy as stored in the application
+    /// Returns [`StrategyResponse`]
+    #[returns(StrategyResponse)]
+    Strategy {},
+    /// Returns the current funds distribution between all the strategies
+    /// Returns [`StrategyResponse`]
+    #[returns(StrategyResponse)]
+    StrategyStatus {},
+    /// Returns a preview of the rebalance distribution
+    /// Returns [`RebalancePreviewResponse`]
+    #[returns(RebalancePreviewResponse)]
+    RebalancePreview {},
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -98,12 +135,12 @@ pub struct AvailableRewardsResponse {
 #[cw_serde]
 pub struct AssetsBalanceResponse {
     pub balances: Vec<Coin>,
-    pub liquidity: String,
+    pub total_value: Uint128,
 }
 
 #[cw_serde]
-pub struct PositionResponse {
-    pub position: Option<Position>,
+pub struct StrategyResponse {
+    pub strategy: BalanceStrategy,
 }
 
 #[cw_serde]
@@ -130,3 +167,6 @@ impl CompoundStatus {
         matches!(self, Self::Ready {})
     }
 }
+
+#[cw_serde]
+pub struct RebalancePreviewResponse {}

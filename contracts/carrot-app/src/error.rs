@@ -51,6 +51,12 @@ pub enum AppError {
     #[error("No position registered in contract, please create a position !")]
     NoPosition {},
 
+    #[error("Deposit pool was not found")]
+    PoolNotFound {},
+
+    #[error("Deposit assets were not found in Abstract ANS : {0:?}")]
+    AssetsNotRegistered(Vec<String>),
+
     #[error("No swap fund to swap assets into each other")]
     NoSwapPossibility {},
 
@@ -73,4 +79,25 @@ pub enum AppError {
 
     #[error("Operation exceeds max spread limit, price: {price}")]
     MaxSpreadAssertion { price: Decimal },
+
+    #[error(
+        "The given strategy is not valid, the sum of share : {} is not 1",
+        share_sum
+    )]
+    InvalidStrategySum { share_sum: Decimal },
+
+    #[error("The given strategy is not valid, there must be at least one element")]
+    InvalidEmptyStrategy {},
+
+    #[error("Exchange Rate not given for {0}")]
+    NoExchangeRate(String),
+
+    #[error("Deposited total value is zero")]
+    NoDeposit {},
+
+    #[error("Wrong yield type when executing internal operations")]
+    WrongYieldType {},
+
+    #[error("Invalid strategy format, check shares and parameters")]
+    InvalidStrategy {},
 }

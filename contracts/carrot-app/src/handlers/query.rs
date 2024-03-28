@@ -1,22 +1,25 @@
+use std::collections::HashMap;
+
+use abstract_app::traits::AccountIdentification;
 use abstract_app::{
     abstract_core::objects::AnsAsset,
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{ensure, to_json_binary, Binary, Coin, Decimal, Deps, Env};
+use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
 use cw_asset::Asset;
-use osmosis_std::try_proto_to_cosmwasm_coins;
 
+use crate::autocompound::get_autocompound_status;
+use crate::yield_sources::BalanceStrategy;
 use crate::{
-    contract::{App, AppResult, OSMOSIS},
+    contract::{App, AppResult},
     error::AppError,
-    handlers::swap_helpers::DEFAULT_SLIPPAGE,
-    helpers::{get_balance, get_user},
+    helpers::get_balance,
     msg::{
         AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
-        PositionResponse,
+        StrategyResponse,
     },
-    state::{get_osmosis_position, get_position_status, Config, CONFIG, POSITION},
+    state::{Config, CONFIG},
 };
 
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -24,8 +27,10 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
         AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        AppQueryMsg::Position {} => to_json_binary(&query_position(deps)?),
+        AppQueryMsg::Strategy {} => to_json_binary(&query_strategy(deps)?),
         AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
+        AppQueryMsg::RebalancePreview {} => todo!(),
+        AppQueryMsg::StrategyStatus {} => to_json_binary(&query_strategy_status(deps, app)?),
     }
     .map_err(Into::into)
 }
@@ -34,20 +39,21 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
 /// Accounts for the user's ability to pay for the gas fees of executing the contract.
 fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
-    let status = get_position_status(
+    let status = get_autocompound_status(
         deps.storage,
         &env,
-        config.autocompound_cooldown_seconds.u64(),
+        config.autocompound_config.cooldown_seconds.u64(),
     )?;
 
     let gas_denom = config
-        .autocompound_rewards_config
+        .autocompound_config
+        .rewards
         .gas_asset
         .resolve(&deps.querier, &app.ans_host(deps)?)?;
 
-    let reward = Asset::new(gas_denom.clone(), config.autocompound_rewards_config.reward);
+    let reward = Asset::new(gas_denom.clone(), config.autocompound_config.rewards.reward);
 
-    let user = get_user(deps, app)?;
+    let user = app.account_base(deps)?.proxy;
 
     let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
 
@@ -55,8 +61,8 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         true
     } else {
         // check if can swap
-        let rewards_config = config.autocompound_rewards_config;
-        let dex = app.ans_dex(deps, OSMOSIS.to_string());
+        let rewards_config = config.autocompound_config.rewards;
+        let dex = app.ans_dex(deps, config.dex);
 
         // Reverse swap to see how many swap coins needed
         let required_gas_coins = reward.amount - user_gas_balance;
@@ -79,94 +85,83 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
     })
 }
 
-fn query_position(deps: Deps) -> AppResult<PositionResponse> {
-    let position = POSITION.may_load(deps.storage)?;
+pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
+    let config = CONFIG.load(deps.storage)?;
 
-    Ok(PositionResponse { position })
+    Ok(StrategyResponse {
+        strategy: config.balance_strategy,
+    })
+}
+
+pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
+    let strategy = query_strategy(deps)?.strategy;
+
+    Ok(StrategyResponse {
+        strategy: strategy.query_current_status(deps, app)?,
+    })
 }
 
 fn query_config(deps: Deps) -> AppResult<Config> {
     Ok(CONFIG.load(deps.storage)?)
 }
-fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
-    let pool = get_osmosis_position(deps)?;
 
-    let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
-    let liquidity = pool.position.unwrap().liquidity.replace('.', "");
+pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
+    let mut funds = Coins::default();
+    let mut total_value = Uint128::zero();
+    query_strategy(deps)?.strategy.0.iter().try_for_each(|s| {
+        let deposit_value = s
+            .yield_source
+            .ty
+            .user_deposit(deps, app)
+            .unwrap_or_default();
+        for fund in deposit_value {
+            let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+            funds.add(fund.clone())?;
+            total_value += fund.amount * exchange_rate;
+        }
+        Ok::<_, AppError>(())
+    })?;
+
     Ok(AssetsBalanceResponse {
-        balances,
-        liquidity,
+        balances: funds.into(),
+        total_value,
     })
 }
 
-fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> {
-    let pool = get_osmosis_position(deps)?;
+fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
+    let strategy = query_strategy(deps)?.strategy;
 
-    let mut rewards = cosmwasm_std::Coins::default();
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
-        rewards.add(coin)?;
-    }
-
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
-        rewards.add(coin)?;
-    }
+    let mut rewards = Coins::default();
+    strategy.0.into_iter().try_for_each(|s| {
+        let this_rewards = s.yield_source.ty.user_rewards(deps, app)?;
+        for fund in this_rewards {
+            rewards.add(fund)?;
+        }
+        Ok::<_, AppError>(())
+    })?;
 
     Ok(AvailableRewardsResponse {
         available_rewards: rewards.into(),
     })
 }
 
-pub fn query_price(
-    deps: Deps,
-    funds: &[Coin],
-    app: &App,
-    max_spread: Option<Decimal>,
-    belief_price0: Option<Decimal>,
-    belief_price1: Option<Decimal>,
+pub fn query_exchange_rate(
+    _deps: Deps,
+    _denom: impl Into<String>,
+    _app: &App,
 ) -> AppResult<Decimal> {
-    let config = CONFIG.load(deps.storage)?;
+    // In the first iteration, all deposited tokens are assumed to be equal to 1
+    Ok(Decimal::one())
+}
 
-    let amount0 = funds
-        .iter()
-        .find(|c| c.denom == config.pool_config.token0)
-        .map(|c| c.amount)
-        .unwrap_or_default();
-    let amount1 = funds
-        .iter()
-        .find(|c| c.denom == config.pool_config.token1)
-        .map(|c| c.amount)
-        .unwrap_or_default();
-
-    // We take the biggest amount and simulate a swap for the corresponding asset
-    let price = if amount0 > amount1 {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
-            AnsAsset::new(config.pool_config.asset0, amount0),
-            config.pool_config.asset1,
-        )?;
-
-        let price = Decimal::from_ratio(amount0, simulation_result.return_amount);
-        if let Some(belief_price) = belief_price1 {
-            ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion { price }
-            );
-        }
-        price
-    } else {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
-            AnsAsset::new(config.pool_config.asset1, amount1),
-            config.pool_config.asset0,
-        )?;
-
-        let price = Decimal::from_ratio(simulation_result.return_amount, amount1);
-        if let Some(belief_price) = belief_price0 {
-            ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion { price }
-            );
-        }
-        price
-    };
-
-    Ok(price)
+// Returns a hashmap with all request exchange rates
+pub fn query_all_exchange_rates(
+    deps: Deps,
+    denoms: impl Iterator<Item = String>,
+    app: &App,
+) -> AppResult<HashMap<String, Decimal>> {
+    denoms
+        .into_iter()
+        .map(|denom| Ok((denom.clone(), query_exchange_rate(deps, denom, app)?)))
+        .collect()
 }
