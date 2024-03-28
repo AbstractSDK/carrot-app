@@ -179,8 +179,9 @@ fn withdraw(
         .add_attribute("total_amount", total_amount)
         .add_message(withdraw_msg);
 
-    // Add the collect_rewards_msgs only if rewards are superior to 0
-    if !rewards.is_empty() {
+    // Add the collect_rewards_msgs only if there are rewards AND if we are doing a partial withdraw
+    // Context: While partial position withdraws on osmosis keep the rewards unclaimed, full withdraws automatically withdraw rewards
+    if !rewards.is_empty() && amount.is_some() {
         app_response = app_response.add_messages(collect_rewards_msgs);
     }
 
