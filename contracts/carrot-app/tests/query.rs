@@ -30,20 +30,20 @@ fn query_strategy_status() -> anyhow::Result<()> {
     assert_eq!(strategy.0.len(), 1);
     let single_strategy = strategy.0[0].clone();
     assert_eq!(single_strategy.share, Decimal::one());
-    assert_eq!(single_strategy.yield_source.expected_tokens.len(), 2);
+    assert_eq!(single_strategy.yield_source.asset_distribution.len(), 2);
     // The strategy shares are a little off 50%
     assert_ne!(
-        single_strategy.yield_source.expected_tokens[0].share,
+        single_strategy.yield_source.asset_distribution[0].share,
         Decimal::percent(50)
     );
     assert_ne!(
-        single_strategy.yield_source.expected_tokens[1].share,
+        single_strategy.yield_source.asset_distribution[1].share,
         Decimal::percent(50)
     );
     assert!(close_to(
         Decimal::one(),
-        single_strategy.yield_source.expected_tokens[0].share
-            + single_strategy.yield_source.expected_tokens[1].share
+        single_strategy.yield_source.asset_distribution[0].share
+            + single_strategy.yield_source.asset_distribution[1].share
     ),);
 
     Ok(())

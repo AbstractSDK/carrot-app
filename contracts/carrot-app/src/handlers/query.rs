@@ -111,11 +111,11 @@ pub fn query_strategy_target(deps: Deps, app: &App) -> AppResult<StrategyRespons
                             shares
                         }
                         crate::yield_sources::ShareType::Fixed => {
-                            yield_source.yield_source.expected_tokens
+                            yield_source.yield_source.asset_distribution
                         }
                     };
 
-                    yield_source.yield_source.expected_tokens = shares;
+                    yield_source.yield_source.asset_distribution = shares;
 
                     Ok::<_, AppError>(yield_source)
                 })
@@ -148,7 +148,7 @@ pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyRespons
                 .map(
                     |(original_strategy, (value, shares))| BalanceStrategyElement {
                         yield_source: YieldSource {
-                            expected_tokens: shares,
+                            asset_distribution: shares,
                             ty: original_strategy.yield_source.ty,
                         },
                         share: Decimal::from_ratio(value, all_strategies_value),
@@ -170,7 +170,7 @@ fn query_dynamic_source_value(
         Err(_) => {
             return Ok((
                 Uint128::zero(),
-                yield_source.yield_source.expected_tokens.clone(),
+                yield_source.yield_source.asset_distribution.clone(),
             ))
         }
     };

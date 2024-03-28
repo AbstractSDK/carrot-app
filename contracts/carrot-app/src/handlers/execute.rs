@@ -247,8 +247,8 @@ pub fn _inner_deposit(
             .flat_map(|s| {
                 s.yield_source
                     .asset_distribution
-                    .into_iter()
-                    .map(|ExpectedToken { denom, share: _ }| denom)
+                    .iter()
+                    .map(|ExpectedToken { denom, share: _ }| denom.clone())
             })
             .chain(funds.iter().map(|f| f.denom.clone())),
         app,

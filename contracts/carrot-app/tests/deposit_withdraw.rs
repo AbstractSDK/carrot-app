@@ -2,7 +2,6 @@ mod common;
 
 use crate::common::{setup_test_tube, USDC, USDT};
 use abstract_client::Application;
-use abstract_interface::Abstract;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
@@ -13,15 +12,7 @@ use carrot_app::{
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
-use cw_orch::{
-    anyhow,
-    osmosis_test_tube::osmosis_test_tube::{
-        osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition,
-        ConcentratedLiquidity, Module,
-    },
-    prelude::*,
-};
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
+use cw_orch::{anyhow, prelude::*};
 
 fn query_balances<Chain: CwEnv>(
     carrot_app: &Application<Chain, AppInterface<Chain>>,

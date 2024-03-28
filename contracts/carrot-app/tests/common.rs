@@ -1,50 +1,32 @@
-use std::iter;
-
 use abstract_app::abstract_core::objects::{
-    pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType,
+    pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType,
 };
-use abstract_app::objects::module::ModuleInfo;
-use abstract_client::{AbstractClient, Application, Environment, Namespace};
-use abstract_dex_adapter::DEX_ADAPTER_ID;
-use abstract_sdk::core::manager::{self, ModuleInstallConfig};
-use carrot_app::contract::{APP_ID, OSMOSIS};
+use abstract_client::{AbstractClient, Application, Namespace};
+use carrot_app::contract::OSMOSIS;
 use carrot_app::msg::AppInstantiateMsg;
 use carrot_app::state::{AutocompoundConfig, AutocompoundRewardsConfig};
 use carrot_app::yield_sources::yield_type::{ConcentratedPoolParams, YieldType};
 use carrot_app::yield_sources::{
-    BalanceStrategy, BalanceStrategyElement, ExpectedToken, ShareType, YieldSource,
+    BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
 };
-use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
+use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
 use cw_orch::{
     anyhow,
     osmosis_test_tube::osmosis_test_tube::{
         osmosis_std::types::{
-            cosmos::{
-                authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
-                base::v1beta1,
-            },
-            osmosis::{
-                concentratedliquidity::v1beta1::{
-                    MsgCreatePosition, MsgWithdrawPosition, Pool, PoolsRequest,
-                },
-                gamm::v1beta1::MsgSwapExactAmountIn,
-            },
+            cosmos::base::v1beta1,
+            osmosis::concentratedliquidity::v1beta1::{MsgCreatePosition, Pool, PoolsRequest},
         },
         ConcentratedLiquidity, GovWithAppAccess, Module,
     },
     prelude::*,
 };
-use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
-use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
-    CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-    MsgCollectSpreadRewards, PoolRecord,
+    CreateConcentratedLiquidityPoolsProposal, PoolRecord,
 };
 use prost::Message;
-use prost_types::Any;
-
 pub const LOTS: u128 = 100_000_000_000_000;
 
 // Asset 0
