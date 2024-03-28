@@ -37,17 +37,18 @@ impl YieldSource {
             !self.asset_distribution.is_empty(),
             AppError::InvalidEmptyStrategy {}
         );
-
         // We ensure all deposited tokens exist in ANS
+        let all_denoms = self.all_denoms();
         let ans = app.name_service(deps);
-        ans.host().query_assets_reverse(
-            &deps.querier,
-            &self
-                .asset_distribution
-                .iter()
-                .map(|e| AssetInfo::native(e.denom.clone()))
-                .collect::<Vec<_>>(),
-        )?;
+        ans.host()
+            .query_assets_reverse(
+                &deps.querier,
+                &all_denoms
+                    .iter()
+                    .map(|denom| AssetInfo::native(denom.clone()))
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|_| AppError::AssetsNotRegistered(all_denoms))?;
 
         // Then we check every yield strategy underneath
         match &self.ty {
@@ -77,6 +78,13 @@ impl YieldSource {
         }
 
         Ok(())
+    }
+
+    pub fn all_denoms(&self) -> Vec<String> {
+        self.asset_distribution
+            .iter()
+            .map(|e| e.denom.clone())
+            .collect()
     }
 }
 
@@ -127,16 +135,11 @@ impl BalanceStrategy {
         Ok(())
     }
 
-    pub fn get_all_tokens(&self) -> Vec<String> {
+    pub fn all_denoms(&self) -> Vec<String> {
         self.0
             .clone()
             .iter()
-            .flat_map(|s| {
-                s.yield_source
-                    .asset_distribution
-                    .iter()
-                    .map(|ExpectedToken { denom, share: _ }| denom.clone())
-            })
+            .flat_map(|s| s.yield_source.all_denoms())
             .collect()
     }
 }

@@ -1,14 +1,21 @@
 use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
+use abstract_app::objects::AnsAsset;
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
+use abstract_dex_adapter::DexInterface;
+use abstract_sdk::{Execution, TransferInterface};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{ensure, Addr, Coin, Deps, Env, Storage, Timestamp, Uint128, Uint64};
+use cosmwasm_std::{
+    ensure, Addr, Coin, CosmosMsg, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64,
+};
 use cw_storage_plus::Item;
 
+use crate::contract::App;
+use crate::handlers::swap_helpers::swap_msg;
 use crate::yield_sources::BalanceStrategy;
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
 pub const CONFIG: Item<Config> = Item::new("config");
-pub const POSITION: Item<AutocompoundState> = Item::new("position");
+pub const AUTOCOMPOUND_STATE: Item<AutocompoundState> = Item::new("position");
 pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
 
 // TEMP VARIABLES FOR DEPOSITING INTO ONE STRATEGY
@@ -33,6 +40,87 @@ pub struct AutocompoundConfig {
     pub cooldown_seconds: Uint64,
     /// Configuration of rewards to the address who helped to execute autocompound
     pub rewards: AutocompoundRewardsConfig,
+}
+
+impl Config {
+    pub fn get_executor_reward_messages(
+        &self,
+        deps: Deps,
+        env: &Env,
+        info: MessageInfo,
+        app: &App,
+    ) -> AppResult<Vec<CosmosMsg>> {
+        Ok(
+            // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
+            if !app.admin.is_admin(deps, &info.sender)?
+                && get_autocompound_status(
+                    deps.storage,
+                    env,
+                    self.autocompound_config.cooldown_seconds.u64(),
+                )?
+                .is_ready()
+            {
+                self.autocompound_executor_rewards(deps, env, &info.sender, app)?
+            } else {
+                vec![]
+            },
+        )
+    }
+    pub fn autocompound_executor_rewards(
+        &self,
+        deps: Deps,
+        env: &Env,
+        executor: &Addr,
+        app: &App,
+    ) -> AppResult<Vec<CosmosMsg>> {
+        let rewards_config = self.autocompound_config.rewards.clone();
+
+        // Get user balance of gas denom
+        let user_gas_balance = app.bank(deps).balance(&rewards_config.gas_asset)?.amount;
+
+        let mut rewards_messages = vec![];
+
+        // If not enough gas coins - swap for some amount
+        if user_gas_balance < rewards_config.min_gas_balance {
+            // Get asset entries
+            let dex = app.ans_dex(deps, self.dex.to_string());
+
+            // Do reverse swap to find approximate amount we need to swap
+            let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;
+            let simulate_swap_response = dex.simulate_swap(
+                AnsAsset::new(rewards_config.gas_asset.clone(), need_gas_coins),
+                rewards_config.swap_asset.clone(),
+            )?;
+
+            // Get user balance of swap denom
+            let user_swap_balance = app.bank(deps).balance(&rewards_config.swap_asset)?.amount;
+
+            // Swap as much as available if not enough for max_gas_balance
+            let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
+
+            let msgs = swap_msg(
+                deps,
+                env,
+                AnsAsset::new(rewards_config.swap_asset, swap_amount),
+                rewards_config.gas_asset.clone(),
+                app,
+            )?;
+            rewards_messages.extend(msgs);
+        }
+
+        // We send their reward to the executor
+        let msg_send = app.bank(deps).transfer(
+            vec![AnsAsset::new(
+                rewards_config.gas_asset,
+                rewards_config.reward,
+            )],
+            executor,
+        )?;
+
+        rewards_messages.push(app.executor(deps).execute(vec![msg_send])?.into());
+
+        Ok(rewards_messages)
+    }
 }
 
 /// Configuration on how rewards should be distributed
@@ -93,7 +181,7 @@ pub fn get_autocompound_status(
     env: &Env,
     cooldown_seconds: u64,
 ) -> AppResult<CompoundStatus> {
-    let position = POSITION.may_load(storage)?;
+    let position = AUTOCOMPOUND_STATE.may_load(storage)?;
     let status = match position {
         Some(position) => {
             let ready_on = position.last_compound.plus_seconds(cooldown_seconds);

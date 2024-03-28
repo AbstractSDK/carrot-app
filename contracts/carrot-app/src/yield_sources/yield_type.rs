@@ -118,7 +118,8 @@ pub struct ConcentratedPoolParams {
 impl ConcentratedPoolParams {
     pub fn check(&self, deps: Deps) -> AppResult<()> {
         let _pool: Pool = PoolmanagerQuerier::new(&deps.querier)
-            .pool(self.pool_id)?
+            .pool(self.pool_id)
+            .map_err(|_| AppError::PoolNotFound {})?
             .pool
             .ok_or(AppError::PoolNotFound {})?
             .try_into()?;

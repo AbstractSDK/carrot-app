@@ -4,20 +4,18 @@ use crate::{
     handlers::query::query_balance,
     helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
-    state::{get_autocompound_status, Config, CONFIG},
+    state::{AUTOCOMPOUND_STATE, CONFIG},
     yield_sources::{BalanceStrategy, ExpectedToken},
 };
-use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
-use abstract_dex_adapter::DexInterface;
-use abstract_sdk::{AccountAction, Execution, ExecutorMsg, TransferInterface};
+use abstract_app::abstract_sdk::features::AbstractResponse;
+use abstract_sdk::ExecutorMsg;
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, Uint128, WasmMsg,
 };
 
 use super::{
     internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step},
-    query::{query_all_exchange_rates, query_exchange_rate, query_strategy, query_strategy_target},
-    swap_helpers::swap_msg,
+    query::{query_strategy, query_strategy_target},
 };
 
 pub fn execute_handler(
@@ -34,7 +32,9 @@ pub fn execute_handler(
         } => deposit(deps, env, info, funds, yield_sources_params, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, amount, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
-        AppExecuteMsg::Rebalance { strategy } => rebalance(deps, env, info, strategy, app),
+        AppExecuteMsg::UpdateStrategy { strategy } => {
+            update_strategy(deps, env, info, strategy, app)
+        }
         // Endpoints called by the contract directly
         AppExecuteMsg::Internal(internal_msg) => {
             if info.sender != env.contract.address {
@@ -109,7 +109,7 @@ fn withdraw(
     Ok(app.response("withdraw").add_messages(msgs))
 }
 
-fn rebalance(
+fn update_strategy(
     deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
@@ -134,26 +134,11 @@ fn rebalance(
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
-
     let strategy = query_strategy(deps.as_ref())?.strategy;
+
     // We withdraw all rewards from protocols
-    let (rewards, collect_rewards_msgs): (Vec<Vec<Coin>>, Vec<ExecutorMsg>) = strategy
-        .0
-        .into_iter()
-        .map(|s| {
-            let (rewards, raw_msgs) = s.yield_source.ty.withdraw_rewards(deps.as_ref(), &app)?;
+    let (all_rewards, collect_rewards_msgs) = strategy.withdraw_rewards(deps.as_ref(), &app)?;
 
-            Ok::<_, AppError>((
-                rewards,
-                app.executor(deps.as_ref())
-                    .execute(vec![AccountAction::from_vec(raw_msgs)])?,
-            ))
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .unzip();
-
-    let all_rewards: Vec<Coin> = rewards.into_iter().flatten().collect();
     // If there are no rewards, we can't do anything
     if all_rewards.is_empty() {
         return Err(crate::error::AppError::NoRewards {});
@@ -169,33 +154,21 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         funds: vec![],
     });
 
-    let mut response = app
+    let response = app
         .response("auto-compound")
         .add_messages(collect_rewards_msgs)
         .add_message(msg_deposit);
 
-    // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
     let config = CONFIG.load(deps.storage)?;
-    if !app.admin.is_admin(deps.as_ref(), &info.sender)?
-        && get_autocompound_status(
-            deps.storage,
-            &env,
-            config.autocompound_config.cooldown_seconds.u64(),
-        )?
-        .is_ready()
-    {
-        let executor_reward_messages = autocompound_executor_rewards(
-            deps.as_ref(),
-            &env,
-            info.sender.into_string(),
-            &app,
-            config,
-        )?;
+    let executor_reward_messages =
+        config.get_executor_reward_messages(deps.as_ref(), &env, info, &app)?;
 
-        response = response.add_messages(executor_reward_messages);
-    }
+    AUTOCOMPOUND_STATE.update(deps.storage, |mut state| {
+        state.last_compound = env.block.time;
+        Ok::<_, AppError>(state)
+    })?;
 
-    Ok(response)
+    Ok(response.add_messages(executor_reward_messages))
 }
 
 /// The deposit process goes through the following steps
@@ -234,19 +207,11 @@ pub fn _inner_deposit(
     // We query the target strategy depending on the existing deposits
     let mut current_strategy_status = query_strategy_target(deps, app)?.strategy;
 
-    // We determine the value of all tokens that will be used inside this function
-    let exchange_rates = query_all_exchange_rates(
-        deps,
-        current_strategy_status
-            .get_all_tokens()
-            .into_iter()
-            .chain(funds.iter().map(|f| f.denom.clone())),
-        app,
-    )?;
-
+    // We correct it if the user asked to correct the share parameters of each strategy
     current_strategy_status.correct_with(yield_source_params);
 
-    current_strategy_status.fill_all_and_get_messages(env, funds, &exchange_rates)
+    // We fill the strategies with the current deposited funds and get messages to execute those deposits
+    current_strategy_status.fill_all_and_get_messages(deps, env, funds, app)
 }
 
 fn _inner_withdraw(
@@ -259,15 +224,7 @@ fn _inner_withdraw(
     let withdraw_share = value
         .map(|value| {
             let total_deposit = query_balance(deps.as_ref(), app)?;
-            let total_value = total_deposit
-                .balances
-                .into_iter()
-                .map(|balance| {
-                    let exchange_rate = query_exchange_rate(deps.as_ref(), balance.denom, app)?;
-
-                    Ok::<_, AppError>(exchange_rate * balance.amount)
-                })
-                .sum::<Result<Uint128, _>>()?;
+            let total_value = total_deposit.value(deps.as_ref(), app)?;
 
             if total_value.is_zero() {
                 return Err(AppError::NoDeposit {});
@@ -276,90 +233,11 @@ fn _inner_withdraw(
         })
         .transpose()?;
 
-    // We withdraw the necessary share from all investments
-    let withdraw_msgs = query_strategy(deps.as_ref())?
-        .strategy
-        .0
-        .into_iter()
-        .map(|s| {
-            let this_withdraw_amount = withdraw_share
-                .map(|share| {
-                    let this_amount = s.yield_source.ty.user_liquidity(deps.as_ref(), app)?;
-                    let this_withdraw_amount = share * this_amount;
-
-                    Ok::<_, AppError>(this_withdraw_amount)
-                })
-                .transpose()?;
-            let raw_msg = s
-                .yield_source
-                .ty
-                .withdraw(deps.as_ref(), this_withdraw_amount, app)?;
-
-            Ok::<_, AppError>(
-                app.executor(deps.as_ref())
-                    .execute(vec![AccountAction::from_vec(raw_msg)])?,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    // We withdraw the necessary share from all registered investments
+    let withdraw_msgs =
+        query_strategy(deps.as_ref())?
+            .strategy
+            .withdraw(deps.as_ref(), withdraw_share, app)?;
 
     Ok(withdraw_msgs.into_iter().collect())
-}
-
-/// Sends autocompound rewards to the executor.
-/// In case user does not have not enough gas token the contract will swap some
-/// tokens for gas tokens.
-pub fn autocompound_executor_rewards(
-    deps: Deps,
-    env: &Env,
-    executor: String,
-    app: &App,
-    config: Config,
-) -> AppResult<Vec<CosmosMsg>> {
-    let rewards_config = config.autocompound_config.rewards;
-
-    // Get user balance of gas denom
-    let user_gas_balance = app.bank(deps).balance(&rewards_config.gas_asset)?.amount;
-
-    let mut rewards_messages = vec![];
-
-    // If not enough gas coins - swap for some amount
-    if user_gas_balance < rewards_config.min_gas_balance {
-        // Get asset entries
-        let dex = app.ans_dex(deps, config.dex.to_string());
-
-        // Do reverse swap to find approximate amount we need to swap
-        let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;
-        let simulate_swap_response = dex.simulate_swap(
-            AnsAsset::new(rewards_config.gas_asset.clone(), need_gas_coins),
-            rewards_config.swap_asset.clone(),
-        )?;
-
-        // Get user balance of swap denom
-        let user_swap_balance = app.bank(deps).balance(&rewards_config.swap_asset)?.amount;
-
-        // Swap as much as available if not enough for max_gas_balance
-        let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
-
-        let msgs = swap_msg(
-            deps,
-            env,
-            AnsAsset::new(rewards_config.swap_asset, swap_amount),
-            rewards_config.gas_asset.clone(),
-            app,
-        )?;
-        rewards_messages.extend(msgs);
-    }
-
-    // We send their reward to the executor
-    let msg_send = app.bank(deps).transfer(
-        vec![AnsAsset::new(
-            rewards_config.gas_asset,
-            rewards_config.reward,
-        )],
-        &deps.api.addr_validate(&executor)?,
-    )?;
-
-    rewards_messages.push(app.executor(deps).execute(vec![msg_send])?.into());
-
-    Ok(rewards_messages)
 }

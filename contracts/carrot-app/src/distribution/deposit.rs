@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use cosmwasm_std::{coin, Coin, Coins, Decimal, Uint128};
+use cosmwasm_std::{coin, Coin, Coins, Decimal, Deps, Uint128};
 
 use crate::{
-    contract::AppResult,
+    contract::{App, AppResult},
+    handlers::query::query_all_exchange_rates,
     helpers::compute_total_value,
     yield_sources::{yield_type::YieldType, BalanceStrategy, ExpectedToken},
 };
@@ -80,21 +81,31 @@ impl BalanceStrategy {
 
     pub fn fill_all(
         &self,
+        deps: Deps,
         funds: Vec<Coin>,
-        exchange_rates: &HashMap<String, Decimal>,
+        app: &App,
     ) -> AppResult<Vec<OneDepositStrategy>> {
-        let (status, remaining_funds) = self.fill_sources(funds, exchange_rates)?;
-        status.fill_with_remaining_funds(remaining_funds, exchange_rates)
+        // We determine the value of all tokens that will be used inside this function
+        let exchange_rates = query_all_exchange_rates(
+            deps,
+            self.all_denoms()
+                .into_iter()
+                .chain(funds.iter().map(|f| f.denom.clone())),
+            app,
+        )?;
+        let (status, remaining_funds) = self.fill_sources(funds, &exchange_rates)?;
+        status.fill_with_remaining_funds(remaining_funds, &exchange_rates)
     }
 
     /// Gets the deposit messages from a given strategy by filling all strategies with the associated funds
     pub fn fill_all_and_get_messages(
         &self,
+        deps: Deps,
         env: &Env,
         funds: Vec<Coin>,
-        exchange_rates: &HashMap<String, Decimal>,
+        app: &App,
     ) -> AppResult<Vec<CosmosMsg>> {
-        let deposit_strategies = self.fill_all(funds, exchange_rates)?;
+        let deposit_strategies = self.fill_all(deps, funds, app)?;
         deposit_strategies
             .iter()
             .zip(self.0.iter().map(|s| s.yield_source.ty.clone()))

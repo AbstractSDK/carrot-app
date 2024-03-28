@@ -241,7 +241,11 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
     })
 }
 
-pub fn query_exchange_rate(_deps: Deps, _denom: String, _app: &App) -> AppResult<Decimal> {
+pub fn query_exchange_rate(
+    _deps: Deps,
+    _denom: impl Into<String>,
+    _app: &App,
+) -> AppResult<Decimal> {
     // In the first iteration, all deposited tokens are assumed to be equal to 1
     Ok(Decimal::one())
 }

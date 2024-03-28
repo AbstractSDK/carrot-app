@@ -50,7 +50,7 @@ pub enum AppExecuteMsg {
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},
     /// Rebalances all investments according to a new balance strategy
-    Rebalance { strategy: BalanceStrategy },
+    UpdateStrategy { strategy: BalanceStrategy },
 
     /// Only called by the contract internally   
     Internal(InternalExecuteMsg),

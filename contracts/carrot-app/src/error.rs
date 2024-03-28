@@ -54,6 +54,9 @@ pub enum AppError {
     #[error("Deposit pool was not found")]
     PoolNotFound {},
 
+    #[error("Deposit assets were not found in Abstract ANS : {0:?}")]
+    AssetsNotRegistered(Vec<String>),
+
     #[error("No swap fund to swap assets into each other")]
     NoSwapPossibility {},
 
