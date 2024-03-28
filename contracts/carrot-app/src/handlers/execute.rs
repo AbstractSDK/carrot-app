@@ -173,12 +173,13 @@ pub fn _inner_deposit(
     funds: Vec<Coin>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
+    let strategy = query_strategy(deps)?.strategy;
+
     // We determine the value of all tokens that will be used inside this function
     let exchange_rates = query_all_exchange_rates(
         deps,
-        query_strategy(deps)?
-            .strategy
-            .0
+            strategy
+            .0.clone()
             .into_iter()
             .flat_map(|s| {
                 s.yield_source
@@ -190,16 +191,14 @@ pub fn _inner_deposit(
         app,
     )?;
 
-    let deposit_strategies = query_strategy(deps)?
-        .strategy
+    let deposit_strategies = strategy
         .fill_all(funds, &exchange_rates)?;
 
     // We select the target shares depending on the strategy selected
     let deposit_msgs = deposit_strategies
         .iter()
         .zip(
-            query_strategy(deps)?
-                .strategy
+            strategy
                 .0
                 .iter()
                 .map(|s| s.yield_source.ty.clone()),
