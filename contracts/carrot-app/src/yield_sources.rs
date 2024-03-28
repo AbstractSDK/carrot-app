@@ -26,20 +26,20 @@ use self::yield_type::YieldType;
 #[cw_serde]
 pub struct YieldSource {
     /// This id (denom, share)
-    pub expected_tokens: Vec<ExpectedToken>,
+    pub asset_distribution: Vec<ExpectedToken>,
     pub ty: YieldType,
 }
 
 impl YieldSource {
     pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
         // First we check the share sums the 100
-        let share_sum: Decimal = self.expected_tokens.iter().map(|e| e.share).sum();
+        let share_sum: Decimal = self.asset_distribution.iter().map(|e| e.share).sum();
         ensure!(
             close_to(Decimal::one(), share_sum),
             AppError::InvalidStrategySum { share_sum }
         );
         ensure!(
-            !self.expected_tokens.is_empty(),
+            !self.asset_distribution.is_empty(),
             AppError::InvalidEmptyStrategy {}
         );
 
@@ -48,7 +48,7 @@ impl YieldSource {
         ans.host().query_assets_reverse(
             &deps.querier,
             &self
-                .expected_tokens
+                .asset_distribution
                 .iter()
                 .map(|e| AssetInfo::native(e.denom.clone()))
                 .collect::<Vec<_>>(),
@@ -58,15 +58,23 @@ impl YieldSource {
         match &self.ty {
             YieldType::ConcentratedLiquidityPool(params) => {
                 // A valid CL pool strategy is for 2 assets
-                ensure_eq!(self.expected_tokens.len(), 2, AppError::InvalidStrategy {});
+                ensure_eq!(
+                    self.asset_distribution.len(),
+                    2,
+                    AppError::InvalidStrategy {}
+                );
                 params.check(deps)?;
             }
             YieldType::Mars(denom) => {
                 // We verify there is only one element in the shares vector
-                ensure_eq!(self.expected_tokens.len(), 1, AppError::InvalidStrategy {});
+                ensure_eq!(
+                    self.asset_distribution.len(),
+                    1,
+                    AppError::InvalidStrategy {}
+                );
                 // We verify the first element correspond to the mars deposit denom
                 ensure_eq!(
-                    &self.expected_tokens[0].denom,
+                    &self.asset_distribution[0].denom,
                     denom,
                     AppError::InvalidStrategy {}
                 );
@@ -144,7 +152,7 @@ impl BalanceStrategy {
             .map(|source| {
                 source
                     .yield_source
-                    .expected_tokens
+                    .asset_distribution
                     .iter()
                     .map(|ExpectedToken { denom, share }| B {
                         denom: denom.clone(),
@@ -162,7 +170,7 @@ impl BalanceStrategy {
                 // Find the share for the specific denom inside the strategy
                 let this_denom_status = strategy
                     .yield_source
-                    .expected_tokens
+                    .asset_distribution
                     .iter()
                     .zip(status.iter_mut())
                     .find(|(ExpectedToken { denom, share: _ }, _status)| this_coin.denom.eq(denom))

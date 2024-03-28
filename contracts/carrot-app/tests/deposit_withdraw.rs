@@ -158,7 +158,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
     let new_strat = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
@@ -179,7 +179,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
@@ -228,7 +228,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
     let new_strat = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
@@ -249,7 +249,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
@@ -270,7 +270,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![ExpectedToken {
+                asset_distribution: vec![ExpectedToken {
                     denom: USDT.to_string(),
                     share: Decimal::percent(100),
                 }],

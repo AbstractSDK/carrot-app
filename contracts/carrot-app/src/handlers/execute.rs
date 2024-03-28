@@ -234,16 +234,19 @@ pub fn _inner_deposit(
     yield_source_params: Vec<Option<Vec<ExpectedToken>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
+    // We query the target strategy depending on the existing deposits
+    let mut current_strategy_status = query_strategy_target(deps, app)?.strategy;
+
     // We determine the value of all tokens that will be used inside this function
     let exchange_rates = query_all_exchange_rates(
         deps,
-        query_strategy(deps)?
-            .strategy
+        current_strategy_status
             .0
-            .into_iter()
+            .clone()
+            .iter()
             .flat_map(|s| {
                 s.yield_source
-                    .expected_tokens
+                    .asset_distribution
                     .into_iter()
                     .map(|ExpectedToken { denom, share: _ }| denom)
             })
@@ -251,8 +254,6 @@ pub fn _inner_deposit(
         app,
     )?;
 
-    // We query the target strategy depending on the existing deposits
-    let mut current_strategy_status = query_strategy_target(deps, app)?.strategy;
     // We correct the strategy if specified in parameters
     current_strategy_status
         .0
@@ -260,7 +261,7 @@ pub fn _inner_deposit(
         .zip(yield_source_params)
         .for_each(|(strategy, params)| {
             if let Some(param) = params {
-                strategy.yield_source.expected_tokens = param;
+                strategy.yield_source.asset_distribution = param;
             }
         });
 

@@ -20,7 +20,7 @@ fn rebalance_fails() -> anyhow::Result<()> {
         .rebalance(BalanceStrategy(vec![
             BalanceStrategyElement {
                 yield_source: YieldSource {
-                    expected_tokens: vec![
+                    asset_distribution: vec![
                         ExpectedToken {
                             denom: USDT.to_string(),
                             share: Decimal::percent(50),
@@ -41,7 +41,7 @@ fn rebalance_fails() -> anyhow::Result<()> {
             },
             BalanceStrategyElement {
                 yield_source: YieldSource {
-                    expected_tokens: vec![
+                    asset_distribution: vec![
                         ExpectedToken {
                             denom: USDT.to_string(),
                             share: Decimal::percent(50),
@@ -75,7 +75,7 @@ fn rebalance_success() -> anyhow::Result<()> {
     let new_strat = BalanceStrategy(vec![
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
@@ -96,7 +96,7 @@ fn rebalance_success() -> anyhow::Result<()> {
         },
         BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),

@@ -142,7 +142,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         },
         balance_strategy: BalanceStrategy(vec![BalanceStrategyElement {
             yield_source: YieldSource {
-                expected_tokens: vec![
+                asset_distribution: vec![
                     ExpectedToken {
                         denom: USDT.to_string(),
                         share: Decimal::percent(50),
