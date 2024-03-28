@@ -161,7 +161,7 @@ fn withdraw(
     let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
 
     // Collect all rewards/incentives if they exist
-    let (collect_rewards_msgs, _) = _inner_claim_rewards(
+    let (collect_rewards_msgs, rewards) = _inner_claim_rewards(
         &env,
         position.clone(),
         position_details.clone(),
@@ -173,12 +173,18 @@ fn withdraw(
     let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
         _inner_withdraw(&env, amount, position, position_details, user, authz)?;
 
-    Ok(app
+    let mut app_response = app
         .response("withdraw")
         .add_attribute("withdraw_amount", withdraw_amount)
         .add_attribute("total_amount", total_amount)
-        .add_messages(collect_rewards_msgs)
-        .add_message(withdraw_msg))
+        .add_message(withdraw_msg);
+
+    // Add the collect_rewards_msgs only if rewards are superior to 0
+    if !rewards.is_empty() {
+        app_response = app_response.add_messages(collect_rewards_msgs);
+    }
+
+    Ok(app_response)
 }
 
 /// Auto-compound the position with earned fees and incentives.
