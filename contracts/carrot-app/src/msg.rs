@@ -71,13 +71,9 @@ pub enum AppQueryMsg {
     Config {},
     #[returns(AssetsBalanceResponse)]
     Balance {},
-    /// Get the claimable rewards that the position has accumulated.
-    /// Returns [`AvailableRewardsResponse`]
-    #[returns(AvailableRewardsResponse)]
-    AvailableRewards {},
     #[returns(PositionResponse)]
     Position {},
-    /// Get the status of the compounding logic of the application
+    /// Get the status of the compounding logic of the application and pool rewards
     /// Returns [`CompoundStatusResponse`]
     #[returns(CompoundStatusResponse)]
     CompoundStatus {},
@@ -89,10 +85,6 @@ pub enum AppMigrateMsg {}
 #[cosmwasm_schema::cw_serde]
 pub struct BalanceResponse {
     pub balance: Vec<Coin>,
-}
-#[cosmwasm_schema::cw_serde]
-pub struct AvailableRewardsResponse {
-    pub available_rewards: Vec<Coin>,
 }
 
 #[cw_serde]
@@ -109,9 +101,10 @@ pub struct PositionResponse {
 #[cw_serde]
 pub struct CompoundStatusResponse {
     pub status: CompoundStatus,
-    pub reward: AssetBase<String>,
-    // Wether user have enough balance to reward or can swap
-    pub rewards_available: bool,
+    pub autocompound_reward: AssetBase<String>,
+    /// Wether user have enough balance to reward or can swap to get enough
+    pub autocompound_reward_available: bool,
+    pub pool_rewards: Vec<Coin>,
 }
 
 #[cw_serde]

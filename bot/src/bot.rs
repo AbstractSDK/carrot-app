@@ -66,6 +66,7 @@ struct Metrics {
     fetch_instances_count: IntGauge,
     autocompounded_count: IntCounter,
     autocompounded_error_count: IntCounter,
+    contract_instances_to_autocompound: IntGauge,
 }
 
 impl Metrics {
@@ -90,6 +91,11 @@ impl Metrics {
             "Number of times autocompounding errored",
         )
         .unwrap();
+        let contract_instances_to_autocompound = IntGauge::new(
+            "carrot_app_bot_contract_instances_to_autocompound",
+            "Number of instances that are eligible to be compounded",
+        )
+        .unwrap();
         registry.register(Box::new(fetch_count.clone())).unwrap();
         registry
             .register(Box::new(fetch_instances_count.clone()))
@@ -100,11 +106,15 @@ impl Metrics {
         registry
             .register(Box::new(autocompounded_error_count.clone()))
             .unwrap();
+        registry
+            .register(Box::new(contract_instances_to_autocompound.clone()))
+            .unwrap();
         Self {
             fetch_count,
             fetch_instances_count,
             autocompounded_count,
             autocompounded_error_count,
+            contract_instances_to_autocompound,
         }
     }
 }
@@ -182,7 +192,11 @@ impl Bot {
         self.metrics
             .fetch_instances_count
             .set(fetch_instances_count as i64);
-        self.contract_instances_to_ac = contract_instances_to_autocompound;
+        self.contract_instances_to_ac
+            .clone_from(&contract_instances_to_autocompound);
+        self.metrics
+            .contract_instances_to_autocompound
+            .set(contract_instances_to_autocompound.len() as i64);
         Ok(())
     }
 
@@ -208,11 +222,10 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let resp: CompoundStatusResponse = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee
-    // To discuss if we really need it?
 
-    if resp.rewards_available {
+    // Ensure there is rewards and pool rewards not empty
+    if resp.autocompound_reward_available && !resp.pool_rewards.is_empty() {
         // Execute autocompound
-        let daemon = daemon.rebuild().authz_granter(address).build()?;
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
             &[],
@@ -254,22 +267,27 @@ mod utils {
         // Check if authz is indeed given
         let authz_querier: Authz = daemon.querier();
         let authz_grantee = contract_addr.to_string();
-        let generic_authorizations: Vec<GenericAuthorization> = daemon
+
+        let grants = daemon
             .rt_handle
             .block_on(async {
                 authz_querier
                     ._grants(
                         granter.to_string(),
                         authz_grantee.clone(),
-                        GenericAuthorization::TYPE_URL.to_string(),
+                        // Get every authorization
+                        "".to_owned(),
                         None,
                     )
                     .await
             })?
-            .grants
-            .into_iter()
-            .map(|grant| GenericAuthorization::decode(&*grant.authorization.unwrap().value))
-            .collect::<Result<_, _>>()?;
+            .grants;
+        let generic_authorizations: Vec<GenericAuthorization> = grants
+            .iter()
+            .filter_map(|grant| {
+                GenericAuthorization::decode(&*grant.authorization.clone().unwrap().value).ok()
+            })
+            .collect();
         // Check all generic authorizations are in place
         for &authorization_url in AUTHORIZATION_URLS {
             if !generic_authorizations.contains(&GenericAuthorization {
@@ -283,17 +301,13 @@ mod utils {
         if !generic_authorizations.contains(&GenericAuthorization {
             msg: MsgSend::TYPE_URL.to_owned(),
         }) {
-            let send_authorizations = daemon.rt_handle.block_on(async {
-                authz_querier
-                    ._grants(
-                        granter.to_string(),
-                        authz_grantee,
-                        SendAuthorization::TYPE_URL.to_string(),
-                        None,
-                    )
-                    .await
-            })?;
-            if send_authorizations.grants.is_empty() {
+            let send_authorizations: Vec<SendAuthorization> = grants
+                .iter()
+                .filter_map(|grant| {
+                    SendAuthorization::decode(&*grant.authorization.clone().unwrap().value).ok()
+                })
+                .collect();
+            if send_authorizations.is_empty() {
                 return Ok(false);
             }
         }

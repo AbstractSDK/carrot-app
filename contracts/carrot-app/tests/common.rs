@@ -278,11 +278,11 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 tokens_provided: vec![
                     v1beta1::Coin {
                         denom: asset1,
-                        amount: "1_000_000".to_owned(),
+                        amount: "10_000_000".to_owned(),
                     },
                     v1beta1::Coin {
                         denom: asset0.clone(),
-                        amount: "1_000_000".to_owned(),
+                        amount: "10_000_000".to_owned(),
                     },
                 ],
                 token_min_amount0: "0".to_string(),
@@ -425,4 +425,31 @@ pub fn give_authorizations<Chain: CwEnv + Stargate>(
         .environment()
         .commit_any::<MsgGrantResponse>(msgs, None)?;
     Ok(())
+}
+
+pub mod incentives {
+    use cw_orch::osmosis_test_tube::osmosis_test_tube::{fn_execute, Module, Runner};
+    use osmosis_std::types::osmosis::incentives::{MsgCreateGauge, MsgCreateGaugeResponse};
+
+    #[allow(unused)]
+    pub struct Incentives<'a, R: Runner<'a>> {
+        runner: &'a R,
+    }
+
+    impl<'a, R: Runner<'a>> Module<'a, R> for Incentives<'a, R> {
+        fn new(runner: &'a R) -> Self {
+            Self { runner }
+        }
+    }
+
+    impl<'a, R> Incentives<'a, R>
+    where
+        R: Runner<'a>,
+    {
+        // macro for creating execute function
+        fn_execute! {
+            // (pub)? <fn_name>: <request_type> => <response_type>
+            pub create_gauge: MsgCreateGauge => MsgCreateGaugeResponse
+        }
+    }
 }
