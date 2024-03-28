@@ -65,10 +65,10 @@ impl<Chain: cw_orch::environment::CwEnv> abstract_app::abstract_interface::Depen
             <abstract_dex_adapter::interface::DexAdapter<Chain> as abstract_app::abstract_interface::DependencyCreation>::dependency_install_configs(
                 cosmwasm_std::Empty {},
             )?;
-        let moneymarket_dependency_install_configs: Vec<abstract_app::abstract_core::manager::ModuleInstallConfig> =
-                <abstract_money_market_adapter::interface::MoneyMarketAdapter<Chain> as abstract_app::abstract_interface::DependencyCreation>::dependency_install_configs(
-                    cosmwasm_std::Empty {},
-                )?;
+        // let moneymarket_dependency_install_configs: Vec<abstract_app::abstract_core::manager::ModuleInstallConfig> =
+        //         <abstract_money_market_adapter::interface::MoneyMarketAdapter<Chain> as abstract_app::abstract_interface::DependencyCreation>::dependency_install_configs(
+        //             cosmwasm_std::Empty {},
+        //         )?;
 
         let adapter_install_config = vec![
             abstract_app::abstract_core::manager::ModuleInstallConfig::new(
@@ -78,18 +78,18 @@ impl<Chain: cw_orch::environment::CwEnv> abstract_app::abstract_interface::Depen
                 )?,
                 None,
             ),
-            abstract_app::abstract_core::manager::ModuleInstallConfig::new(
-                abstract_app::abstract_core::objects::module::ModuleInfo::from_id(
-                    abstract_money_market_adapter::MONEY_MARKET_ADAPTER_ID,
-                    abstract_money_market_adapter::contract::CONTRACT_VERSION.into(),
-                )?,
-                None,
-            ),
+            // abstract_app::abstract_core::manager::ModuleInstallConfig::new(
+            //     abstract_app::abstract_core::objects::module::ModuleInfo::from_id(
+            //         abstract_money_market_adapter::MONEY_MARKET_ADAPTER_ID,
+            //         abstract_money_market_adapter::contract::CONTRACT_VERSION.into(),
+            //     )?,
+            //     None,
+            // ),
         ];
 
         Ok([
             dex_dependency_install_configs,
-            moneymarket_dependency_install_configs,
+            // moneymarket_dependency_install_configs,
             adapter_install_config,
         ]
         .concat())

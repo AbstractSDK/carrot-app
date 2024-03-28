@@ -221,6 +221,86 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
+    let (pool_id, carrot_app) = setup_test_tube(false)?;
+
+    let new_strat = BalanceStrategy(vec![
+        BalanceStrategyElement {
+            yield_source: YieldSource {
+                expected_tokens: vec![
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                ],
+                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                    pool_id,
+                    lower_tick: INITIAL_LOWER_TICK,
+                    upper_tick: INITIAL_UPPER_TICK,
+                    position_id: None,
+                }),
+            },
+            share: Decimal::percent(50),
+        },
+        BalanceStrategyElement {
+            yield_source: YieldSource {
+                expected_tokens: vec![
+                    ExpectedToken {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    ExpectedToken {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                ],
+                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                    pool_id,
+                    lower_tick: 2 * INITIAL_LOWER_TICK,
+                    upper_tick: 2 * INITIAL_UPPER_TICK,
+                    position_id: None,
+                }),
+            },
+            share: Decimal::percent(50),
+        },
+        BalanceStrategyElement {
+            yield_source: YieldSource {
+                expected_tokens: vec![ExpectedToken {
+                    denom: USDT.to_string(),
+                    share: Decimal::percent(100),
+                }],
+                ty: YieldType::Mars(USDT.to_string()),
+            },
+            share: Decimal::percent(0),
+        },
+    ]);
+    carrot_app.rebalance(new_strat.clone())?;
+
+    let deposit_amount = 5_000;
+    let deposit_coins = coins(deposit_amount, USDT.to_owned());
+    let mut chain = carrot_app.get_chain().clone();
+
+    let balances_before = query_balances(&carrot_app)?;
+    chain.add_balance(
+        carrot_app.account().proxy()?.to_string(),
+        deposit_coins.clone(),
+    )?;
+    carrot_app.deposit(deposit_coins, None)?;
+    let balances_after = query_balances(&carrot_app)?;
+
+    println!("{balances_before} --> {balances_after}");
+    let slippage = Decimal::percent(4);
+    assert!(
+        balances_after
+            > balances_before + (Uint128::from(deposit_amount) * (Decimal::one() - slippage))
+    );
+    Ok(())
+}
 // #[test]
 // fn create_position_on_instantiation() -> anyhow::Result<()> {
 //     let (_, carrot_app) = setup_test_tube(true)?;

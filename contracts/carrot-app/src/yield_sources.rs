@@ -4,17 +4,19 @@ pub mod yield_type;
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    coin, ensure, ensure_eq, wasm_execute, Coin, Coins, CosmosMsg, Decimal, Env, Uint128,
+    coin, ensure, ensure_eq, wasm_execute, Coin, Coins, CosmosMsg, Decimal, Deps, Env, Uint128,
 };
+use cw_asset::AssetInfo;
 use std::collections::HashMap;
 
 use crate::{
-    contract::AppResult,
+    contract::{App, AppResult},
     error::AppError,
     helpers::close_to,
-    msg::{AppExecuteMsg, ExecuteMsg},
+    msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     state::compute_total_value,
 };
+use abstract_app::traits::AbstractNameService;
 
 use self::yield_type::YieldType;
 
@@ -29,7 +31,7 @@ pub struct YieldSource {
 }
 
 impl YieldSource {
-    pub fn check(&self) -> AppResult<()> {
+    pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
         // First we check the share sums the 100
         let share_sum: Decimal = self.expected_tokens.iter().map(|e| e.share).sum();
         ensure!(
@@ -41,12 +43,23 @@ impl YieldSource {
             AppError::InvalidEmptyStrategy {}
         );
 
-        // Then we check every yield strategy underneath
+        // We ensure all deposited tokens exist in ANS
+        let ans = app.name_service(deps);
+        ans.host().query_assets_reverse(
+            &deps.querier,
+            &self
+                .expected_tokens
+                .iter()
+                .map(|e| AssetInfo::native(e.denom.clone()))
+                .collect::<Vec<_>>(),
+        )?;
 
+        // Then we check every yield strategy underneath
         match &self.ty {
-            YieldType::ConcentratedLiquidityPool(_) => {
+            YieldType::ConcentratedLiquidityPool(params) => {
                 // A valid CL pool strategy is for 2 assets
                 ensure_eq!(self.expected_tokens.len(), 2, AppError::InvalidStrategy {});
+                params.check(deps)?;
             }
             YieldType::Mars(denom) => {
                 // We verify there is only one element in the shares vector
@@ -70,6 +83,14 @@ pub struct ExpectedToken {
     pub share: Decimal,
 }
 
+#[cw_serde]
+pub enum ShareType {
+    /// This allows using the current distribution of tokens inside the position to compute the distribution on deposit
+    Dynamic,
+    /// This forces the position to use the target distribution of tokens when depositing
+    Fixed,
+}
+
 // Related to balance strategies
 #[cw_serde]
 pub struct BalanceStrategy(pub Vec<BalanceStrategyElement>);
@@ -80,13 +101,13 @@ pub struct BalanceStrategyElement {
     pub share: Decimal,
 }
 impl BalanceStrategyElement {
-    pub fn check(&self) -> AppResult<()> {
-        self.yield_source.check()
+    pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
+        self.yield_source.check(deps, app)
     }
 }
 
 impl BalanceStrategy {
-    pub fn check(&self) -> AppResult<()> {
+    pub fn check(&self, deps: Deps, app: &App) -> AppResult<()> {
         // First we check the share sums the 100
         let share_sum: Decimal = self.0.iter().map(|e| e.share).sum();
         ensure!(
@@ -97,7 +118,7 @@ impl BalanceStrategy {
 
         // Then we check every yield strategy underneath
         for yield_source in &self.0 {
-            yield_source.check()?;
+            yield_source.check(deps, app)?;
         }
 
         Ok(())
@@ -277,11 +298,13 @@ impl OneDepositStrategy {
         // For each strategy, we send a message on the contract to execute it
         Ok(wasm_execute(
             env.contract.address.clone(),
-            &ExecuteMsg::Module(AppExecuteMsg::DepositOneStrategy {
-                swap_strategy: self.clone(),
-                yield_type,
-                yield_index,
-            }),
+            &ExecuteMsg::Module(AppExecuteMsg::Internal(
+                InternalExecuteMsg::DepositOneStrategy {
+                    swap_strategy: self.clone(),
+                    yield_type,
+                    yield_index,
+                },
+            )),
             vec![],
         )?
         .into())

@@ -2,7 +2,7 @@ use crate::{
     contract::{App, AppResult},
     error::AppError,
     handlers::query::query_balance,
-    msg::{AppExecuteMsg, ExecuteMsg},
+    msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     state::{assert_contract, get_autocompound_status, Config, CONFIG},
     yield_sources::{BalanceStrategy, ExpectedToken},
 };
@@ -15,7 +15,7 @@ use cosmwasm_std::{
 
 use super::{
     internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step},
-    query::{query_all_exchange_rates, query_exchange_rate, query_strategy},
+    query::{query_all_exchange_rates, query_exchange_rate, query_strategy, query_strategy_target},
     swap_helpers::swap_msg,
 };
 
@@ -34,22 +34,44 @@ pub fn execute_handler(
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, amount, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
         AppExecuteMsg::Rebalance { strategy } => rebalance(deps, env, info, strategy, app),
-
         // Endpoints called by the contract directly
-        AppExecuteMsg::DepositOneStrategy {
-            swap_strategy,
-            yield_type,
-            yield_index,
-        } => deposit_one_strategy(deps, env, info, swap_strategy, yield_index, yield_type, app),
-        AppExecuteMsg::ExecuteOneDepositSwapStep {
-            asset_in,
-            denom_out,
-            expected_amount,
-        } => execute_one_deposit_step(deps, env, info, asset_in, denom_out, expected_amount, app),
-        AppExecuteMsg::FinalizeDeposit {
-            yield_type,
-            yield_index,
-        } => execute_finalize_deposit(deps, env, info, yield_type, yield_index, app),
+        AppExecuteMsg::Internal(internal_msg) => {
+            if info.sender != env.contract.address {
+                return Err(AppError::Unauthorized {});
+            }
+            match internal_msg {
+                InternalExecuteMsg::DepositOneStrategy {
+                    swap_strategy,
+                    yield_type,
+                    yield_index,
+                } => deposit_one_strategy(
+                    deps,
+                    env,
+                    info,
+                    swap_strategy,
+                    yield_index,
+                    yield_type,
+                    app,
+                ),
+                InternalExecuteMsg::ExecuteOneDepositSwapStep {
+                    asset_in,
+                    denom_out,
+                    expected_amount,
+                } => execute_one_deposit_step(
+                    deps,
+                    env,
+                    info,
+                    asset_in,
+                    denom_out,
+                    expected_amount,
+                    app,
+                ),
+                InternalExecuteMsg::FinalizeDeposit {
+                    yield_type,
+                    yield_index,
+                } => execute_finalize_deposit(deps, env, info, yield_type, yield_index, app),
+            }
+        }
     }
 }
 
@@ -99,7 +121,8 @@ fn rebalance(
     // We load it raw because we're changing the strategy
     let mut config = CONFIG.load(deps.storage)?;
     let old_strategy = config.balance_strategy;
-    strategy.check()?;
+
+    strategy.check(deps.as_ref(), &app)?;
 
     // We execute operations to rebalance the funds between the strategies
     // TODO
@@ -177,6 +200,33 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     Ok(response)
 }
 
+/// The deposit process goes through the following steps
+/// 1. We query the target strategy in storage
+/// 2. We correct the expected token shares of each strategy, in case there are corrections passed to the function
+/// 3. We deposit funds according to that strategy
+///
+/// This approach is not perfect. TO show the flaws, take an example where you allocate 50% into mars, 50% into osmosis and both give similar rewards.
+/// Assume we deposited 2x inside the app.
+/// When an auto-compounding happens, they both get y as rewards, mars is already auto-compounding and osmosis' rewards are redeposited inside the pool
+/// Step | Mars | Osmosis | Rewards|
+/// Deposit | x | x | 0 |
+/// Withdraw Rewards | x + y | x| y |
+/// Re-deposit | x + y + y/2 | x + y/2 | 0 |
+/// The final ratio is not the 50/50 ratio we target
+///
+/// PROPOSITION : We could also have this kind of deposit flow
+/// 1a. We query the target strategy in storage (target strategy)
+/// 1b. We query the current status of the strategy (current strategy)
+/// 1c. We create a temporary strategy object to allocate the funds from this deposit into the various strategies
+/// --> the goal of those 3 steps is to correct the funds allocation faster towards the target strategy
+/// 2. We correct the expected token shares of each strategy, in case there are corrections passed to the function
+/// 3. We deposit funds according to that strategy
+/// This time :
+/// Step | Mars | Osmosis | Rewards|
+/// Deposit | x | x | 0 |
+/// Withdraw Rewards | x + y | x| y |
+/// Re-deposit | x + y | x + y | 0 |
+///
 pub fn _inner_deposit(
     deps: Deps,
     env: &Env,
@@ -201,8 +251,9 @@ pub fn _inner_deposit(
         app,
     )?;
 
+    // We query the target strategy depending on the existing deposits
+    let mut current_strategy_status = query_strategy_target(deps, app)?.strategy;
     // We correct the strategy if specified in parameters
-    let mut current_strategy_status = query_strategy(deps)?.strategy;
     current_strategy_status
         .0
         .iter_mut()
@@ -213,16 +264,13 @@ pub fn _inner_deposit(
             }
         });
 
-    let deposit_strategies = query_strategy(deps)?
-        .strategy
-        .fill_all(funds, &exchange_rates)?;
+    let deposit_strategies = current_strategy_status.fill_all(funds, &exchange_rates)?;
 
     // We select the target shares depending on the strategy selected
     let deposit_msgs = deposit_strategies
         .iter()
         .zip(
-            query_strategy(deps)?
-                .strategy
+            current_strategy_status
                 .0
                 .iter()
                 .map(|s| s.yield_source.ty.clone()),

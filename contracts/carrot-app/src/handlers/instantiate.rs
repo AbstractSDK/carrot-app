@@ -16,7 +16,7 @@ pub fn instantiate_handler(
     msg: AppInstantiateMsg,
 ) -> AppResult {
     // We check the balance strategy is valid
-    msg.balance_strategy.check()?;
+    msg.balance_strategy.check(deps.as_ref(), &app)?;
 
     // We don't check the dex on instantiation
 

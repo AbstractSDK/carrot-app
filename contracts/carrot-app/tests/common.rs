@@ -12,7 +12,7 @@ use carrot_app::msg::AppInstantiateMsg;
 use carrot_app::state::{AutocompoundConfig, AutocompoundRewardsConfig};
 use carrot_app::yield_sources::yield_type::{ConcentratedPoolParams, YieldType};
 use carrot_app::yield_sources::{
-    BalanceStrategy, BalanceStrategyElement, ExpectedToken, YieldSource,
+    BalanceStrategy, BalanceStrategyElement, ExpectedToken, ShareType, YieldSource,
 };
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
@@ -115,6 +115,16 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 recipient_account: 0,
             },
         )?;
+    // // The moneymarket adapter
+    // let money_market_adapter = publisher
+    //     .publish_adapter::<_, abstract_money_market_adapter::interface::MoneyMarketAdapter<
+    //     Chain,
+    // >>(
+    //     abstract_money_market_adapter::msg::MoneyMarketInstantiateMsg {
+    //         fee: Decimal::percent(2),
+    //         recipient_account: 0,
+    //     },
+    // )?;
     // The savings app
     publisher.publish_app::<carrot_app::contract::interface::AppInterface<Chain>>()?;
 
@@ -177,6 +187,18 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         ),
         None,
     )?;
+    // money_market_adapter.execute(
+    //     &abstract_money_market_adapter::msg::ExecuteMsg::Base(
+    //         abstract_app::abstract_core::adapter::BaseExecuteMsg {
+    //             proxy_address: Some(carrot_app.account().proxy()?.to_string()),
+    //             msg: abstract_app::abstract_core::adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
+    //                 to_add: vec![carrot_app.addr_str()?],
+    //                 to_remove: vec![],
+    //             },
+    //         },
+    //     ),
+    //     None,
+    // )?;
 
     Ok(carrot_app)
 }

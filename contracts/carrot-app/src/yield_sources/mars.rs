@@ -1,13 +1,9 @@
 use crate::contract::{App, AppResult};
-use crate::error::AppError;
 use abstract_app::traits::AccountIdentification;
-use abstract_app::{
-    objects::{AnsAsset, AssetEntry},
-    traits::AbstractNameService,
-};
+use abstract_app::{objects::AnsAsset, traits::AbstractNameService};
 use abstract_money_market_adapter::msg::MoneyMarketQueryMsg;
 use abstract_money_market_adapter::MoneyMarketInterface;
-use cosmwasm_std::{ensure_eq, Coin, CosmosMsg, Decimal, Deps, SubMsg, Uint128};
+use cosmwasm_std::{Coin, CosmosMsg, Deps, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use abstract_money_market_standard::query::MoneyMarketAnsQuery;
@@ -35,21 +31,20 @@ pub fn withdraw(
     let amount = if let Some(amount) = amount {
         amount
     } else {
-        user_deposit(deps, denom.clone(), &app)?
+        user_deposit(deps, denom.clone(), app)?
     };
 
     let ans_fund = ans.query(&AssetInfo::native(denom))?;
 
     Ok(vec![app
         .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
-        .withdraw(AnsAsset::new(ans_fund, amount))?
-        .into()])
+        .withdraw(AnsAsset::new(ans_fund, amount))?])
 }
 
 pub fn withdraw_rewards(
-    deps: Deps,
-    denom: String,
-    app: &App,
+    _deps: Deps,
+    _denom: String,
+    _app: &App,
 ) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
     // Mars doesn't have rewards, it's automatically auto-compounded
     Ok((vec![], vec![]))
@@ -76,8 +71,8 @@ pub fn user_liquidity(deps: Deps, denom: String, app: &App) -> AppResult<Uint128
     user_deposit(deps, denom, app)
 }
 
-pub fn user_rewards(deps: Deps, denom: String, app: &App) -> AppResult<Vec<Coin>> {
-    // No rewards, because mars is self-auto-compounding
+pub fn user_rewards(_deps: Deps, _denom: String, _app: &App) -> AppResult<Vec<Coin>> {
+    // No rewards, because mars is already auto-compounding
 
     Ok(vec![])
 }

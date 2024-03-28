@@ -51,6 +51,9 @@ pub enum AppError {
     #[error("No position registered in contract, please create a position !")]
     NoPosition {},
 
+    #[error("Deposit pool was not found")]
+    PoolNotFound {},
+
     #[error("No swap fund to swap assets into each other")]
     NoSwapPossibility {},
 

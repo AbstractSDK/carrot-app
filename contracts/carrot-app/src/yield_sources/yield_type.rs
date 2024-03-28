@@ -1,9 +1,15 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{coins, Coin, CosmosMsg, Deps, Env, SubMsg, Uint128};
+use osmosis_std::types::osmosis::{
+    concentratedliquidity::v1beta1::Pool, poolmanager::v1beta1::PoolmanagerQuerier,
+};
 
-use crate::contract::{App, AppResult};
+use crate::{
+    contract::{App, AppResult},
+    error::AppError,
+};
 
-use super::{mars, osmosis_cl_pool};
+use super::{mars, osmosis_cl_pool, ShareType};
 
 #[cw_serde]
 pub enum YieldType {
@@ -22,6 +28,9 @@ impl YieldType {
         funds: Vec<Coin>,
         app: &App,
     ) -> AppResult<Vec<SubMsg>> {
+        if funds.is_empty() {
+            return Ok(vec![]);
+        }
         match self {
             YieldType::ConcentratedLiquidityPool(params) => {
                 osmosis_cl_pool::deposit(deps, env, params, funds, app)
@@ -82,6 +91,17 @@ impl YieldType {
             YieldType::Mars(denom) => mars::user_liquidity(deps, denom.clone(), app),
         }
     }
+
+    /// Indicate the default funds allocation
+    /// This is specifically useful for auto-compound as we're not able to input target amounts
+    /// CL pools use that to know the best funds deposit ratio
+    /// Mars doesn't use that, because the share is fixed to 1
+    pub fn share_type(&self) -> ShareType {
+        match self {
+            YieldType::ConcentratedLiquidityPool(_) => ShareType::Dynamic,
+            YieldType::Mars(_) => ShareType::Fixed,
+        }
+    }
 }
 
 #[cw_serde]
@@ -90,4 +110,15 @@ pub struct ConcentratedPoolParams {
     pub lower_tick: i64,
     pub upper_tick: i64,
     pub position_id: Option<u64>,
+}
+
+impl ConcentratedPoolParams {
+    pub fn check(&self, deps: Deps) -> AppResult<()> {
+        let _pool: Pool = PoolmanagerQuerier::new(&deps.querier)
+            .pool(self.pool_id)?
+            .pool
+            .ok_or(AppError::PoolNotFound {})?
+            .try_into()?;
+        Ok(())
+    }
 }

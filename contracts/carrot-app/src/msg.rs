@@ -51,7 +51,14 @@ pub enum AppExecuteMsg {
     /// Rebalances all investments according to a new balance strategy
     Rebalance { strategy: BalanceStrategy },
 
-    /// Only called by the contract internally
+    /// Only called by the contract internally   
+    Internal(InternalExecuteMsg),
+}
+
+#[cw_serde]
+#[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
+#[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
+pub enum InternalExecuteMsg {
     DepositOneStrategy {
         swap_strategy: OneDepositStrategy,
         yield_type: YieldType,
@@ -68,6 +75,16 @@ pub enum AppExecuteMsg {
         yield_type: YieldType,
         yield_index: usize,
     },
+}
+impl From<InternalExecuteMsg>
+    for abstract_app::abstract_core::base::ExecuteMsg<
+        abstract_app::abstract_core::app::BaseExecuteMsg,
+        AppExecuteMsg,
+    >
+{
+    fn from(value: InternalExecuteMsg) -> Self {
+        Self::Module(AppExecuteMsg::Internal(value))
+    }
 }
 
 /// App query messages

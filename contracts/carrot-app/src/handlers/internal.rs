@@ -1,8 +1,7 @@
 use crate::{
     contract::{App, AppResult},
-    error::AppError,
     helpers::{add_funds, get_proxy_balance},
-    msg::{AppExecuteMsg, ExecuteMsg},
+    msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     replies::REPLY_AFTER_SWAPS_STEP,
     state::{
         CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN,
@@ -20,15 +19,14 @@ use super::query::query_exchange_rate;
 pub fn deposit_one_strategy(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     strategy: OneDepositStrategy,
     yield_index: usize,
     yield_type: YieldType,
     app: App,
 ) -> AppResult {
-    if info.sender != env.contract.address {
-        return Err(AppError::Unauthorized {});
-    }
+    deps.api
+        .debug(&format!("We're depositing {:?}-{:?}", strategy, yield_type));
 
     TEMP_DEPOSIT_COINS.save(deps.storage, &vec![])?;
 
@@ -46,11 +44,13 @@ pub fn deposit_one_strategy(
                         expected_amount,
                     } => wasm_execute(
                         env.contract.address.clone(),
-                        &ExecuteMsg::Module(AppExecuteMsg::ExecuteOneDepositSwapStep {
-                            asset_in,
-                            denom_out,
-                            expected_amount,
-                        }),
+                        &ExecuteMsg::Module(AppExecuteMsg::Internal(
+                            InternalExecuteMsg::ExecuteOneDepositSwapStep {
+                                asset_in,
+                                denom_out,
+                                expected_amount,
+                            },
+                        )),
                         vec![],
                     )
                     .map(|msg| Some(SubMsg::reply_on_success(msg, REPLY_AFTER_SWAPS_STEP))),
@@ -69,10 +69,12 @@ pub fn deposit_one_strategy(
     // Finalize and execute the deposit
     let last_step = wasm_execute(
         env.contract.address.clone(),
-        &ExecuteMsg::Module(AppExecuteMsg::FinalizeDeposit {
-            yield_type,
-            yield_index,
-        }),
+        &ExecuteMsg::Module(AppExecuteMsg::Internal(
+            InternalExecuteMsg::FinalizeDeposit {
+                yield_type,
+                yield_index,
+            },
+        )),
         vec![],
     )?;
 
@@ -84,17 +86,13 @@ pub fn deposit_one_strategy(
 
 pub fn execute_one_deposit_step(
     deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
+    _env: Env,
+    _info: MessageInfo,
     asset_in: Coin,
     denom_out: String,
     expected_amount: Uint128,
     app: App,
 ) -> AppResult {
-    if info.sender != env.contract.address {
-        return Err(AppError::Unauthorized {});
-    }
-
     let config = CONFIG.load(deps.storage)?;
 
     let exchange_rate_in = query_exchange_rate(deps.as_ref(), asset_in.denom.clone(), &app)?;
@@ -126,14 +124,11 @@ pub fn execute_one_deposit_step(
 pub fn execute_finalize_deposit(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     yield_type: YieldType,
     yield_index: usize,
     app: App,
 ) -> AppResult {
-    if info.sender != env.contract.address {
-        return Err(AppError::Unauthorized {});
-    }
     let available_deposit_coins = TEMP_DEPOSIT_COINS.load(deps.storage)?;
 
     TEMP_CURRENT_YIELD.save(deps.storage, &yield_index)?;
