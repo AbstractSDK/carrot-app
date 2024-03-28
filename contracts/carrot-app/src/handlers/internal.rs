@@ -1,12 +1,13 @@
 use crate::{
     contract::{App, AppResult},
+    distribution::deposit::{DepositStep, OneDepositStrategy},
     helpers::{add_funds, get_proxy_balance},
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     replies::REPLY_AFTER_SWAPS_STEP,
     state::{
         CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN,
     },
-    yield_sources::{yield_type::YieldType, BalanceStrategy, DepositStep, OneDepositStrategy},
+    yield_sources::{yield_type::YieldType, BalanceStrategy},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;

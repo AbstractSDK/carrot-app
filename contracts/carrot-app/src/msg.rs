@@ -4,8 +4,9 @@ use cw_asset::AssetBase;
 
 use crate::{
     contract::App,
+    distribution::deposit::OneDepositStrategy,
     state::AutocompoundConfig,
-    yield_sources::{yield_type::YieldType, BalanceStrategy, ExpectedToken, OneDepositStrategy},
+    yield_sources::{yield_type::YieldType, BalanceStrategy, ExpectedToken},
 };
 
 // This is used for type safety and re-exporting the contract endpoint structs.

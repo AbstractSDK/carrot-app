@@ -1,8 +1,19 @@
+use std::collections::HashMap;
+
 use crate::contract::{App, AppResult};
+use crate::error::AppError;
 use abstract_app::traits::AccountIdentification;
 use abstract_app::{objects::AssetEntry, traits::AbstractNameService};
 use abstract_sdk::Resolve;
-use cosmwasm_std::{Addr, Coin, Coins, Decimal, Deps, StdResult, Uint128};
+use cosmwasm_std::{Addr, Coin, Coins, Decimal, Deps, Env, MessageInfo, StdResult, Uint128};
+
+pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
+    if info.sender == env.contract.address {
+        Ok(())
+    } else {
+        Err(AppError::Unauthorized {})
+    }
+}
 
 pub fn get_balance(a: AssetEntry, deps: Deps, address: Addr, app: &App) -> AppResult<Uint128> {
     let denom = a.resolve(&deps.querier, &app.ans_host(deps)?)?;
@@ -34,6 +45,21 @@ pub fn close_to(expected: Decimal, actual: Decimal) -> bool {
 
     actual > expected * (Decimal::one() - close_coeff)
         && actual < expected * (Decimal::one() + close_coeff)
+}
+
+pub fn compute_total_value(
+    funds: &[Coin],
+    exchange_rates: &HashMap<String, Decimal>,
+) -> AppResult<Uint128> {
+    funds
+        .iter()
+        .map(|c| {
+            let exchange_rate = exchange_rates
+                .get(&c.denom)
+                .ok_or(AppError::NoExchangeRate(c.denom.clone()))?;
+            Ok(c.amount * *exchange_rate)
+        })
+        .sum()
 }
 
 #[cfg(test)]

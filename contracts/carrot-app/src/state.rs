@@ -1,11 +1,7 @@
-use std::collections::HashMap;
-
 use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{
-    ensure, Addr, Coin, Decimal, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64,
-};
+use cosmwasm_std::{ensure, Addr, Coin, Deps, Env, Storage, Timestamp, Uint128, Uint64};
 use cw_storage_plus::Item;
 
 use crate::yield_sources::BalanceStrategy;
@@ -85,29 +81,6 @@ pub struct PoolConfig {
     pub token1: String,
     pub asset0: AssetEntry,
     pub asset1: AssetEntry,
-}
-
-pub fn compute_total_value(
-    funds: &[Coin],
-    exchange_rates: &HashMap<String, Decimal>,
-) -> AppResult<Uint128> {
-    funds
-        .iter()
-        .map(|c| {
-            let exchange_rate = exchange_rates
-                .get(&c.denom)
-                .ok_or(AppError::NoExchangeRate(c.denom.clone()))?;
-            Ok(c.amount * *exchange_rate)
-        })
-        .sum()
-}
-
-pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
-    if info.sender == env.contract.address {
-        Ok(())
-    } else {
-        Err(AppError::Unauthorized {})
-    }
 }
 
 #[cw_serde]

@@ -2,8 +2,9 @@ use crate::{
     contract::{App, AppResult},
     error::AppError,
     handlers::query::query_balance,
+    helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
-    state::{assert_contract, get_autocompound_status, Config, CONFIG},
+    state::{get_autocompound_status, Config, CONFIG},
     yield_sources::{BalanceStrategy, ExpectedToken},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
@@ -87,9 +88,6 @@ fn deposit(
     app.admin
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
-
-    let yield_source_params = yield_source_params
-        .unwrap_or_else(|| vec![None; query_strategy(deps.as_ref()).unwrap().strategy.0.len()]);
 
     let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
 
@@ -226,12 +224,11 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 /// Deposit | x | x | 0 |
 /// Withdraw Rewards | x + y | x| y |
 /// Re-deposit | x + y | x + y | 0 |
-///
 pub fn _inner_deposit(
     deps: Deps,
     env: &Env,
     funds: Vec<Coin>,
-    yield_source_params: Vec<Option<Vec<ExpectedToken>>>,
+    yield_source_params: Option<Vec<Option<Vec<ExpectedToken>>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     // We query the target strategy depending on the existing deposits
@@ -241,46 +238,15 @@ pub fn _inner_deposit(
     let exchange_rates = query_all_exchange_rates(
         deps,
         current_strategy_status
-            .0
-            .clone()
-            .iter()
-            .flat_map(|s| {
-                s.yield_source
-                    .asset_distribution
-                    .iter()
-                    .map(|ExpectedToken { denom, share: _ }| denom.clone())
-            })
+            .get_all_tokens()
+            .into_iter()
             .chain(funds.iter().map(|f| f.denom.clone())),
         app,
     )?;
 
-    // We correct the strategy if specified in parameters
-    current_strategy_status
-        .0
-        .iter_mut()
-        .zip(yield_source_params)
-        .for_each(|(strategy, params)| {
-            if let Some(param) = params {
-                strategy.yield_source.asset_distribution = param;
-            }
-        });
+    current_strategy_status.correct_with(yield_source_params);
 
-    let deposit_strategies = current_strategy_status.fill_all(funds, &exchange_rates)?;
-
-    // We select the target shares depending on the strategy selected
-    let deposit_msgs = deposit_strategies
-        .iter()
-        .zip(
-            current_strategy_status
-                .0
-                .iter()
-                .map(|s| s.yield_source.ty.clone()),
-        )
-        .enumerate()
-        .map(|(index, (strategy, yield_type))| strategy.deposit_msgs(env, index, yield_type))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(deposit_msgs)
+    current_strategy_status.fill_all_and_get_messages(env, funds, &exchange_rates)
 }
 
 fn _inner_withdraw(
