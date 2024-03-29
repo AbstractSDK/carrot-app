@@ -139,3 +139,14 @@ run-script script +CHAINS:
 deploy +CHAINS:
   just run-script deploy {{CHAINS}}
   
+# Serve docs locally, pass --open to open in browser
+docs-serve *FLAGS:
+  (cd docs && mdbook serve {{FLAGS}}) 
+
+docs-build:
+  (cd docs && mdbook build)
+
+docs-install:
+  cargo install mdbook --vers "0.4.21" --locked
+  cargo install mdbook-mermaid --vers "0.12.6" --locked
+  cargo install mdbook-admonish --vers "1.9.0" --locked
