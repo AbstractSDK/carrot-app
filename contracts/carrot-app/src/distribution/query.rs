@@ -3,7 +3,7 @@ use cosmwasm_std::{Coins, Decimal, Deps, Uint128};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    handlers::query::query_exchange_rate,
+    exchange_rate::query_exchange_rate,
     msg::AssetsBalanceResponse,
     yield_sources::{AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource},
 };

@@ -2,6 +2,7 @@ pub mod autocompound;
 pub mod contract;
 pub mod distribution;
 pub mod error;
+pub mod exchange_rate;
 mod handlers;
 pub mod helpers;
 pub mod msg;

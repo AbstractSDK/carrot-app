@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::contract::{App, AppResult};
 use crate::error::AppError;
-use crate::handlers::query::query_exchange_rate;
+use crate::exchange_rate::query_exchange_rate;
 use abstract_app::traits::AccountIdentification;
 use abstract_app::{objects::AssetEntry, traits::AbstractNameService};
 use abstract_sdk::Resolve;

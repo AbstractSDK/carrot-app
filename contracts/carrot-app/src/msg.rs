@@ -98,6 +98,8 @@ pub enum AppQueryMsg {
     Config {},
     #[returns(AssetsBalanceResponse)]
     Balance {},
+    #[returns(PositionsResponse)]
+    Positions {},
     /// Get the claimable rewards that the position has accumulated.
     /// Returns [`AvailableRewardsResponse`]
     #[returns(AvailableRewardsResponse)]
@@ -141,6 +143,18 @@ pub struct AssetsBalanceResponse {
 #[cw_serde]
 pub struct StrategyResponse {
     pub strategy: BalanceStrategy,
+}
+
+#[cw_serde]
+pub struct PositionsResponse {
+    pub positions: Vec<PositionResponse>,
+}
+
+#[cw_serde]
+pub struct PositionResponse {
+    pub ty: YieldType,
+    pub balance: Vec<Coin>,
+    pub liquidity: Uint128,
 }
 
 #[cw_serde]

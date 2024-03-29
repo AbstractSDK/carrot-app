@@ -4,7 +4,7 @@ use cosmwasm_std::{coin, Coin, Coins, Decimal, Deps, Uint128};
 
 use crate::{
     contract::{App, AppResult},
-    handlers::query::query_all_exchange_rates,
+    exchange_rate::query_all_exchange_rates,
     helpers::{compute_total_value, compute_value},
     yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy, BalanceStrategyElement},
 };

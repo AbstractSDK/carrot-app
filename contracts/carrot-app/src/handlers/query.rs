@@ -1,15 +1,15 @@
-use std::collections::HashMap;
-
 use abstract_app::traits::AccountIdentification;
 use abstract_app::{
     abstract_core::objects::AnsAsset,
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
+use cosmwasm_std::{to_json_binary, Binary, Coins, Deps, Env, Uint128};
 use cw_asset::Asset;
 
 use crate::autocompound::get_autocompound_status;
+use crate::exchange_rate::query_exchange_rate;
+use crate::msg::{PositionResponse, PositionsResponse};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
@@ -30,6 +30,7 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
         AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
         AppQueryMsg::RebalancePreview {} => todo!(),
         AppQueryMsg::StrategyStatus {} => to_json_binary(&query_strategy_status(deps, app)?),
+        AppQueryMsg::Positions {} => to_json_binary(&query_positions(deps, app)?),
     }
     .map_err(Into::into)
 }
@@ -144,23 +145,22 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
     })
 }
 
-pub fn query_exchange_rate(
-    _deps: Deps,
-    _denom: impl Into<String>,
-    _app: &App,
-) -> AppResult<Decimal> {
-    // In the first iteration, all deposited tokens are assumed to be equal to 1
-    Ok(Decimal::one())
-}
+pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
+    Ok(PositionsResponse {
+        positions: query_strategy(deps)?
+            .strategy
+            .0
+            .into_iter()
+            .map(|s| {
+                let balance = s.yield_source.ty.user_deposit(deps, app)?;
+                let liquidity = s.yield_source.ty.user_liquidity(deps, app)?;
 
-// Returns a hashmap with all request exchange rates
-pub fn query_all_exchange_rates(
-    deps: Deps,
-    denoms: impl Iterator<Item = String>,
-    app: &App,
-) -> AppResult<HashMap<String, Decimal>> {
-    denoms
-        .into_iter()
-        .map(|denom| Ok((denom.clone(), query_exchange_rate(deps, denom, app)?)))
-        .collect()
+                Ok::<_, AppError>(PositionResponse {
+                    ty: s.yield_source.ty,
+                    balance,
+                    liquidity,
+                })
+            })
+            .collect::<Result<_, _>>()?,
+    })
 }

@@ -15,7 +15,7 @@ use abstract_sdk::features::AbstractNameService;
 use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, StdError, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
-use super::query::query_exchange_rate;
+use crate::exchange_rate::query_exchange_rate;
 
 pub fn deposit_one_strategy(
     deps: DepsMut,
