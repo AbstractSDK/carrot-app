@@ -10,7 +10,6 @@ use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
 use cw_asset::Asset;
 
 use crate::autocompound::get_autocompound_status;
-use crate::yield_sources::BalanceStrategy;
 use crate::{
     contract::{App, AppResult},
     error::AppError,

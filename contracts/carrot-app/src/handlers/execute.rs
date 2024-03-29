@@ -2,10 +2,10 @@ use crate::{
     contract::{App, AppResult},
     error::AppError,
     handlers::query::query_balance,
-    helpers::{assert_contract, compute_value},
+    helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     state::{AUTOCOMPOUND_STATE, CONFIG},
-    yield_sources::{AssetShare, BalanceStrategy, BalanceStrategyElement},
+    yield_sources::{AssetShare, BalanceStrategy},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_sdk::ExecutorMsg;
@@ -205,7 +205,7 @@ pub fn _inner_deposit(
 pub fn _inner_advanced_deposit(
     deps: Deps,
     env: &Env,
-    mut funds: Vec<Coin>,
+    funds: Vec<Coin>,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
@@ -213,74 +213,21 @@ pub fn _inner_advanced_deposit(
     let target_strategy = query_strategy(deps)?.strategy;
 
     // This is the current distribution of funds inside the strategies
-    let current_distribution = target_strategy.query_current_status(deps, app)?;
-    let total_value = target_strategy.current_balance(deps, app)?.total_value;
-    let deposit_value = compute_value(deps, &funds, app)?;
+    let current_strategy_status = target_strategy.query_current_status(deps, app)?;
 
-    if deposit_value.is_zero() {
-        // We are trying to deposit no value, so we just don't do anything
-        return Ok(vec![]);
-    }
+    let mut usable_funds: Coins = funds.try_into()?;
+    let (withdraw_msgs, this_deposit_strategy) = target_strategy.current_deposit_strategy(
+        deps,
+        &mut usable_funds,
+        current_strategy_status,
+        app,
+    )?;
 
-    // We create the strategy so that he final distribution is as close to the target strategy as possible
-    // 1. For all strategies, we withdraw some if its value is too high above target_strategy
-    let mut withdraw_funds = Coins::default();
-    let mut withdraw_value = Uint128::zero();
-    let mut withdraw_msgs = vec![];
-
-    // All strategies have to be reviewed
-    // EITHER of those are true :
-    // - The yield source has too much funds deposited and some should be withdrawn
-    // OR
-    // - Some funds need to be deposited into the strategy
-    let mut this_deposit_strategy: BalanceStrategy = target_strategy
-        .0
-        .iter()
-        .zip(current_distribution.0)
-        .map(|(target, current)| {
-            // We need to take into account the total value added by the current shares
-
-            let value_now = current.share * total_value;
-            let target_value = target.share * (total_value + deposit_value);
-
-            // If value now is greater than the target value, we need to withdraw some funds from the protocol
-            if target_value < value_now {
-                let this_withdraw_value = target_value - value_now;
-                // In the following line, total_value can't be zero, otherwise the if condition wouldn't be met
-                let this_withdraw_share = Decimal::from_ratio(withdraw_value, total_value);
-                let this_withdraw_funds =
-                    current.withdraw_preview(deps, Some(this_withdraw_share), app)?;
-                withdraw_value += this_withdraw_value;
-                for fund in this_withdraw_funds {
-                    withdraw_funds.add(fund)?;
-                }
-                withdraw_msgs.push(
-                    current
-                        .withdraw(deps, Some(this_withdraw_share), app)?
-                        .into(),
-                );
-
-                // In case there is a withdraw from the strategy, we don't need to deposit into this strategy after !
-                Ok::<_, AppError>(None)
-            } else {
-                // In case we don't withdraw anything, it means we might deposit.
-                // Total should sum to one !
-                let share = Decimal::from_ratio(target_value - value_now, deposit_value);
-
-                Ok(Some(BalanceStrategyElement {
-                    yield_source: target.yield_source.clone(),
-                    share,
-                }))
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .into();
-
-    // We add the withdrawn funds to the deposit funds
-    funds.extend(withdraw_funds);
+    let mut this_deposit_strategy = if let Some(this_deposit_strategy) = this_deposit_strategy {
+        this_deposit_strategy
+    } else {
+        return Ok(withdraw_msgs);
+    };
 
     // We query the yield source shares
     this_deposit_strategy.apply_current_strategy_shares(deps, app)?;
@@ -289,7 +236,8 @@ pub fn _inner_advanced_deposit(
     this_deposit_strategy.correct_with(yield_source_params);
 
     // We fill the strategies with the current deposited funds and get messages to execute those deposits
-    let deposit_msgs = this_deposit_strategy.fill_all_and_get_messages(deps, env, funds, app)?;
+    let deposit_msgs =
+        this_deposit_strategy.fill_all_and_get_messages(deps, env, usable_funds.into(), app)?;
 
     Ok([withdraw_msgs, deposit_msgs].concat())
 }

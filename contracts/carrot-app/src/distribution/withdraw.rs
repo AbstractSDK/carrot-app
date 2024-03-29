@@ -4,9 +4,6 @@ use cosmwasm_std::{Coin, Decimal, Deps};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    handlers::query::query_all_exchange_rates,
-    helpers::compute_total_value,
-    msg::AssetsBalanceResponse,
     yield_sources::{BalanceStrategy, BalanceStrategyElement},
 };
 
@@ -57,8 +54,7 @@ impl BalanceStrategyElement {
         app: &App,
     ) -> AppResult<Vec<Coin>> {
         let current_deposit = self.yield_source.ty.user_deposit(deps, app)?;
-        let exchange_rates =
-            query_all_exchange_rates(deps, current_deposit.iter().map(|f| f.denom.clone()), app)?;
+
         if let Some(share) = withdraw_share {
             Ok(current_deposit
                 .into_iter()

@@ -5,8 +5,8 @@ use cosmwasm_std::{coin, Coin, Coins, Decimal, Deps, Uint128};
 use crate::{
     contract::{App, AppResult},
     handlers::query::query_all_exchange_rates,
-    helpers::compute_total_value,
-    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy},
+    helpers::{compute_total_value, compute_value},
+    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy, BalanceStrategyElement},
 };
 
 use cosmwasm_schema::cw_serde;
@@ -18,6 +18,82 @@ use crate::{
 };
 
 impl BalanceStrategy {
+    // We determine the best balance strategy depending on the current deposits and the target strategy.
+    // This method needs to be called on the stored strategy
+    pub fn current_deposit_strategy(
+        &self,
+        deps: Deps,
+        funds: &mut Coins,
+        current_strategy_status: Self,
+        app: &App,
+    ) -> AppResult<(Vec<CosmosMsg>, Option<Self>)> {
+        let total_value = self.current_balance(deps, app)?.total_value;
+        let deposit_value = compute_value(deps, &funds.to_vec(), app)?;
+
+        if deposit_value.is_zero() {
+            // We are trying to deposit no value, so we just don't do anything
+            return Ok((vec![], None));
+        }
+
+        // We create the strategy so that he final distribution is as close to the target strategy as possible
+        // 1. For all strategies, we withdraw some if its value is too high above target_strategy
+        let mut withdraw_value = Uint128::zero();
+        let mut withdraw_msgs = vec![];
+
+        // All strategies have to be reviewed
+        // EITHER of those are true :
+        // - The yield source has too much funds deposited and some should be withdrawn
+        // OR
+        // - Some funds need to be deposited into the strategy
+        let this_deposit_strategy: BalanceStrategy = current_strategy_status
+            .0
+            .into_iter()
+            .zip(self.0.clone())
+            .map(|(target, current)| {
+                // We need to take into account the total value added by the current shares
+
+                let value_now = current.share * total_value;
+                let target_value = target.share * (total_value + deposit_value);
+
+                // If value now is greater than the target value, we need to withdraw some funds from the protocol
+                if target_value < value_now {
+                    let this_withdraw_value = target_value - value_now;
+                    // In the following line, total_value can't be zero, otherwise the if condition wouldn't be met
+                    let this_withdraw_share = Decimal::from_ratio(withdraw_value, total_value);
+                    let this_withdraw_funds =
+                        current.withdraw_preview(deps, Some(this_withdraw_share), app)?;
+                    withdraw_value += this_withdraw_value;
+                    for fund in this_withdraw_funds {
+                        funds.add(fund)?;
+                    }
+                    withdraw_msgs.push(
+                        current
+                            .withdraw(deps, Some(this_withdraw_share), app)?
+                            .into(),
+                    );
+
+                    // In case there is a withdraw from the strategy, we don't need to deposit into this strategy after !
+                    Ok::<_, AppError>(None)
+                } else {
+                    // In case we don't withdraw anything, it means we might deposit.
+                    // Total should sum to one !
+                    let share = Decimal::from_ratio(target_value - value_now, deposit_value);
+
+                    Ok(Some(BalanceStrategyElement {
+                        yield_source: target.yield_source.clone(),
+                        share,
+                    }))
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .into();
+
+        Ok((withdraw_msgs, Some(this_deposit_strategy)))
+    }
+
     // We dispatch the available funds directly into the Strategies
     // This returns :
     // 0 : Funds that are used for specific strategies. And remaining amounts to fill those strategies
