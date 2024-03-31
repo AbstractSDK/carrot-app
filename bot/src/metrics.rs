@@ -1,6 +1,4 @@
-use prometheus::{
-    Encoder, GaugeVec, IntCounter, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
-};
+use prometheus::{Encoder, IntCounter, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder};
 
 use warp::Filter;
 
