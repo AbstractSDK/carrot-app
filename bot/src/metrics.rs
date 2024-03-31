@@ -1,4 +1,6 @@
-use prometheus::{Encoder, IntCounter, IntGauge, Registry, TextEncoder};
+use prometheus::{
+    Encoder, GaugeVec, IntCounter, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
+};
 
 use warp::Filter;
 
@@ -12,6 +14,8 @@ pub struct Metrics {
     pub total_value_locked: IntGauge,
     // The balance of the instance used to calculate the APR
     pub reference_contract_balance: IntGauge,
+    // balance of every instance
+    pub contract_balance: IntGaugeVec,
 }
 
 impl Metrics {
@@ -51,6 +55,14 @@ impl Metrics {
             "balance of the reference contract to calculate the apr",
         )
         .unwrap();
+        let contract_balance = IntGaugeVec::new(
+            Opts::new(
+                "carrot_app_bot_contract_balance",
+                "Funds managed by a specific carrot instance",
+            ),
+            &["contract_address"],
+        )
+        .unwrap();
         registry.register(Box::new(fetch_count.clone())).unwrap();
         registry
             .register(Box::new(fetch_instances_count.clone()))
@@ -70,6 +82,9 @@ impl Metrics {
         registry
             .register(Box::new(reference_contract_balance.clone()))
             .unwrap();
+        registry
+            .register(Box::new(contract_balance.clone()))
+            .unwrap();
         Self {
             fetch_count,
             fetch_instances_count,
@@ -78,6 +93,7 @@ impl Metrics {
             contract_instances_to_autocompound,
             total_value_locked,
             reference_contract_balance,
+            contract_balance,
         }
     }
 }

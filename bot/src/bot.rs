@@ -30,7 +30,7 @@ use osmosis_std::types::{
         gamm::v1beta1::MsgSwapExactAmountIn,
     },
 };
-use prometheus::Registry;
+use prometheus::{labels, Registry};
 use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
@@ -158,20 +158,30 @@ impl Bot {
                     .unwrap(),
             );
 
-            self.metrics.total_value_locked.set(
-                contract_addrs
-                    .iter()
-                    .fold(Uint128::zero(), |acc, inst| {
-                        acc + utils::get_carrot_balance(
-                            daemon.clone(),
-                            &Addr::unchecked(Addr::unchecked(inst)),
-                        )
-                        .unwrap_or(Uint128::zero())
-                    })
-                    .u128()
-                    .try_into() // There is a risk of overflow here
-                    .unwrap(),
-            );
+            let mut total_value_locked = Uint128::zero();
+            for contract_addr in contract_addrs.iter() {
+                let address = Addr::unchecked(contract_addr.clone());
+                let balance_result = utils::get_carrot_balance(daemon.clone(), &address);
+                let balance = match balance_result {
+                    Ok(value) => value,
+                    Err(_) => Uint128::zero(), // Handle potential errors
+                };
+
+                // Update total_value_locked
+                total_value_locked += balance;
+
+                // Update contract_balance GaugeVec with label
+                let label = labels! {"contract_address"=> contract_addr.as_ref()};
+                self.metrics
+                    .contract_balance
+                    .with(&label)
+                    .set(balance.u128().try_into().unwrap());
+            }
+
+            // Finally, set the total_value_locked metric after the loop
+            self.metrics
+                .total_value_locked
+                .set(total_value_locked.u128().try_into().unwrap());
 
             // Only keep the contract addresses that have the required permissions
             contract_addrs.retain(|address| {
