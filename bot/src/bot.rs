@@ -152,7 +152,7 @@ impl Bot {
 
             self.metrics.reference_contract_balance.set(
                 utils::get_carrot_balance(daemon.clone(), &Addr::unchecked(ref_contract.clone()))
-                    .unwrap()
+                    .unwrap_or(Uint128::zero())
                     .u128()
                     .try_into() // There is a risk of overflow here
                     .unwrap(),
