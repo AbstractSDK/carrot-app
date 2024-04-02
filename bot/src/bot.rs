@@ -149,7 +149,7 @@ impl Bot {
         for app_info in saving_modules.modules {
             // Skip if version mismatches
             if semver::Version::parse(&app_info.module.info.version.to_string())
-                .map(|v| ver_req.matches(&v))
+                .map(|v| !ver_req.matches(&v))
                 .unwrap_or(false)
             {
                 continue;
