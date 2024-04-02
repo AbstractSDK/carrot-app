@@ -147,8 +147,9 @@ impl Bot {
 
         let ver_req = VersionReq::parse(VERSION_REQ).unwrap();
         for app_info in saving_modules.modules {
+            let version = app_info.module.info.version.to_string();
             // Skip if version mismatches
-            if semver::Version::parse(&app_info.module.info.version.to_string())
+            if semver::Version::parse(&version)
                 .map(|v| !ver_req.matches(&v))
                 .unwrap_or(false)
             {
@@ -156,9 +157,11 @@ impl Bot {
             }
             let code_id = app_info.module.reference.unwrap_app()?;
 
-            let mut contract_addrs = daemon
-                .rt_handle
-                .block_on(utils::fetch_instances(daemon.channel(), code_id))?;
+            let mut contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
+                daemon.channel(),
+                code_id,
+                &version,
+            ))?;
             fetch_instances_count += contract_addrs.len();
 
             self.metrics.reference_contract_balance.set(
@@ -262,7 +265,11 @@ mod utils {
     use super::*;
 
     /// Get the contract instances of a given code_id
-    pub async fn fetch_instances(channel: Channel, code_id: u64) -> anyhow::Result<Vec<String>> {
+    pub async fn fetch_instances(
+        channel: Channel,
+        code_id: u64,
+        version: &str,
+    ) -> anyhow::Result<Vec<String>> {
         let mut cw_querier = QueryClient::new(channel);
         let contract_addrs = cw_querier
             .contracts_by_code(QueryContractsByCodeRequest {
@@ -273,7 +280,7 @@ mod utils {
             .await?
             .into_inner()
             .contracts;
-        log!(Level::Info, "Savings addrs: {contract_addrs:?}");
+        log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
         anyhow::Ok(contract_addrs)
     }
 
