@@ -1,12 +1,14 @@
-use prometheus::{Encoder, IntCounter, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder};
+use prometheus::{
+    Encoder, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder,
+};
 
 use warp::Filter;
 
 pub struct Metrics {
     pub fetch_count: IntCounter,
     pub fetch_instances_count: IntGauge,
-    pub autocompounded_count: IntCounter,
-    pub autocompounded_error_count: IntCounter,
+    pub autocompounded_count: IntCounterVec,
+    pub autocompounded_error_count: IntCounterVec,
     pub contract_instances_to_autocompound: IntGauge,
     // Total value locked by all instance
     pub total_value_locked: IntGauge,
@@ -28,14 +30,20 @@ impl Metrics {
             "Number of fetched instances",
         )
         .unwrap();
-        let autocompounded_count = IntCounter::new(
-            "carrot_app_bot_autocompounded_count",
-            "Number of times contracts have been autocompounded",
+        let autocompounded_count = IntCounterVec::new(
+            Opts::new(
+                "carrot_app_bot_autocompounded_count",
+                "Number of times contracts have been autocompounded",
+            ),
+            &["contract_address", "contract_version"],
         )
         .unwrap();
-        let autocompounded_error_count = IntCounter::new(
-            "carrot_app_bot_autocompounded_error_count",
-            "Number of times autocompounding errored",
+        let autocompounded_error_count = IntCounterVec::new(
+            Opts::new(
+                "carrot_app_bot_autocompounded_error_count",
+                "Number of times autocompounding errored",
+            ),
+            &["contract_address", "contract_version"],
         )
         .unwrap();
         let contract_instances_to_autocompound = IntGauge::new(
