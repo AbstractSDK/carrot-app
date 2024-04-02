@@ -3,6 +3,7 @@ use carrot_app::{
     msg::{AppExecuteMsg, AppQueryMsg, CompoundStatusResponse, ExecuteMsg, QueryMsg},
     AppInterface,
 };
+use semver::VersionReq;
 
 use crate::Metrics;
 use cosmos_sdk_proto::{
@@ -42,6 +43,8 @@ use abstract_app::{
     abstract_interface::VCQueryFns,
     objects::module::{ModuleInfo, ModuleStatus},
 };
+
+const VERSION_REQ: &str = ">=0.2";
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
@@ -142,7 +145,15 @@ impl Bot {
 
         let ref_contract = self.apr_reference_contract.clone();
 
+        let ver_req = VersionReq::parse(VERSION_REQ).unwrap();
         for app_info in saving_modules.modules {
+            // Skip if version mismatches
+            if semver::Version::parse(&app_info.module.info.version.to_string())
+                .map(|v| ver_req.matches(&v))
+                .unwrap_or(false)
+            {
+                continue;
+            }
             let code_id = app_info.module.reference.unwrap_app()?;
 
             let mut contract_addrs = daemon
