@@ -58,7 +58,7 @@ impl Metrics {
                 "carrot_app_bot_contract_balance",
                 "Funds managed by a specific carrot instance",
             ),
-            &["contract_address"],
+            &["contract_address", "contract_version"],
         )
         .unwrap();
         registry.register(Box::new(fetch_count.clone())).unwrap();

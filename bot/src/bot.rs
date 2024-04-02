@@ -131,6 +131,7 @@ impl Bot {
         let abstr = AbstractClient::new(self.daemon.clone())?;
         let mut contract_instances_to_autocompound: HashSet<(String, Addr)> = HashSet::new();
 
+        log!(Level::Debug, "Fetching modules");
         let saving_modules = abstr.version_control().module_list(
             Some(ModuleFilter {
                 namespace: Some(self.module_info.namespace.to_string()),
@@ -141,20 +142,16 @@ impl Bot {
             None,
             None,
         )?;
+
         let mut fetch_instances_count = 0;
 
         let ref_contract = self.apr_reference_contract.clone();
 
         let ver_req = VersionReq::parse(VERSION_REQ).unwrap();
+        log!(Level::Debug, "version requirement: {ver_req}");
         for app_info in saving_modules.modules {
             let version = app_info.module.info.version.to_string();
-            // Skip if version mismatches
-            if semver::Version::parse(&version)
-                .map(|v| !ver_req.matches(&v))
-                .unwrap_or(false)
-            {
-                continue;
-            }
+
             let code_id = app_info.module.reference.unwrap_app()?;
 
             let mut contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
@@ -185,17 +182,25 @@ impl Bot {
                 total_value_locked += balance;
 
                 // Update contract_balance GaugeVec with label
-                let label = labels! {"contract_address"=> contract_addr.as_ref()};
+                let label = labels! {"contract_address"=> contract_addr.as_ref(),"contract_version"=> version.as_ref()};
+
                 self.metrics
                     .contract_balance
                     .with(&label)
                     .set(balance.u128().try_into().unwrap());
             }
-
             // Finally, set the total_value_locked metric after the loop
             self.metrics
                 .total_value_locked
                 .set(total_value_locked.u128().try_into().unwrap());
+
+            // Skip if version mismatches
+            if semver::Version::parse(&version)
+                .map(|v| !ver_req.matches(&v))
+                .unwrap_or(false)
+            {
+                continue;
+            }
 
             // Only keep the contract addresses that have the required permissions
             contract_addrs.retain(|address| {
