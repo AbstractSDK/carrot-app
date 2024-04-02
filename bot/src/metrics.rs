@@ -35,7 +35,7 @@ impl Metrics {
                 "carrot_app_bot_autocompounded_count",
                 "Number of times contracts have been autocompounded",
             ),
-            &["contract_address", "contract_version"],
+            &["contract_version"],
         )
         .unwrap();
         let autocompounded_error_count = IntCounterVec::new(
@@ -43,7 +43,7 @@ impl Metrics {
                 "carrot_app_bot_autocompounded_error_count",
                 "Number of times autocompounding errored",
             ),
-            &["contract_address", "contract_version"],
+            &["contract_version"],
         )
         .unwrap();
         let contract_instances_to_autocompound = IntGauge::new(

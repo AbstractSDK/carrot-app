@@ -261,8 +261,7 @@ impl Bot {
         for (id, contract) in self.contract_instances_to_ac.iter() {
             let version = &contract.version;
             let addr = &contract.address;
-            let label =
-                labels! {"contract_address"=> addr.as_ref(),"contract_version"=> version.as_ref()};
+            let label = labels! {"contract_version"=> version.as_ref()};
             let result = autocompound_instance(&self.daemon, (id, &addr));
             if let Err(err) = result {
                 log!(
