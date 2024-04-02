@@ -8,7 +8,8 @@ use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, CompoundStatusResponse,
 };
-use cosmwasm_std::{coin, coins, Uint128};
+use carrot_app::state::AutocompoundRewardsConfig;
+use cosmwasm_std::{coin, coins, Uint128, Uint64};
 use cw_asset::AssetBase;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Module};
 use cw_orch::{anyhow, prelude::*};
@@ -221,5 +222,31 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     // Check stranger gets rewarded
     let stranger_reward_balance = chain.query_balance(stranger.address().as_str(), REWARD_DENOM)?;
     assert_eq!(stranger_reward_balance, Uint128::new(1000));
+    Ok(())
+}
+
+#[test]
+fn update_autocompound_config() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    let config = carrot_app.config()?;
+    assert_eq!(config.autocompound_cooldown_seconds, Uint64::new(300));
+    assert_eq!(
+        config.autocompound_rewards_config.reward,
+        Uint128::new(1000)
+    );
+    carrot_app.update_config(
+        Some(Uint64::new(1)),
+        Some(AutocompoundRewardsConfig {
+            gas_asset: config.autocompound_rewards_config.gas_asset,
+            swap_asset: config.autocompound_rewards_config.swap_asset,
+            reward: Uint128::zero(),
+            min_gas_balance: config.autocompound_rewards_config.min_gas_balance,
+            max_gas_balance: config.autocompound_rewards_config.max_gas_balance,
+        }),
+    )?;
+    let config = carrot_app.config()?;
+    assert_eq!(config.autocompound_cooldown_seconds, Uint64::new(1));
+    assert_eq!(config.autocompound_rewards_config.reward, Uint128::zero());
     Ok(())
 }

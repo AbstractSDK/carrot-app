@@ -6,7 +6,8 @@ use crate::{
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
-        assert_contract, get_osmosis_position, get_position, get_position_status, Config, CONFIG,
+        assert_contract, get_osmosis_position, get_position, get_position_status,
+        AutocompoundRewardsConfig, Config, CONFIG,
     },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
@@ -15,7 +16,7 @@ use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
     to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
-    WasmMsg,
+    Uint64, WasmMsg,
 };
 use cw_asset::Asset;
 use osmosis_std::{
@@ -35,6 +36,15 @@ pub fn execute_handler(
     msg: AppExecuteMsg,
 ) -> AppResult {
     match msg {
+        AppExecuteMsg::UpdateConfig {
+            autocompound_cooldown_seconds,
+            autocompound_rewards_config,
+        } => update_config(
+            deps,
+            app,
+            autocompound_cooldown_seconds,
+            autocompound_rewards_config,
+        ),
         AppExecuteMsg::CreatePosition(create_position_msg) => {
             create_position(deps, env, info, app, create_position_msg)
         }
@@ -57,6 +67,47 @@ pub fn execute_handler(
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
     }
+}
+
+fn update_config(
+    deps: DepsMut,
+    app: App,
+    autocompound_cooldown_seconds: Option<Uint64>,
+    autocompound_rewards_config: Option<AutocompoundRewardsConfig>,
+) -> AppResult {
+    let mut config = CONFIG.load(deps.storage)?;
+
+    if let Some(new_rewards_config) = autocompound_rewards_config {
+        // Validate rewards config first
+        let ans = app.name_service(deps.as_ref());
+        let asset_pairing_resp: Vec<abstract_sdk::core::ans_host::AssetPairingMapEntry> = ans
+            .pool_list(
+                Some(abstract_sdk::core::ans_host::AssetPairingFilter {
+                    asset_pair: Some((
+                        new_rewards_config.gas_asset.clone(),
+                        new_rewards_config.swap_asset.clone(),
+                    )),
+                    dex: None,
+                }),
+                None,
+                None,
+            )?;
+
+        let pair = asset_pairing_resp
+            .into_iter()
+            .find(|(_, refs)| !refs.is_empty())
+            .ok_or(AppError::NoSwapPossibility {})?
+            .0;
+        let dex_name = pair.dex();
+        new_rewards_config.check(deps.as_ref(), dex_name, ans.host())?;
+        config.autocompound_rewards_config = new_rewards_config;
+    }
+    if let Some(new_autocompound_cooldown) = autocompound_cooldown_seconds {
+        config.autocompound_cooldown_seconds = new_autocompound_cooldown;
+    }
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(app.response("update_config"))
 }
 
 /// In this function, we want to create a new position for the user.
