@@ -45,7 +45,7 @@ cw-controllers = { version = "1.0.1" }
 cw-storage-plus = "1.2.0"
 thiserror = { version = "1.0.50" }
 schemars = "0.8"
-cw-asset = { version = "3.0" }
+cw-asset = { workspace = true }
 
 abstract-app = { workspace = true }
 abstract-sdk = { version = "0.21.0", features = ["stargate"] }
