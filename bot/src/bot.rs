@@ -71,7 +71,7 @@ pub struct Bot {
     fetch_contracts_cooldown: Duration,
     last_fetch: SystemTime,
     // Autocompound information
-    contract_instances_to_ac: HashSet<(String, CarrotInstancee)>,
+    contract_instances_to_ac: HashSet<(String, CarrotInstance)>,
     // Used for APR calculation
     apr_reference_contract: Addr,
     pub autocompound_cooldown: Duration,
@@ -80,11 +80,11 @@ pub struct Bot {
 }
 
 #[derive(Eq, Hash, PartialEq, Clone)]
-struct CarrotInstancee {
+struct CarrotInstance {
     address: Addr,
     version: String,
 }
-impl CarrotInstancee {
+impl CarrotInstance {
     fn new(address: Addr, version: &str) -> Self {
         Self {
             address,
@@ -93,11 +93,11 @@ impl CarrotInstancee {
     }
 }
 
-impl Display for CarrotInstancee {
+impl Display for CarrotInstance {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CarrotInstancee {{ address: {:?}, version: {} }}",
+            "CarrotInstance {{ address: {:?}, version: {} }}",
             self.address, self.version
         )
     }
@@ -154,7 +154,7 @@ impl Bot {
         let daemon = &self.daemon;
 
         let abstr = AbstractClient::new(self.daemon.clone())?;
-        let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstancee)> =
+        let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
             HashSet::new();
 
         log!(Level::Debug, "Fetching modules");
@@ -239,7 +239,7 @@ impl Bot {
             contract_instances_to_autocompound.extend(contract_addrs.into_iter().map(|addr| {
                 (
                     app_info.module.info.id(),
-                    CarrotInstancee::new(Addr::unchecked(addr), version.as_ref()),
+                    CarrotInstance::new(Addr::unchecked(addr), version.as_ref()),
                 )
             }));
         }
