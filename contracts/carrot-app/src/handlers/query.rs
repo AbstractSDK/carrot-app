@@ -68,13 +68,14 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         user_swap_balance > required_swap_amount
     };
 
-    let pool_rewards = query_rewards(deps, app)?;
+    let (spread_rewards, incentives) = query_rewards(deps, app)?;
 
     Ok(CompoundStatusResponse {
         status,
         autocompound_reward: reward.into(),
         autocompound_reward_available: rewards_available,
-        pool_rewards,
+        spread_rewards,
+        incentives,
     })
 }
 
@@ -99,19 +100,13 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
     })
 }
 
-fn query_rewards(deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+fn query_rewards(deps: Deps, _app: &App) -> AppResult<(Vec<Coin>, Vec<Coin>)> {
     let pool = get_osmosis_position(deps)?;
 
-    let mut rewards = cosmwasm_std::Coins::default();
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
-        rewards.add(coin)?;
-    }
-
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
-        rewards.add(coin)?;
-    }
-
-    Ok(rewards.into())
+    Ok((
+        try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)?,
+        try_proto_to_cosmwasm_coins(pool.claimable_incentives)?,
+    ))
 }
 
 pub fn query_price(

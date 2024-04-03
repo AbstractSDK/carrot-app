@@ -80,9 +80,11 @@ fn check_autocompound() -> anyhow::Result<()> {
 
     // Check autocompound adds liquidity from the rewards and user balance remain unchanged
 
+    // Check we have rewards
     // Check it has some rewards to autocompound first
-    let rewards = carrot_app.compound_status()?.pool_rewards;
-    assert!(rewards.iter().any(|c| c.denom == GAS_DENOM));
+    let status = carrot_app.compound_status()?;
+    assert!(!status.spread_rewards.is_empty());
+    assert!(status.incentives.iter().any(|c| c.denom == GAS_DENOM));
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
@@ -120,8 +122,9 @@ fn check_autocompound() -> anyhow::Result<()> {
     assert!(balance_usdc_after_autocompound.amount >= balance_usdc_before_autocompound.amount);
     assert!(balance_usdt_after_autocompound.amount >= balance_usdt_before_autocompound.amount,);
     // Check it used all of the rewards
-    let rewards = carrot_app.compound_status()?.pool_rewards;
-    assert!(rewards.is_empty());
+    let status = carrot_app.compound_status()?;
+    assert!(status.spread_rewards.is_empty());
+    assert!(status.incentives.is_empty());
 
     Ok(())
 }
@@ -191,8 +194,9 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     // and rewards gets passed to the "stranger"
 
     // Check it has some rewards to autocompound first
-    let pool_rewards = carrot_app.compound_status()?.pool_rewards;
-    assert!(pool_rewards.iter().any(|c| c.denom == GAS_DENOM));
+    let status = carrot_app.compound_status()?;
+    assert!(!status.spread_rewards.is_empty());
+    assert!(status.incentives.iter().any(|c| c.denom == GAS_DENOM));
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
@@ -216,8 +220,9 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     assert!(balance_after_autocompound.liquidity > balance_before_autocompound.liquidity);
 
     // Check it used all of the rewards
-    let rewards = carrot_app.compound_status()?.pool_rewards;
-    assert!(rewards.is_empty());
+    let status = carrot_app.compound_status()?;
+    assert!(status.incentives.is_empty());
+    assert!(status.spread_rewards.is_empty());
 
     // Check stranger gets rewarded
     let stranger_reward_balance = chain.query_balance(stranger.address().as_str(), REWARD_DENOM)?;

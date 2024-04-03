@@ -109,7 +109,8 @@ pub struct CompoundStatusResponse {
     pub autocompound_reward: AssetBase<String>,
     /// Wether user have enough balance to reward or can swap to get enough
     pub autocompound_reward_available: bool,
-    pub pool_rewards: Vec<Coin>,
+    pub spread_rewards: Vec<Coin>,
+    pub incentives: Vec<Coin>,
 }
 
 #[cw_serde]
