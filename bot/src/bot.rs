@@ -251,10 +251,15 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     use carrot_app::AppQueryMsgFns;
     let resp: CompoundStatusResponse = app.compound_status()?;
 
-    // TODO: ensure rewards > tx fee
-
-    // Ensure there is rewards and pool rewards not empty
-    if resp.autocompound_reward_available && !resp.pool_rewards.is_empty() {
+    // Ensure contract is ready for autocompound,
+    // user can send rewards,
+    // pool rewards not empty
+    // and bot will get paid enough to cover gas fees
+    if resp.status.is_ready()
+        && resp.autocompound_reward_available
+        && !resp.pool_rewards.is_empty()
+        && utils::enough_rewards(resp.autocompound_reward)
+    {
         // Execute autocompound
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
@@ -266,8 +271,10 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
 }
 
 mod utils {
+    use cw_asset::AssetBase;
 
     use super::*;
+    const MIN_REWARD: (&str, Uint128) = ("uosmo", Uint128::new(100_000));
 
     /// Get the contract instances of a given code_id
     pub async fn fetch_instances(
@@ -382,5 +389,13 @@ mod utils {
             "contract: {contract_addr:?} balance: {balance:?}"
         );
         Ok(balance)
+    }
+
+    pub fn enough_rewards(rewards: AssetBase<String>) -> bool {
+        let gas_asset = match rewards.info {
+            cw_asset::AssetInfoBase::Native(denom) => denom == MIN_REWARD.0,
+            _ => false,
+        };
+        gas_asset && rewards.amount >= MIN_REWARD.1
     }
 }
