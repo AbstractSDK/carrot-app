@@ -1,9 +1,11 @@
 mod bot;
 mod bot_args;
+mod metrics;
 
 pub use bot::Bot;
 pub use bot_args::BotArgs;
-use warp::Filter;
+use metrics::serve_metrics;
+pub use metrics::Metrics;
 
 use abstract_app::objects::module::{ModuleInfo, ModuleVersion};
 use carrot_app::contract::{APP_ID, APP_VERSION};
@@ -13,23 +15,7 @@ use cw_orch::{
     tokio::runtime::Runtime,
 };
 
-use prometheus::{Encoder, Registry, TextEncoder};
-
-async fn serve_metrics(registry: prometheus::Registry) {
-    let addr: std::net::SocketAddr = "0.0.0.0:8000".parse().unwrap();
-    let metric_server = warp::serve(warp::path("metrics").map(move || {
-        let metric_families = registry.gather();
-        let mut buffer = vec![];
-        let encoder = TextEncoder::new();
-        encoder.encode(&metric_families, &mut buffer).unwrap();
-        warp::reply::with_header(
-            buffer,
-            "content-type",
-            "text/plain; version=0.0.4; charset=utf-8",
-        )
-    }));
-    metric_server.run(addr).await;
-}
+use prometheus::Registry;
 
 /// entrypoint for the bot
 pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {

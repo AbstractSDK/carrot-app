@@ -12,6 +12,7 @@ path = "src/bin/local.rs"
 cw-orch = { workspace = true, features = ["daemon"] }
 abstract-app = { workspace = true }
 abstract-client = { workspace = true }
+cosmwasm-std = { version = "1.2" }
 osmosis-std = { version = "0.21.0" }
 cosmos-sdk-proto = { version = "0.20.0" }
 dotenv = "0.15.0"
@@ -24,3 +25,4 @@ humantime = "2.1.0"
 prometheus = "0.13.2"
 tokio = "1.26.0"
 warp = "0.3.6"
+semver = "1.0"

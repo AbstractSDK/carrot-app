@@ -60,8 +60,6 @@ pub fn instantiate_handler(
     let config: Config = Config {
         pool_config: PoolConfig {
             pool_id: msg.pool_id,
-            token0: pool.token0.clone(),
-            token1: pool.token1.clone(),
             asset0,
             asset1,
         },
