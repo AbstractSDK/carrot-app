@@ -262,7 +262,7 @@ fn deposit_slippage() -> anyhow::Result<()> {
 }
 
 #[test]
-fn withdraw_position_autoclaims() -> anyhow::Result<()> {
+fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     let chain = carrot_app.get_chain().clone();
@@ -292,11 +292,81 @@ fn withdraw_position_autoclaims() -> anyhow::Result<()> {
         dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
     }
 
+    // Check it has some rewards
+    let status = carrot_app.compound_status()?;
+    assert!(!status.pool_rewards.is_empty());
+
     // Withdraw half of liquidity
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
     let half_of_liquidity = liquidity_amount / Uint128::new(2);
     carrot_app.withdraw(half_of_liquidity)?;
+
+    // Check rewards claimed
+    let status = carrot_app.compound_status()?;
+    assert!(status.pool_rewards.is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    let chain = carrot_app.get_chain().clone();
+
+    // Create position
+    create_position(
+        &carrot_app,
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
+
+    // Do some swaps
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
+    let abs = Abstract::load_from(chain.clone())?;
+    let account_id = carrot_app.account().id()?;
+    let account = AbstractAccount::new(&abs, account_id);
+    chain.bank_send(
+        account.proxy.addr_str()?,
+        vec![
+            coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
+        ],
+    )?;
+    for _ in 0..10 {
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+    }
+
+    // Check it has some rewards
+    let status = carrot_app.compound_status()?;
+    assert!(!status.pool_rewards.is_empty());
+
+    // Withdraw half of liquidity
+    let test_tube = chain.app.borrow();
+    let cl = ConcentratedLiquidity::new(&*test_tube);
+
+    let position: PositionResponse = carrot_app.position()?;
+    let position_id = position.position.unwrap().position_id;
+
+    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint128::new(2);
+
+    cl.withdraw_position(
+        MsgWithdrawPosition {
+            position_id,
+            sender: chain.sender().to_string(),
+            liquidity_amount: half_of_liquidity.to_string(),
+        },
+        &chain.sender,
+    )?;
+
+    // Check rewards not claimed
+    let status = carrot_app.compound_status()?;
+    assert!(!status.pool_rewards.is_empty());
 
     Ok(())
 }
