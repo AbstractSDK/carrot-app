@@ -45,7 +45,7 @@ use abstract_app::{
     objects::module::{ModuleInfo, ModuleStatus},
 };
 
-const VERSION_REQ: &str = ">=0.2";
+const VERSION_REQ: &str = ">=0.3";
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
@@ -286,11 +286,11 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
 
     // Ensure contract is ready for autocompound,
     // user can send rewards,
-    // pool rewards not empty
+    // spread rewards not empty
     // and bot will get paid enough to cover gas fees
     if resp.status.is_ready()
         && resp.autocompound_reward_available
-        && !resp.pool_rewards.is_empty()
+        && !resp.spread_rewards.is_empty()
         && utils::enough_rewards(resp.autocompound_reward)
     {
         // Execute autocompound
