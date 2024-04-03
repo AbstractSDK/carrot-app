@@ -44,7 +44,7 @@ use abstract_app::{
     objects::module::{ModuleInfo, ModuleStatus},
 };
 
-const VERSION_REQ: &str = ">=0.2";
+const VERSION_REQ: &str = ">=0.3";
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
@@ -254,7 +254,7 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     // TODO: ensure rewards > tx fee
 
     // Ensure there is rewards and pool rewards not empty
-    if resp.autocompound_reward_available && !resp.pool_rewards.is_empty() {
+    if resp.autocompound_reward_available && !resp.spread_rewards.is_empty() {
         // Execute autocompound
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
