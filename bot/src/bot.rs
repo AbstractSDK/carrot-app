@@ -34,6 +34,7 @@ use osmosis_std::types::{
 use prometheus::{labels, Registry};
 use std::{
     collections::HashSet,
+    fmt::{Display, Formatter},
     time::{Duration, SystemTime},
 };
 use tonic::transport::Channel;
@@ -70,12 +71,36 @@ pub struct Bot {
     fetch_contracts_cooldown: Duration,
     last_fetch: SystemTime,
     // Autocompound information
-    contract_instances_to_ac: HashSet<(String, Addr)>,
+    contract_instances_to_ac: HashSet<(String, CarrotInstance)>,
     // Used for APR calculation
     apr_reference_contract: Addr,
     pub autocompound_cooldown: Duration,
     // metrics
     metrics: Metrics,
+}
+
+#[derive(Eq, Hash, PartialEq, Clone)]
+struct CarrotInstance {
+    address: Addr,
+    version: String,
+}
+impl CarrotInstance {
+    fn new(address: Addr, version: &str) -> Self {
+        Self {
+            address,
+            version: version.to_string(),
+        }
+    }
+}
+
+impl Display for CarrotInstance {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CarrotInstance {{ address: {:?}, version: {} }}",
+            self.address, self.version
+        )
+    }
 }
 
 struct Balance {
@@ -129,7 +154,8 @@ impl Bot {
         let daemon = &self.daemon;
 
         let abstr = AbstractClient::new(self.daemon.clone())?;
-        let mut contract_instances_to_autocompound: HashSet<(String, Addr)> = HashSet::new();
+        let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
+            HashSet::new();
 
         log!(Level::Debug, "Fetching modules");
         let saving_modules = abstr.version_control().module_list(
@@ -210,11 +236,12 @@ impl Bot {
             });
 
             // Add all the entries to the `contract_instances_to_check`
-            contract_instances_to_autocompound.extend(
-                contract_addrs
-                    .into_iter()
-                    .map(|addr| (app_info.module.info.id(), Addr::unchecked(addr))),
-            );
+            contract_instances_to_autocompound.extend(contract_addrs.into_iter().map(|addr| {
+                (
+                    app_info.module.info.id(),
+                    CarrotInstance::new(Addr::unchecked(addr), version.as_ref()),
+                )
+            }));
         }
 
         // Metrics
@@ -232,13 +259,19 @@ impl Bot {
 
     // Autocompound all saved instances and wait for cooldown duration
     pub fn autocompound(&self) {
-        for (id, addr) in self.contract_instances_to_ac.iter() {
+        for (id, contract) in self.contract_instances_to_ac.iter() {
+            let version = &contract.version;
+            let addr = &contract.address;
+            let label = labels! {"contract_version"=> version.as_ref()};
             let result = autocompound_instance(&self.daemon, (id, addr));
             if let Err(err) = result {
-                log!(Level::Error, "error ocurred for {addr} carrot-app: {err:?}");
-                self.metrics.autocompounded_error_count.inc();
+                log!(
+                    Level::Error,
+                    "error ocurred for {contract} carrot-app: {err:?}"
+                );
+                self.metrics.autocompounded_error_count.with(&label).inc();
             } else {
-                self.metrics.autocompounded_count.inc();
+                self.metrics.autocompounded_count.with(&label).inc();
             }
         }
     }
