@@ -1,7 +1,7 @@
 use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
+use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Timestamp, Uint128, Uint64};
 use cw_storage_plus::Item;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     ConcentratedliquidityQuerier, FullPositionBreakdown,
@@ -90,29 +90,42 @@ pub fn get_position(deps: Deps) -> AppResult<Position> {
 pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
     let position = get_position(deps)?;
 
-    ConcentratedliquidityQuerier::new(&deps.querier)
-        .position_by_id(position.position_id)
-        .map_err(|e| AppError::UnableToQueryPosition(position.position_id, e))?
+    Ok(ConcentratedliquidityQuerier::new(&deps.querier)
+        .position_by_id(position.position_id)?
         .position
-        .ok_or(AppError::NoPosition {})
+        .unwrap())
 }
 
+/// Returns compound status and position
 pub fn get_position_status(
-    storage: &dyn Storage,
+    deps: Deps,
     env: &Env,
     cooldown_seconds: u64,
-) -> AppResult<CompoundStatus> {
-    let position = POSITION.may_load(storage)?;
+) -> AppResult<(CompoundStatus, Option<FullPositionBreakdown>)> {
+    let position = POSITION.may_load(deps.storage)?;
     let status = match position {
         Some(position) => {
+            let Ok(position_response) = ConcentratedliquidityQuerier::new(&deps.querier)
+                .position_by_id(position.position_id)
+            else {
+                return Ok((
+                    CompoundStatus::PositionNotAvailable(position.position_id),
+                    None,
+                ));
+            };
             let ready_on = position.last_compound.plus_seconds(cooldown_seconds);
             if env.block.time >= ready_on {
-                CompoundStatus::Ready {}
+                (CompoundStatus::Ready {}, position_response.position)
             } else {
-                CompoundStatus::Cooldown((env.block.time.seconds() - ready_on.seconds()).into())
+                (
+                    CompoundStatus::Cooldown(
+                        (env.block.time.seconds() - ready_on.seconds()).into(),
+                    ),
+                    position_response.position,
+                )
             }
         }
-        None => CompoundStatus::NoPosition {},
+        None => (CompoundStatus::NoPosition {}, None),
     };
     Ok(status)
 }

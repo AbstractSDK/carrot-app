@@ -289,10 +289,11 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     let config = CONFIG.load(deps.storage)?;
     if !app.admin.is_admin(deps.as_ref(), &info.sender)?
         && get_position_status(
-            deps.storage,
+            deps.as_ref(),
             &env,
             config.autocompound_cooldown_seconds.u64(),
         )?
+        .0
         .is_ready()
     {
         let executor_reward_messages = autocompound_executor_rewards(

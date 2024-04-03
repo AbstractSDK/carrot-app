@@ -1,7 +1,9 @@
 mod common;
 
 use crate::common::{create_position, setup_test_tube, USDC, USDT};
-use carrot_app::msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, PositionResponse};
+use carrot_app::msg::{
+    AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, PositionResponse,
+};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_orch::{
     anyhow,
@@ -187,6 +189,13 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
 
     // Ensure it errors
     carrot_app.withdraw_all().unwrap_err();
+
+    // Ensure we get correct compound response
+    let status_response = carrot_app.compound_status()?;
+    assert_eq!(
+        status_response.status,
+        CompoundStatus::PositionNotAvailable(position_id)
+    );
 
     // Ensure position deleted
     let position_not_found = cl
