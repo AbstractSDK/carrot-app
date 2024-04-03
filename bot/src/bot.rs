@@ -286,7 +286,7 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
 
     // Ensure contract is ready for autocompound,
     // user can send rewards,
-    // pool rewards not empty
+    // spread rewards not empty
     // and bot will get paid enough to cover gas fees
     if resp.status.is_ready()
         && resp.autocompound_reward_available
