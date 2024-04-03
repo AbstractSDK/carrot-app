@@ -44,6 +44,11 @@ pub struct CreatePositionMessage {
 #[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
+    /// Update autocompound settings
+    UpdateConfig {
+        autocompound_cooldown_seconds: Option<Uint64>,
+        autocompound_rewards_config: Option<AutocompoundRewardsConfig>,
+    },
     /// Create the initial liquidity position
     CreatePosition(CreatePositionMessage),
     /// Deposit funds onto the app
@@ -80,7 +85,7 @@ pub enum AppQueryMsg {
 }
 
 #[cosmwasm_schema::cw_serde]
-pub enum AppMigrateMsg {}
+pub struct AppMigrateMsg {}
 
 #[cosmwasm_schema::cw_serde]
 pub struct BalanceResponse {

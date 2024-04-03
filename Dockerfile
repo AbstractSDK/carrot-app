@@ -8,7 +8,7 @@ WORKDIR /carrot_workspace
 # Copy your source tree
 COPY ./bot ./bot
 COPY ./contracts ./contracts
-# Also copy Cargo.toml 
+# Also copy Cargo.toml
 COPY Cargo.toml ./
 
 # RUN echo | ls && exit 1
@@ -31,5 +31,9 @@ RUN mv target/release/prod .
 RUN mkdir ~/.cw-orchestrator
 RUN echo "{}" > ~/.cw-orchestrator/state.json
 
+COPY ./entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+ENTRYPOINT ["./entrypoint.sh"]
+
 # Command to run the binary
-CMD ["./prod", "--fcd", "1d", "--acd", "1h", "--grpcs", "https://grpc.osmosis.zone:443"]
+CMD ./prod --fcd 1d --acd 1h $GRPC_OPTION

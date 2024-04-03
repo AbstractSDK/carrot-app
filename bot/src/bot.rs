@@ -1,12 +1,17 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
 use carrot_app::{
-    msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
+    msg::{AppExecuteMsg, AppQueryMsg, CompoundStatusResponse, ExecuteMsg, QueryMsg},
     AppInterface,
 };
+use semver::VersionReq;
+
+use crate::Metrics;
 use cosmos_sdk_proto::{
     cosmwasm::wasm::v1::{query_client::QueryClient, QueryContractsByCodeRequest},
     traits::Message as _,
 };
+
+use cosmwasm_std::Uint128;
 use cw_orch::{
     anyhow,
     daemon::{queriers::Authz, Daemon},
@@ -26,8 +31,10 @@ use osmosis_std::types::{
         gamm::v1beta1::MsgSwapExactAmountIn,
     },
 };
+use prometheus::{labels, Registry};
 use std::{
     collections::HashSet,
+    fmt::{Display, Formatter},
     time::{Duration, SystemTime},
 };
 use tonic::transport::Channel;
@@ -38,6 +45,8 @@ use abstract_app::{
     objects::module::{ModuleInfo, ModuleStatus},
 };
 
+const VERSION_REQ: &str = ">=0.2";
+
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
     MsgSwapExactAmountIn::TYPE_URL,
@@ -46,7 +55,14 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectIncentives::TYPE_URL,
     MsgCollectSpreadRewards::TYPE_URL,
 ];
-use prometheus::{IntCounter, IntGauge, Registry};
+
+const APR_REFERENCE_INSTANCE: &str =
+    "osmo1rhvdhjxx25x3v4gan68h3n0an3wsa94zjj4yjnxc5yx2vt6q3scsfjgykp";
+// TODO: Get these values from ans
+const USDT_OSMOSIS_DENOM: &str =
+    "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
+const USDC_OSMOSIS_DENOM: &str =
+    "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
 
 pub struct Bot {
     pub daemon: Daemon,
@@ -55,68 +71,54 @@ pub struct Bot {
     fetch_contracts_cooldown: Duration,
     last_fetch: SystemTime,
     // Autocompound information
-    contract_instances_to_ac: HashSet<(String, Addr)>,
+    contract_instances_to_ac: HashSet<(String, CarrotInstance)>,
+    // Used for APR calculation
+    apr_reference_contract: Addr,
     pub autocompound_cooldown: Duration,
     // metrics
     metrics: Metrics,
 }
 
-struct Metrics {
-    fetch_count: IntCounter,
-    fetch_instances_count: IntGauge,
-    autocompounded_count: IntCounter,
-    autocompounded_error_count: IntCounter,
-    contract_instances_to_autocompound: IntGauge,
+#[derive(Eq, Hash, PartialEq, Clone)]
+struct CarrotInstance {
+    address: Addr,
+    version: String,
 }
-
-impl Metrics {
-    fn new(registry: &Registry) -> Self {
-        let fetch_count = IntCounter::new(
-            "carrot_app_bot_fetch_count",
-            "Number of times the bot has fetched the instances",
-        )
-        .unwrap();
-        let fetch_instances_count = IntGauge::new(
-            "carrot_app_bot_fetch_instances_count",
-            "Number of fetched instances",
-        )
-        .unwrap();
-        let autocompounded_count = IntCounter::new(
-            "carrot_app_bot_autocompounded_count",
-            "Number of times contracts have been autocompounded",
-        )
-        .unwrap();
-        let autocompounded_error_count = IntCounter::new(
-            "carrot_app_bot_autocompounded_error_count",
-            "Number of times autocompounding errored",
-        )
-        .unwrap();
-        let contract_instances_to_autocompound = IntGauge::new(
-            "carrot_app_bot_contract_instances_to_autocompound",
-            "Number of instances that are eligible to be compounded",
-        )
-        .unwrap();
-        registry.register(Box::new(fetch_count.clone())).unwrap();
-        registry
-            .register(Box::new(fetch_instances_count.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(autocompounded_count.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(autocompounded_error_count.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(contract_instances_to_autocompound.clone()))
-            .unwrap();
+impl CarrotInstance {
+    fn new(address: Addr, version: &str) -> Self {
         Self {
-            fetch_count,
-            fetch_instances_count,
-            autocompounded_count,
-            autocompounded_error_count,
-            contract_instances_to_autocompound,
+            address,
+            version: version.to_string(),
         }
     }
+}
+
+impl Display for CarrotInstance {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CarrotInstance {{ address: {:?}, version: {} }}",
+            self.address, self.version
+        )
+    }
+}
+
+struct Balance {
+    coins: Vec<ValuedCoin>,
+}
+impl Balance {
+    fn new(coins: Vec<ValuedCoin>) -> Self {
+        Self { coins }
+    }
+    fn calculate_usd_value(self) -> Uint128 {
+        self.coins.iter().fold(Uint128::zero(), |acc, c| {
+            acc + c.coin.amount.checked_mul(c.usd_value).unwrap()
+        })
+    }
+}
+struct ValuedCoin {
+    coin: Coin,
+    usd_value: Uint128,
 }
 
 impl Bot {
@@ -135,6 +137,7 @@ impl Bot {
             fetch_contracts_cooldown,
             last_fetch: SystemTime::UNIX_EPOCH,
             contract_instances_to_ac: Default::default(),
+            apr_reference_contract: Addr::unchecked(APR_REFERENCE_INSTANCE),
             autocompound_cooldown,
             metrics,
         }
@@ -149,9 +152,12 @@ impl Bot {
         }
 
         let daemon = &self.daemon;
-        let abstr = AbstractClient::new(self.daemon.clone())?;
-        let mut contract_instances_to_autocompound: HashSet<(String, Addr)> = HashSet::new();
 
+        let abstr = AbstractClient::new(self.daemon.clone())?;
+        let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
+            HashSet::new();
+
+        log!(Level::Debug, "Fetching modules");
         let saving_modules = abstr.version_control().module_list(
             Some(ModuleFilter {
                 namespace: Some(self.module_info.namespace.to_string()),
@@ -162,15 +168,65 @@ impl Bot {
             None,
             None,
         )?;
+
         let mut fetch_instances_count = 0;
 
+        let ref_contract = self.apr_reference_contract.clone();
+
+        let ver_req = VersionReq::parse(VERSION_REQ).unwrap();
+        log!(Level::Debug, "version requirement: {ver_req}");
         for app_info in saving_modules.modules {
+            let version = app_info.module.info.version.to_string();
+
             let code_id = app_info.module.reference.unwrap_app()?;
 
-            let mut contract_addrs = daemon
-                .rt_handle
-                .block_on(utils::fetch_instances(daemon.channel(), code_id))?;
+            let mut contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
+                daemon.channel(),
+                code_id,
+                &version,
+            ))?;
             fetch_instances_count += contract_addrs.len();
+
+            self.metrics.reference_contract_balance.set(
+                utils::get_carrot_balance(daemon.clone(), &Addr::unchecked(ref_contract.clone()))
+                    .unwrap_or(Uint128::zero())
+                    .u128()
+                    .try_into() // There is a risk of overflow here
+                    .unwrap(),
+            );
+
+            let mut total_value_locked = Uint128::zero();
+            for contract_addr in contract_addrs.iter() {
+                let address = Addr::unchecked(contract_addr.clone());
+                let balance_result = utils::get_carrot_balance(daemon.clone(), &address);
+                let balance = match balance_result {
+                    Ok(value) => value,
+                    Err(_) => Uint128::zero(), // Handle potential errors
+                };
+
+                // Update total_value_locked
+                total_value_locked += balance;
+
+                // Update contract_balance GaugeVec with label
+                let label = labels! {"contract_address"=> contract_addr.as_ref(),"contract_version"=> version.as_ref()};
+
+                self.metrics
+                    .contract_balance
+                    .with(&label)
+                    .set(balance.u128().try_into().unwrap());
+            }
+            // Finally, set the total_value_locked metric after the loop
+            self.metrics
+                .total_value_locked
+                .set(total_value_locked.u128().try_into().unwrap());
+
+            // Skip if version mismatches
+            if semver::Version::parse(&version)
+                .map(|v| !ver_req.matches(&v))
+                .unwrap_or(false)
+            {
+                continue;
+            }
 
             // Only keep the contract addresses that have the required permissions
             contract_addrs.retain(|address| {
@@ -180,11 +236,12 @@ impl Bot {
             });
 
             // Add all the entries to the `contract_instances_to_check`
-            contract_instances_to_autocompound.extend(
-                contract_addrs
-                    .into_iter()
-                    .map(|addr| (app_info.module.info.id(), Addr::unchecked(addr))),
-            );
+            contract_instances_to_autocompound.extend(contract_addrs.into_iter().map(|addr| {
+                (
+                    app_info.module.info.id(),
+                    CarrotInstance::new(Addr::unchecked(addr), version.as_ref()),
+                )
+            }));
         }
 
         // Metrics
@@ -202,13 +259,19 @@ impl Bot {
 
     // Autocompound all saved instances and wait for cooldown duration
     pub fn autocompound(&self) {
-        for (id, addr) in self.contract_instances_to_ac.iter() {
+        for (id, contract) in self.contract_instances_to_ac.iter() {
+            let version = &contract.version;
+            let addr = &contract.address;
+            let label = labels! {"contract_version"=> version.as_ref()};
             let result = autocompound_instance(&self.daemon, (id, addr));
             if let Err(err) = result {
-                log!(Level::Error, "error ocurred for {addr} carrot-app: {err:?}");
-                self.metrics.autocompounded_error_count.inc();
+                log!(
+                    Level::Error,
+                    "error ocurred for {contract} carrot-app: {err:?}"
+                );
+                self.metrics.autocompounded_error_count.with(&label).inc();
             } else {
-                self.metrics.autocompounded_count.inc();
+                self.metrics.autocompounded_count.with(&label).inc();
             }
         }
     }
@@ -221,10 +284,15 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     use carrot_app::AppQueryMsgFns;
     let resp: CompoundStatusResponse = app.compound_status()?;
 
-    // TODO: ensure rewards > tx fee
-
-    // Ensure there is rewards and pool rewards not empty
-    if resp.autocompound_reward_available && !resp.pool_rewards.is_empty() {
+    // Ensure contract is ready for autocompound,
+    // user can send rewards,
+    // pool rewards not empty
+    // and bot will get paid enough to cover gas fees
+    if resp.status.is_ready()
+        && resp.autocompound_reward_available
+        && !resp.pool_rewards.is_empty()
+        && utils::enough_rewards(resp.autocompound_reward)
+    {
         // Execute autocompound
         daemon.execute(
             &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
@@ -236,10 +304,17 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
 }
 
 mod utils {
+    use cw_asset::AssetBase;
+
     use super::*;
+    const MIN_REWARD: (&str, Uint128) = ("uosmo", Uint128::new(100_000));
 
     /// Get the contract instances of a given code_id
-    pub async fn fetch_instances(channel: Channel, code_id: u64) -> anyhow::Result<Vec<String>> {
+    pub async fn fetch_instances(
+        channel: Channel,
+        code_id: u64,
+        version: &str,
+    ) -> anyhow::Result<Vec<String>> {
         let mut cw_querier = QueryClient::new(channel);
         let contract_addrs = cw_querier
             .contracts_by_code(QueryContractsByCodeRequest {
@@ -250,7 +325,7 @@ mod utils {
             .await?
             .into_inner()
             .contracts;
-        log!(Level::Info, "Savings addrs: {contract_addrs:?}");
+        log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
         anyhow::Ok(contract_addrs)
     }
 
@@ -312,5 +387,48 @@ mod utils {
             }
         }
         Ok(true)
+    }
+
+    /// gets the balance managed by an instance
+    pub fn get_carrot_balance(daemon: Daemon, contract_addr: &Addr) -> anyhow::Result<Uint128> {
+        let response: carrot_app::msg::AssetsBalanceResponse =
+            daemon.query(&QueryMsg::from(AppQueryMsg::Balance {}), contract_addr)?;
+
+        let balance = Balance::new(
+            response
+                .balances
+                .iter()
+                .filter(|c| c.denom.eq(USDT_OSMOSIS_DENOM) || c.denom.eq(USDC_OSMOSIS_DENOM))
+                .map(|c| match c.denom.as_str() {
+                    USDT_OSMOSIS_DENOM => ValuedCoin {
+                        coin: c.clone(),
+                        usd_value: Uint128::one(),
+                    },
+                    USDC_OSMOSIS_DENOM => ValuedCoin {
+                        coin: c.clone(),
+                        usd_value: Uint128::one(),
+                    },
+                    _ => ValuedCoin {
+                        coin: c.clone(),
+                        usd_value: Uint128::zero(),
+                    },
+                })
+                .collect(),
+        );
+        let balance = balance.calculate_usd_value();
+
+        log!(
+            Level::Info,
+            "contract: {contract_addr:?} balance: {balance:?}"
+        );
+        Ok(balance)
+    }
+
+    pub fn enough_rewards(rewards: AssetBase<String>) -> bool {
+        let gas_asset = match rewards.info {
+            cw_asset::AssetInfoBase::Native(denom) => denom == MIN_REWARD.0,
+            _ => false,
+        };
+        gas_asset && rewards.amount >= MIN_REWARD.1
     }
 }
