@@ -36,10 +36,9 @@ During the contract
 ### Query Messages
 
 - Balance: Returns the current balance in the pool
-- AvailableRewards: Returns the available rewards to be claimed
 - Config: Returns the current configuration of the contract
 - Position: Returns information about the user's position in the pool
-- CompoundStatus: Returns the current autocompound status (cooldown or ready)
+- CompoundStatus: Returns the current autocompound status (cooldown or ready) and available rewards to be claimed
 
 ## Bot
 
