@@ -16,6 +16,7 @@ use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, StdError, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use crate::exchange_rate::query_exchange_rate;
+use abstract_app::traits::AccountIdentification;
 
 pub fn deposit_one_strategy(
     deps: DepsMut,
@@ -27,6 +28,11 @@ pub fn deposit_one_strategy(
 ) -> AppResult {
     deps.api
         .debug(&format!("We're depositing {:?}-{:?}", strategy, yield_type));
+    deps.api.debug(&format!(
+        "Proxy balance after withdraw : {:?}",
+        deps.querier
+            .query_all_balances(app.account_base(deps.as_ref())?.proxy)?
+    ));
 
     TEMP_DEPOSIT_COINS.save(deps.storage, &vec![])?;
 
@@ -93,6 +99,8 @@ pub fn execute_one_deposit_step(
     app: App,
 ) -> AppResult {
     let config = CONFIG.load(deps.storage)?;
+    deps.api
+        .debug(&format!("Deposit step swap : {:?}", asset_in));
 
     let exchange_rate_in = query_exchange_rate(deps.as_ref(), asset_in.denom.clone(), &app)?;
     let exchange_rate_out = query_exchange_rate(deps.as_ref(), denom_out.clone(), &app)?;

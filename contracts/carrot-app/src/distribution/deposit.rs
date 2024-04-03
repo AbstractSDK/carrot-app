@@ -116,14 +116,22 @@ impl BalanceStrategy {
                     .yield_source
                     .asset_distribution
                     .iter()
-                    .map(|AssetShare { denom, share }| StrategyStatusElement {
-                        denom: denom.clone(),
-                        raw_funds: Uint128::zero(),
-                        remaining_amount: share * source.share * total_value,
+                    .map(|AssetShare { denom, share }| {
+                        // Amount to fill this denom completely is value / exchange_rate
+                        // Value we want to put here is share * source.share * total_value
+                        Ok::<_, AppError>(StrategyStatusElement {
+                            denom: denom.clone(),
+                            raw_funds: Uint128::zero(),
+                            remaining_amount: (share * source.share
+                                / exchange_rates
+                                    .get(denom)
+                                    .ok_or(AppError::NoExchangeRate(denom.clone()))?)
+                                * total_value,
+                        })
                     })
-                    .collect::<Vec<_>>()
+                    .collect::<Result<Vec<_>, _>>()
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
 
         for this_coin in funds {
             let mut remaining_amount = this_coin.amount;
@@ -164,9 +172,10 @@ impl BalanceStrategy {
         // We determine the value of all tokens that will be used inside this function
         let exchange_rates = query_all_exchange_rates(
             deps,
-            self.all_denoms()
-                .into_iter()
-                .chain(funds.iter().map(|f| f.denom.clone())),
+            funds
+                .iter()
+                .map(|f| f.denom.clone())
+                .chain(self.all_denoms()),
             app,
         )?;
         let (status, remaining_funds) = self.fill_sources(funds, &exchange_rates)?;

@@ -133,6 +133,11 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         ]
         .into_iter()
         .flatten()
+        .map(|mut fund| {
+            // This is used because osmosis seems to charge 1 amount for withdrawals on all positions
+            fund.amount -= Uint128::one();
+            fund
+        })
         .collect())
     }
 
@@ -187,7 +192,8 @@ impl ConcentratedPoolParams {
         // create_position_msg: CreatePositionMessage,
     ) -> AppResult<Vec<SubMsg>> {
         let proxy_addr = app.account_base(deps)?.proxy;
-
+        deps.api
+            .debug(&format!("coins to be deposited : {:?}", funds));
         // 2. Create a position
         let tokens = cosmwasm_to_proto_coins(funds);
         let msg = app.executor(deps).execute_with_reply_and_data(

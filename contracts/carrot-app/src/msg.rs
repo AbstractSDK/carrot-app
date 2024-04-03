@@ -50,7 +50,10 @@ pub enum AppExecuteMsg {
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},
     /// Rebalances all investments according to a new balance strategy
-    UpdateStrategy { strategy: BalanceStrategy },
+    UpdateStrategy {
+        strategy: BalanceStrategy,
+        funds: Vec<Coin>,
+    },
 
     /// Only called by the contract internally   
     Internal(InternalExecuteMsg),
@@ -153,7 +156,7 @@ pub struct PositionsResponse {
 #[cw_serde]
 pub struct PositionResponse {
     pub ty: YieldType,
-    pub balance: Vec<Coin>,
+    pub balance: AssetsBalanceResponse,
     pub liquidity: Uint128,
 }
 

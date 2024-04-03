@@ -1,38 +1,14 @@
 mod common;
 
-use crate::common::{setup_test_tube, LOTS, USDC, USDT};
-use abstract_client::Application;
-use carrot_app::{
-    msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
-    yield_sources::{
-        mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParams, yield_type::YieldType,
-        AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource,
-    },
-    AppInterface,
-};
-use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
-use cosmwasm_std::{coin, coins, Decimal, Uint128};
+use crate::common::{setup_test_tube, USDC, USDT};
+use carrot_app::msg::AppExecuteMsgFns;
+use cosmwasm_std::{coin, coins};
 use cw_orch::{anyhow, prelude::*};
 use osmosis_std::types::osmosis::{
     gamm::v1beta1::{MsgSwapExactAmountIn, MsgSwapExactAmountInResponse},
     poolmanager::v1beta1::SwapAmountInRoute,
 };
 use prost_types::Any;
-
-fn query_balances<Chain: CwEnv>(
-    carrot_app: &Application<Chain, AppInterface<Chain>>,
-) -> anyhow::Result<Uint128> {
-    let balance = carrot_app.balance();
-    if balance.is_err() {
-        return Ok(Uint128::zero());
-    }
-    let sum = balance?
-        .balances
-        .iter()
-        .fold(Uint128::zero(), |acc, e| acc + e.amount);
-
-    Ok(sum)
-}
 
 #[test]
 fn deposit_after_inbalance_works() -> anyhow::Result<()> {
@@ -64,7 +40,7 @@ fn deposit_after_inbalance_works() -> anyhow::Result<()> {
         }],
     }
     .to_any();
-    let resp = chain.commit_any::<MsgSwapExactAmountInResponse>(
+    chain.commit_any::<MsgSwapExactAmountInResponse>(
         vec![Any {
             type_url: swap_msg.type_url,
             value: swap_msg.value,
@@ -80,19 +56,15 @@ fn deposit_after_inbalance_works() -> anyhow::Result<()> {
     chain.add_balance(proxy.to_string(), deposit_coins.clone())?;
 
     // // Do the second deposit
-    let response = carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())], None)?;
+    carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())], None)?;
     // Check almost everything landed
     let proxy_balance_after_second = chain
         .bank_querier()
         .balance(&proxy, Some(USDT.to_string()))?[0]
         .amount;
 
-    println!(
-        "balances : {:?}, {:?}",
-        proxy_balance_before_second, proxy_balance_after_second
-    );
-
-    panic!();
+    // Assert second deposit is more efficient than the first one
+    assert!(proxy_balance_after_second - proxy_balance_before_second < proxy_balance_before_second);
 
     Ok(())
 }

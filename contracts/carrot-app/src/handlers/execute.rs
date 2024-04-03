@@ -18,6 +18,7 @@ use super::{
     internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step},
     query::query_strategy,
 };
+use abstract_app::traits::AccountIdentification;
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -33,8 +34,8 @@ pub fn execute_handler(
         } => deposit(deps, env, info, funds, yield_sources_params, app),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, amount, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
-        AppExecuteMsg::UpdateStrategy { strategy } => {
-            update_strategy(deps, env, info, strategy, app)
+        AppExecuteMsg::UpdateStrategy { strategy, funds } => {
+            update_strategy(deps, env, info, strategy, funds, app)
         }
         // Endpoints called by the contract directly
         AppExecuteMsg::Internal(internal_msg) => {
@@ -98,23 +99,73 @@ fn withdraw(
 
 fn update_strategy(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     strategy: BalanceStrategy,
+    funds: Vec<Coin>,
     app: App,
 ) -> AppResult {
     // We load it raw because we're changing the strategy
     let mut config = CONFIG.load(deps.storage)?;
     let old_strategy = config.balance_strategy;
 
+    // We check the new strategy
     strategy.check(deps.as_ref(), &app)?;
+    deps.api.debug("After strategy check");
 
     // We execute operations to rebalance the funds between the strategies
-    // TODO
+    let mut available_funds: Coins = funds.try_into()?;
+    // 1. We withdraw all yield_sources that are not included in the new strategies
+    let all_stale_sources: Vec<_> = old_strategy
+        .0
+        .into_iter()
+        .filter(|x| !strategy.0.contains(x))
+        .collect();
+
+    deps.api.debug("After stale sources");
+    let (withdrawn_funds, withdraw_msgs): (Vec<Vec<Coin>>, Vec<Option<ExecutorMsg>>) =
+        all_stale_sources
+            .into_iter()
+            .map(|s| {
+                Ok::<_, AppError>((
+                    s.withdraw_preview(deps.as_ref(), None, &app)
+                        .unwrap_or_default(),
+                    s.withdraw(deps.as_ref(), None, &app).ok(),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .unzip();
+
+    deps.api
+        .debug(&format!("After withdraw messages : {:?}", withdrawn_funds));
+    withdrawn_funds
+        .into_iter()
+        .try_for_each(|f| f.into_iter().try_for_each(|f| available_funds.add(f)))?;
+
+    // 2. We replace the strategy with the new strategy
     config.balance_strategy = strategy;
     CONFIG.save(deps.storage, &config)?;
 
-    Ok(app.response("rebalance"))
+    // 3. We deposit the funds into the new strategy
+    let deposit_msgs = _inner_deposit(deps.as_ref(), &env, available_funds.into(), None, &app)?;
+
+    deps.api.debug(&format!(
+        "Proxy balance before withdraw : {:?}",
+        deps.querier
+            .query_all_balances(app.account_base(deps.as_ref())?.proxy)?
+    ));
+
+    deps.api.debug("After deposit msgs");
+    Ok(app
+        .response("rebalance")
+        .add_messages(
+            withdraw_msgs
+                .into_iter()
+                .flatten()
+                .collect::<Vec<ExecutorMsg>>(),
+        )
+        .add_messages(deposit_msgs))
 }
 
 // /// Auto-compound the position with earned fees and incentives.

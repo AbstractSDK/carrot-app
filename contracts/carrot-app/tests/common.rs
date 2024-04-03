@@ -92,7 +92,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     let dex_adapter = publisher
         .publish_adapter::<_, abstract_dex_adapter::interface::DexAdapter<Chain>>(
             abstract_dex_adapter::msg::DexInstantiateMsg {
-                swap_fee: Decimal::percent(2),
+                swap_fee: Decimal::permille(2),
                 recipient_account: 0,
             },
         )?;
@@ -205,7 +205,7 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
     //     }],
     //     None,
     // )?;
-    let _proposal_response = GovWithAppAccess::new(&chain.app.borrow())
+    GovWithAppAccess::new(&chain.app.borrow())
         .propose_and_execute(
             CreateConcentratedLiquidityPoolsProposal::TYPE_URL.to_string(),
             CreateConcentratedLiquidityPoolsProposal {
@@ -223,12 +223,13 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
             &chain.sender,
         )
         .unwrap();
+
     let test_tube = chain.app.borrow();
     let cl = ConcentratedLiquidity::new(&*test_tube);
 
     let pools = cl.query_pools(&PoolsRequest { pagination: None }).unwrap();
 
-    let pool = Pool::decode(pools.pools[0].value.as_slice()).unwrap();
+    let pool = Pool::decode(pools.pools.last().unwrap().value.as_slice()).unwrap();
     let _response = cl
         .create_position(
             MsgCreatePosition {

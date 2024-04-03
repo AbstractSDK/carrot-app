@@ -44,24 +44,27 @@ impl YieldType {
     }
 
     pub fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
-        match self {
+        let user_deposit_result = match self {
             YieldType::ConcentratedLiquidityPool(params) => params.user_deposit(deps, app),
             YieldType::Mars(params) => params.user_deposit(deps, app),
-        }
+        };
+        Ok(user_deposit_result.unwrap_or_default())
     }
 
     pub fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
-        match self {
+        let user_deposit_result = match self {
             YieldType::ConcentratedLiquidityPool(params) => params.user_rewards(deps, app),
             YieldType::Mars(params) => params.user_rewards(deps, app),
-        }
+        };
+        Ok(user_deposit_result.unwrap_or_default())
     }
 
     pub fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
-        match self {
+        let user_deposit_result = match self {
             YieldType::ConcentratedLiquidityPool(params) => params.user_liquidity(deps, app),
             YieldType::Mars(params) => params.user_liquidity(deps, app),
-        }
+        };
+        Ok(user_deposit_result.unwrap_or_default())
     }
 
     /// Indicate the default funds allocation

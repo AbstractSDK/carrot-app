@@ -190,7 +190,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
             share: Decimal::percent(50),
         },
     ]);
-    carrot_app.update_strategy(new_strat.clone())?;
+    carrot_app.update_strategy(vec![], new_strat.clone())?;
 
     let deposit_amount = 5_000;
     let deposit_coins = coins(deposit_amount, USDT.to_owned());
@@ -272,7 +272,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
             share: Decimal::percent(0),
         },
     ]);
-    carrot_app.update_strategy(new_strat.clone())?;
+    carrot_app.update_strategy(vec![], new_strat.clone())?;
 
     let deposit_amount = 5_000;
     let deposit_coins = coins(deposit_amount, USDT.to_owned());

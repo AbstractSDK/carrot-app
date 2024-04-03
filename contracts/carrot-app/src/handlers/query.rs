@@ -155,9 +155,20 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
                 let balance = s.yield_source.ty.user_deposit(deps, app)?;
                 let liquidity = s.yield_source.ty.user_liquidity(deps, app)?;
 
+                let total_value = balance
+                    .iter()
+                    .map(|fund| {
+                        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+                        Ok(fund.amount * exchange_rate)
+                    })
+                    .sum::<AppResult<Uint128>>()?;
+
                 Ok::<_, AppError>(PositionResponse {
                     ty: s.yield_source.ty,
-                    balance,
+                    balance: AssetsBalanceResponse {
+                        balances: balance,
+                        total_value,
+                    },
                     liquidity,
                 })
             })
