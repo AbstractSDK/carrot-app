@@ -1,7 +1,9 @@
 mod common;
 
 use crate::common::{create_position, setup_test_tube, USDC, USDT};
+use abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, PositionResponse};
+use common::DEX_NAME;
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_orch::{
     anyhow,
@@ -256,5 +258,45 @@ fn deposit_slippage() -> anyhow::Result<()> {
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
     assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
+    Ok(())
+}
+
+#[test]
+fn withdraw_position_autoclaims() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    let chain = carrot_app.get_chain().clone();
+
+    // Create position
+    create_position(
+        &carrot_app,
+        coins(10_000, USDT.to_owned()),
+        coin(1_000_000, USDT.to_owned()),
+        coin(1_000_000, USDC.to_owned()),
+    )?;
+
+    // Do some swaps
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
+    let abs = Abstract::load_from(chain.clone())?;
+    let account_id = carrot_app.account().id()?;
+    let account = AbstractAccount::new(&abs, account_id);
+    chain.bank_send(
+        account.proxy.addr_str()?,
+        vec![
+            coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
+        ],
+    )?;
+    for _ in 0..10 {
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+    }
+
+    // Withdraw half of liquidity
+    let balance: AssetsBalanceResponse = carrot_app.balance()?;
+    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint128::new(2);
+    carrot_app.withdraw(half_of_liquidity)?;
+
     Ok(())
 }

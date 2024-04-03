@@ -173,6 +173,8 @@ fn withdraw(
     let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
         _inner_withdraw(&env, amount, position, position_details, user, authz)?;
 
+    let partial_withdraw = withdraw_amount != total_amount;
+
     let mut app_response = app
         .response("withdraw")
         .add_attribute("withdraw_amount", withdraw_amount)
@@ -181,7 +183,7 @@ fn withdraw(
 
     // Add the collect_rewards_msgs only if there are rewards AND if we are doing a partial withdraw
     // Context: While partial position withdraws on osmosis keep the rewards unclaimed, full withdraws automatically withdraw rewards
-    if !rewards.is_empty() && amount.is_some() {
+    if !rewards.is_empty() && partial_withdraw {
         app_response = app_response.add_messages(collect_rewards_msgs);
     }
 
