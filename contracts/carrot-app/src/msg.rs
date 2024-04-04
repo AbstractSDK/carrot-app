@@ -122,6 +122,8 @@ pub enum CompoundStatus {
     Cooldown(Uint64),
     /// No open position right now
     NoPosition {},
+    /// Position exists in state, but errors on query to the pool
+    PositionNotAvailable(u64),
 }
 
 impl CompoundStatus {

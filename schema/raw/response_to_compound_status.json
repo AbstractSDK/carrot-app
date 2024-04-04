@@ -5,7 +5,8 @@
   "required": [
     "autocompound_reward",
     "autocompound_reward_available",
-    "pool_rewards",
+    "incentives",
+    "spread_rewards",
     "status"
   ],
   "properties": {
@@ -16,7 +17,13 @@
       "description": "Wether user have enough balance to reward or can swap to get enough",
       "type": "boolean"
     },
-    "pool_rewards": {
+    "incentives": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Coin"
+      }
+    },
+    "spread_rewards": {
       "type": "array",
       "items": {
         "$ref": "#/definitions/Coin"
@@ -139,6 +146,21 @@
             "no_position": {
               "type": "object",
               "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Position exists in state, but errors on query to the pool",
+          "type": "object",
+          "required": [
+            "position_not_available"
+          ],
+          "properties": {
+            "position_not_available": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
             }
           },
           "additionalProperties": false

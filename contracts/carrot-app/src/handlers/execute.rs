@@ -7,7 +7,7 @@ use crate::{
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
         assert_contract, get_osmosis_position, get_position, get_position_status,
-        AutocompoundRewardsConfig, Config, CONFIG,
+        AutocompoundRewardsConfig, Config, CONFIG, POSITION,
     },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
@@ -123,11 +123,15 @@ fn create_position(
 ) -> AppResult {
     // TODO verify authz permissions before creating the position
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
-    // We start by checking if there is already a position
-    if get_osmosis_position(deps.as_ref()).is_ok() {
-        return Err(AppError::PositionExists {});
-        // If the position still has incentives to claim, the user is able to override it
-    };
+    // We start by checking if there is already saved position
+    if let Some(position) = POSITION.may_load(deps.storage)? {
+        // And then check if this position still exists on pool,
+        // as we should allow position recreation in case it got withdrawn manually outside of the contract
+        if get_osmosis_position(deps.as_ref(), position.position_id).is_ok() {
+            return Err(AppError::PositionExists {});
+            // If the position still has incentives to claim, the user is able to override it
+        };
+    }
 
     let (swap_messages, create_position_msg) =
         _create_position(deps.as_ref(), &env, &app, create_position_msg)?;
@@ -154,11 +158,12 @@ fn deposit(
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
 
-    let pool = get_osmosis_position(deps.as_ref())?;
-    let position = pool.position.unwrap();
+    let position = get_position(deps.as_ref())?;
+    let osmosis_position = get_osmosis_position(deps.as_ref(), position.position_id)?;
+    let position = osmosis_position.position.unwrap();
 
-    let asset0 = try_proto_to_cosmwasm_coins(pool.asset0.clone())?[0].clone();
-    let asset1 = try_proto_to_cosmwasm_coins(pool.asset1.clone())?[0].clone();
+    let asset0 = try_proto_to_cosmwasm_coins(osmosis_position.asset0.clone())?[0].clone();
+    let asset1 = try_proto_to_cosmwasm_coins(osmosis_position.asset1.clone())?[0].clone();
 
     // When depositing, we start by adapting the available funds to the expected pool funds ratio
     // We do so by computing the swap information
@@ -205,8 +210,9 @@ fn withdraw(
     // Only the authorized addresses (admin ?) can withdraw
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    let position = get_osmosis_position(deps.as_ref())?;
-    let position_details = position.position.clone().unwrap();
+    let position = get_position(deps.as_ref())?;
+    let osmosis_position = get_osmosis_position(deps.as_ref(), position.position_id)?;
+    let position_details = osmosis_position.position.clone().unwrap();
     // Get app's user and set up authz.
     let user = get_user(deps.as_ref(), &app)?;
     let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
@@ -214,15 +220,21 @@ fn withdraw(
     // Collect all rewards/incentives if they exist
     let (collect_rewards_msgs, rewards) = _inner_claim_rewards(
         &env,
-        position.clone(),
+        osmosis_position.clone(),
         position_details.clone(),
         user.clone(),
         authz.clone(),
     )?;
 
     // Withdraw funds
-    let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
-        _inner_withdraw(&env, amount, position, position_details, user, authz)?;
+    let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) = _inner_withdraw(
+        &env,
+        amount,
+        osmosis_position,
+        position_details,
+        user,
+        authz,
+    )?;
 
     let partial_withdraw = withdraw_amount != total_amount;
 
@@ -245,17 +257,61 @@ fn withdraw(
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
+    let config = CONFIG.load(deps.storage)?;
 
-    let position = get_osmosis_position(deps.as_ref())?;
-    let position_details = position.clone().position.unwrap();
+    let position = get_position(deps.as_ref())?;
+
+    let (compound_status, maybe_osmosis_position) = get_position_status(
+        deps.as_ref(),
+        &env,
+        config.autocompound_cooldown_seconds.u64(),
+        Some(position),
+    )?;
+    // Check if osmosis returned position
+    let Some(osmosis_position) = maybe_osmosis_position else {
+        return Err(AppError::NoPosition {});
+    };
+    let position_details = osmosis_position.position.unwrap();
+
+    let mut rewards = cosmwasm_std::Coins::default();
+    let mut collect_rewards_msgs = vec![];
 
     // Get app's user and set up authz.
     let user = get_user(deps.as_ref(), &app)?;
     let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
 
-    // Collect all rewards/incentives if they exist
-    let (collect_rewards_msgs, rewards) =
-        _inner_claim_rewards(&env, position, position_details, user, authz)?;
+    // If there are external incentives, claim them.
+    if !osmosis_position.claimable_incentives.is_empty() {
+        let asset0_denom = osmosis_position.asset0.unwrap().denom;
+        let asset1_denom = osmosis_position.asset1.unwrap().denom;
+
+        for coin in try_proto_to_cosmwasm_coins(osmosis_position.claimable_incentives)? {
+            if coin.denom == asset0_denom || coin.denom == asset1_denom {
+                rewards.add(coin)?;
+            }
+        }
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
+            MsgCollectIncentives {
+                position_ids: vec![position_details.position_id],
+                sender: user.to_string(),
+            },
+        ));
+    }
+
+    // If there is income from swap fees, claim them.
+    if !osmosis_position.claimable_spread_rewards.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(osmosis_position.claimable_spread_rewards)? {
+            rewards.add(coin)?;
+        }
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
+            MsgCollectSpreadRewards {
+                position_ids: vec![position_details.position_id],
+                sender: position_details.address.clone(),
+            },
+        ))
+    }
 
     // If there are no rewards, we can't do anything
     if rewards.is_empty() {
@@ -280,15 +336,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_message(msg_deposit);
 
     // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
-    let config = CONFIG.load(deps.storage)?;
-    if !app.admin.is_admin(deps.as_ref(), &info.sender)?
-        && get_position_status(
-            deps.storage,
-            &env,
-            config.autocompound_cooldown_seconds.u64(),
-        )?
-        .is_ready()
-    {
+    if !app.admin.is_admin(deps.as_ref(), &info.sender)? && compound_status.is_ready() {
         let executor_reward_messages = autocompound_executor_rewards(
             deps.as_ref(),
             &env,
@@ -351,7 +399,7 @@ fn _inner_claim_rewards(
 fn _inner_withdraw(
     env: &Env,
     amount: Option<Uint128>,
-    position: FullPositionBreakdown,
+    osmosis_position: FullPositionBreakdown,
     position_details: Position,
     user: cosmwasm_std::Addr,
     authz: abstract_sdk::AuthZ,
@@ -376,7 +424,7 @@ fn _inner_withdraw(
     );
 
     let withdrawn_funds = vec![
-        try_proto_to_cosmwasm_coins(position.asset0)?
+        try_proto_to_cosmwasm_coins(osmosis_position.asset0)?
             .first()
             .map(|c| {
                 Ok::<_, AppError>(Coin {
@@ -386,7 +434,7 @@ fn _inner_withdraw(
                 })
             })
             .transpose()?,
-        try_proto_to_cosmwasm_coins(position.asset1)?
+        try_proto_to_cosmwasm_coins(osmosis_position.asset1)?
             .first()
             .map(|c| {
                 Ok::<_, AppError>(Coin {

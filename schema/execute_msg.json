@@ -61,6 +61,42 @@
       "description": "App execute messages",
       "oneOf": [
         {
+          "description": "Update autocompound settings",
+          "type": "object",
+          "required": [
+            "update_config"
+          ],
+          "properties": {
+            "update_config": {
+              "type": "object",
+              "properties": {
+                "autocompound_cooldown_seconds": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/definitions/Uint64"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "autocompound_rewards_config": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/definitions/AutocompoundRewardsConfig"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
           "description": "Create the initial liquidity position",
           "type": "object",
           "required": [
@@ -180,6 +216,10 @@
         }
       ]
     },
+    "AssetEntry": {
+      "description": "An unchecked ANS asset entry. This is a string that is formatted as `src_chain>[intermediate_chain>]asset_name`",
+      "type": "string"
+    },
     "Attribute": {
       "description": "An key value pair that is used in the context of event attributes in logs",
       "type": "object",
@@ -195,6 +235,60 @@
           "type": "string"
         }
       }
+    },
+    "AutocompoundRewardsConfig": {
+      "description": "Configuration on how rewards should be distributed to the address who helped to execute autocompound",
+      "type": "object",
+      "required": [
+        "gas_asset",
+        "max_gas_balance",
+        "min_gas_balance",
+        "reward",
+        "swap_asset"
+      ],
+      "properties": {
+        "gas_asset": {
+          "description": "Gas denominator for this chain",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetEntry"
+            }
+          ]
+        },
+        "max_gas_balance": {
+          "description": "Upper bound of gas tokens expected after the swap",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "min_gas_balance": {
+          "description": "If gas token balance falls below this bound a swap will be generated",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "reward": {
+          "description": "Reward amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "swap_asset": {
+          "description": "Denominator of the asset that will be used for swap to the gas asset",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetEntry"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "BaseExecuteMsg": {
       "oneOf": [

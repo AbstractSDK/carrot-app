@@ -30,11 +30,22 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
 /// Accounts for the user's ability to pay for the gas fees of executing the contract.
 fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
-    let status = get_position_status(
-        deps.storage,
+
+    let position = POSITION.may_load(deps.storage)?;
+    let (status, osmosis_position) = get_position_status(
+        deps,
         &env,
         config.autocompound_cooldown_seconds.u64(),
+        position,
     )?;
+    let (spread_rewards, incentives) = if let Some(position) = osmosis_position {
+        (
+            try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)?,
+            try_proto_to_cosmwasm_coins(position.claimable_incentives)?,
+        )
+    } else {
+        (vec![], vec![])
+    };
 
     let gas_denom = config
         .autocompound_rewards_config
@@ -68,8 +79,6 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         user_swap_balance > required_swap_amount
     };
 
-    let (spread_rewards, incentives) = query_rewards(deps, app)?;
-
     Ok(CompoundStatusResponse {
         status,
         autocompound_reward: reward.into(),
@@ -90,7 +99,13 @@ fn query_config(deps: Deps) -> AppResult<Config> {
 }
 
 fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
-    let pool = get_osmosis_position(deps)?;
+    let Some(position) = POSITION.may_load(deps.storage)? else {
+        return Ok(AssetsBalanceResponse {
+            balances: vec![],
+            liquidity: "0".to_string(),
+        });
+    };
+    let pool = get_osmosis_position(deps, position.position_id)?;
 
     let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
     let liquidity = pool.position.unwrap().liquidity.replace('.', "");
@@ -98,15 +113,6 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
         balances,
         liquidity,
     })
-}
-
-fn query_rewards(deps: Deps, _app: &App) -> AppResult<(Vec<Coin>, Vec<Coin>)> {
-    let pool = get_osmosis_position(deps)?;
-
-    Ok((
-        try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)?,
-        try_proto_to_cosmwasm_coins(pool.claimable_incentives)?,
-    ))
 }
 
 pub fn query_price(
