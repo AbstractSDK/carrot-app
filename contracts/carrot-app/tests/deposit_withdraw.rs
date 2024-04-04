@@ -294,7 +294,7 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
 
     // Check it has some rewards
     let status = carrot_app.compound_status()?;
-    assert!(!status.pool_rewards.is_empty());
+    assert!(!status.spread_rewards.is_empty());
 
     // Withdraw half of liquidity
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
@@ -304,7 +304,7 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
 
     // Check rewards claimed
     let status = carrot_app.compound_status()?;
-    assert!(status.pool_rewards.is_empty());
+    assert!(status.spread_rewards.is_empty());
 
     Ok(())
 }
@@ -342,7 +342,7 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
 
     // Check it has some rewards
     let status = carrot_app.compound_status()?;
-    assert!(!status.pool_rewards.is_empty());
+    assert!(!status.spread_rewards.is_empty());
 
     // Withdraw half of liquidity
     let test_tube = chain.app.borrow();
@@ -366,7 +366,7 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
 
     // Check rewards not claimed
     let status = carrot_app.compound_status()?;
-    assert!(!status.pool_rewards.is_empty());
+    assert!(!status.spread_rewards.is_empty());
 
     Ok(())
 }
