@@ -2,9 +2,10 @@ use abstract_app::abstract_core::objects::{
     pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType,
 };
 use abstract_client::{AbstractClient, Application, Namespace};
-use carrot_app::autocompound::{AutocompoundConfig, AutocompoundRewardsConfig};
+use carrot_app::autocompound::{AutocompoundConfigBase, AutocompoundRewardsConfigBase};
 use carrot_app::contract::OSMOSIS;
 use carrot_app::msg::AppInstantiateMsg;
+use carrot_app::state::ConfigBase;
 use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParamsBase;
 use carrot_app::yield_sources::yield_type::YieldTypeBase;
 use carrot_app::yield_sources::{
@@ -118,41 +119,44 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
     }
 
     let init_msg = AppInstantiateMsg {
-        // 5 mins
-        autocompound_config: AutocompoundConfig {
-            cooldown_seconds: Uint64::new(300),
-            rewards: AutocompoundRewardsConfig {
-                gas_asset: AssetEntry::new(REWARD_ASSET),
-                swap_asset: AssetEntry::new(USDC),
-                reward: Uint128::new(1000),
-                min_gas_balance: Uint128::new(2000),
-                max_gas_balance: Uint128::new(10000),
-            },
-        },
-        balance_strategy: BalanceStrategyBase(vec![BalanceStrategyElementBase {
-            yield_source: YieldSourceBase {
-                asset_distribution: vec![
-                    AssetShare {
-                        denom: USDT.to_string(),
-                        share: Decimal::percent(50),
-                    },
-                    AssetShare {
-                        denom: USDC.to_string(),
-                        share: Decimal::percent(50),
-                    },
-                ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                    pool_id,
-                    lower_tick: INITIAL_LOWER_TICK,
-                    upper_tick: INITIAL_UPPER_TICK,
-                    position_id: None,
+        config: ConfigBase {
+            // 5 mins
+            autocompound_config: AutocompoundConfigBase {
+                cooldown_seconds: Uint64::new(300),
+                rewards: AutocompoundRewardsConfigBase {
+                    gas_asset: AssetEntry::new(REWARD_ASSET),
+                    swap_asset: AssetEntry::new(USDC),
+                    reward: Uint128::new(1000),
+                    min_gas_balance: Uint128::new(2000),
+                    max_gas_balance: Uint128::new(10000),
                     _phantom: std::marker::PhantomData,
-                }),
+                },
             },
-            share: Decimal::one(),
-        }]),
+            balance_strategy: BalanceStrategyBase(vec![BalanceStrategyElementBase {
+                yield_source: YieldSourceBase {
+                    asset_distribution: vec![
+                        AssetShare {
+                            denom: USDT.to_string(),
+                            share: Decimal::percent(50),
+                        },
+                        AssetShare {
+                            denom: USDC.to_string(),
+                            share: Decimal::percent(50),
+                        },
+                    ],
+                    ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                        pool_id,
+                        lower_tick: INITIAL_LOWER_TICK,
+                        upper_tick: INITIAL_UPPER_TICK,
+                        position_id: None,
+                        _phantom: std::marker::PhantomData,
+                    }),
+                },
+                share: Decimal::one(),
+            }]),
+            dex: OSMOSIS.to_string(),
+        },
         deposit: initial_deposit,
-        dex: OSMOSIS.to_string(),
     };
 
     // We install the carrot-app

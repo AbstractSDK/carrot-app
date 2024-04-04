@@ -2,10 +2,10 @@ use crate::{
     autocompound::AutocompoundState,
     contract::{App, AppResult},
     msg::AppInstantiateMsg,
-    state::{Config, AUTOCOMPOUND_STATE, CONFIG},
+    state::{AUTOCOMPOUND_STATE, CONFIG},
     yield_sources::Checkable,
 };
-use abstract_app::abstract_sdk::{features::AbstractNameService, AbstractResponse};
+use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
 
 use super::execute::_inner_deposit;
@@ -17,21 +17,9 @@ pub fn instantiate_handler(
     app: App,
     msg: AppInstantiateMsg,
 ) -> AppResult {
-    // We don't check the dex on instantiation
+    // Check validity of registered config
+    let config = msg.config.check(deps.as_ref(), &app)?;
 
-    // We query the ANS for useful information on the tokens and pool
-    let ans = app.name_service(deps.as_ref());
-
-    // Check validity of autocompound rewards
-    msg.autocompound_config
-        .rewards
-        .check(deps.as_ref(), &msg.dex, ans.host())?;
-
-    let config: Config = Config {
-        dex: msg.dex,
-        balance_strategy: msg.balance_strategy.check(deps.as_ref(), &app)?,
-        autocompound_config: msg.autocompound_config,
-    };
     CONFIG.save(deps.storage, &config)?;
     AUTOCOMPOUND_STATE.save(
         deps.storage,

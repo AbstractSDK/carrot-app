@@ -1,5 +1,8 @@
-use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
+use std::marker::PhantomData;
+
+use abstract_app::abstract_sdk::Resolve;
 use abstract_app::objects::AnsAsset;
+use abstract_app::traits::AbstractNameService;
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{Execution, TransferInterface};
@@ -12,23 +15,36 @@ use crate::contract::App;
 use crate::handlers::swap_helpers::swap_msg;
 use crate::msg::CompoundStatus;
 use crate::state::{Config, AUTOCOMPOUND_STATE};
+use crate::yield_sources::{Checked, Unchecked};
 use crate::{contract::AppResult, error::AppError};
+
+pub type AutocompoundConfig = AutocompoundConfigBase<Checked>;
+pub type AutocompoundConfigUnchecked = AutocompoundConfigBase<Unchecked>;
 
 /// General auto-compound parameters.
 /// Includes the cool down and the technical funds config
 #[cw_serde]
-pub struct AutocompoundConfig {
+pub struct AutocompoundConfigBase<T> {
     /// Seconds to wait before autocompound is incentivized.
     /// Allows the user to configure when the auto-compound happens
     pub cooldown_seconds: Uint64,
     /// Configuration of rewards to the address who helped to execute autocompound
-    pub rewards: AutocompoundRewardsConfig,
+    pub rewards: AutocompoundRewardsConfigBase<T>,
+}
+
+impl From<AutocompoundConfig> for AutocompoundConfigUnchecked {
+    fn from(value: AutocompoundConfig) -> Self {
+        Self {
+            cooldown_seconds: value.cooldown_seconds,
+            rewards: value.rewards.into(),
+        }
+    }
 }
 
 /// Configuration on how rewards should be distributed
 /// to the address who helped to execute autocompound
 #[cw_serde]
-pub struct AutocompoundRewardsConfig {
+pub struct AutocompoundRewardsConfigBase<T> {
     /// Gas denominator for this chain
     pub gas_asset: AssetEntry,
     /// Denominator of the asset that will be used for swap to the gas asset
@@ -39,10 +55,32 @@ pub struct AutocompoundRewardsConfig {
     pub min_gas_balance: Uint128,
     /// Upper bound of gas tokens expected after the swap
     pub max_gas_balance: Uint128,
+    pub _phantom: PhantomData<T>,
 }
 
-impl AutocompoundRewardsConfig {
-    pub fn check(&self, deps: Deps, dex_name: &str, ans_host: &AnsHost) -> AppResult<()> {
+pub type AutocompoundRewardsConfigUnchecked = AutocompoundRewardsConfigBase<Unchecked>;
+pub type AutocompoundRewardsConfig = AutocompoundRewardsConfigBase<Checked>;
+
+impl From<AutocompoundRewardsConfig> for AutocompoundRewardsConfigUnchecked {
+    fn from(value: AutocompoundRewardsConfig) -> Self {
+        Self {
+            gas_asset: value.gas_asset,
+            swap_asset: value.swap_asset,
+            reward: value.reward,
+            min_gas_balance: value.min_gas_balance,
+            max_gas_balance: value.max_gas_balance,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl AutocompoundRewardsConfigUnchecked {
+    pub fn check(
+        self,
+        deps: Deps,
+        app: &App,
+        dex_name: &str,
+    ) -> AppResult<AutocompoundRewardsConfig> {
         ensure!(
             self.reward <= self.min_gas_balance,
             AppError::RewardConfigError(
@@ -58,9 +96,16 @@ impl AutocompoundRewardsConfig {
 
         // Check swap asset has pairing into gas asset
         DexAssetPairing::new(self.gas_asset.clone(), self.swap_asset.clone(), dex_name)
-            .resolve(&deps.querier, ans_host)?;
+            .resolve(&deps.querier, app.name_service(deps).host())?;
 
-        Ok(())
+        Ok(AutocompoundRewardsConfig {
+            gas_asset: self.gas_asset,
+            swap_asset: self.swap_asset,
+            reward: self.reward,
+            min_gas_balance: self.min_gas_balance,
+            max_gas_balance: self.max_gas_balance,
+            _phantom: PhantomData,
+        })
     }
 }
 

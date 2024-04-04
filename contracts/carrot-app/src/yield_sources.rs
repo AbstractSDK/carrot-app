@@ -133,7 +133,7 @@ pub trait Checkable {
 // This represents a balance strategy
 // This object is used for storing the current strategy, retrieving the actual strategy status or expressing a target strategy when depositing
 #[cw_serde]
-pub struct BalanceStrategyBase<T: Clone>(pub Vec<BalanceStrategyElementBase<T>>);
+pub struct BalanceStrategyBase<T>(pub Vec<BalanceStrategyElementBase<T>>);
 
 pub type BalanceStrategyUnchecked = BalanceStrategyBase<Unchecked>;
 pub type BalanceStrategy = BalanceStrategyBase<Checked>;

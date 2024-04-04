@@ -11,9 +11,13 @@ use cw_orch::{
 use dotenv::dotenv;
 
 use carrot_app::{
-    autocompound::{AutocompoundConfig, AutocompoundRewardsConfig},
+    autocompound::{
+        AutocompoundConfig, AutocompoundConfigBase, AutocompoundRewardsConfig,
+        AutocompoundRewardsConfigBase,
+    },
     contract::OSMOSIS,
     msg::AppInstantiateMsg,
+    state::ConfigBase,
     yield_sources::{BalanceStrategy, BalanceStrategyBase},
 };
 use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
@@ -58,19 +62,22 @@ fn main() -> anyhow::Result<()> {
 
     let mut msgs = vec![];
     let init_msg = AppInstantiateMsg {
-        autocompound_config: AutocompoundConfig {
-            cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
-            rewards: AutocompoundRewardsConfig {
-                gas_asset: AssetEntry::new(utils::REWARD_ASSET),
-                swap_asset: app_data.swap_asset,
-                reward: Uint128::new(50_000),
-                min_gas_balance: Uint128::new(1000000),
-                max_gas_balance: Uint128::new(3000000),
+        config: ConfigBase {
+            autocompound_config: AutocompoundConfigBase {
+                cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
+                rewards: AutocompoundRewardsConfigBase {
+                    gas_asset: AssetEntry::new(utils::REWARD_ASSET),
+                    swap_asset: app_data.swap_asset,
+                    reward: Uint128::new(50_000),
+                    min_gas_balance: Uint128::new(1000000),
+                    max_gas_balance: Uint128::new(3000000),
+                    _phantom: std::marker::PhantomData,
+                },
             },
+            balance_strategy: BalanceStrategyBase(vec![]),
+            dex: OSMOSIS.to_string(),
         },
-        balance_strategy: BalanceStrategyBase(vec![]),
         deposit: Some(coins(100, "usdc")),
-        dex: OSMOSIS.to_string(),
     };
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;
 

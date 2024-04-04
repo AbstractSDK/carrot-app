@@ -3,9 +3,9 @@ use cosmwasm_std::{Coin, Uint128, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
-    autocompound::AutocompoundConfig,
     contract::App,
     distribution::deposit::OneDepositStrategy,
+    state::ConfigUnchecked,
     yield_sources::{
         yield_type::{YieldType, YieldTypeUnchecked},
         AssetShare, BalanceStrategyUnchecked,
@@ -18,12 +18,8 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
-    /// Strategy to use to dispatch the deposited funds
-    pub balance_strategy: BalanceStrategyUnchecked,
-    /// Configuration of the aut-compounding procedure
-    pub autocompound_config: AutocompoundConfig,
-    /// Target dex to swap things on
-    pub dex: String,
+    /// Future app configuration
+    pub config: ConfigUnchecked,
     /// Create position with instantiation.
     /// Will not create position if omitted
     pub deposit: Option<Vec<Coin>>,
@@ -100,7 +96,7 @@ impl From<InternalExecuteMsg>
 #[cfg_attr(feature = "interface", impl_into(QueryMsg))]
 #[derive(QueryResponses)]
 pub enum AppQueryMsg {
-    #[returns(crate::state::Config)]
+    #[returns(ConfigUnchecked)]
     Config {},
     #[returns(AssetsBalanceResponse)]
     Balance {},
