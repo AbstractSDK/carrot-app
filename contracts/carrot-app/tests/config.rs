@@ -4,8 +4,8 @@ use crate::common::{create_pool, setup_test_tube, USDC, USDT};
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
-        osmosis_cl_pool::ConcentratedPoolParams, yield_type::YieldType, AssetShare,
-        BalanceStrategy, BalanceStrategyElement, YieldSource,
+        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldTypeBase, AssetShare,
+        BalanceStrategyBase, BalanceStrategyElementBase, YieldSourceBase,
     },
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
@@ -21,9 +21,9 @@ fn rebalance_fails() -> anyhow::Result<()> {
     carrot_app
         .update_strategy(
             vec![],
-            BalanceStrategy(vec![
-                BalanceStrategyElement {
-                    yield_source: YieldSource {
+            BalanceStrategyBase(vec![
+                BalanceStrategyElementBase {
+                    yield_source: YieldSourceBase {
                         asset_distribution: vec![
                             AssetShare {
                                 denom: USDT.to_string(),
@@ -34,17 +34,18 @@ fn rebalance_fails() -> anyhow::Result<()> {
                                 share: Decimal::percent(50),
                             },
                         ],
-                        ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                             pool_id: 7,
                             lower_tick: INITIAL_LOWER_TICK,
                             upper_tick: INITIAL_UPPER_TICK,
                             position_id: None,
+                            _phantom: std::marker::PhantomData,
                         }),
                     },
                     share: Decimal::one(),
                 },
-                BalanceStrategyElement {
-                    yield_source: YieldSource {
+                BalanceStrategyElementBase {
+                    yield_source: YieldSourceBase {
                         asset_distribution: vec![
                             AssetShare {
                                 denom: USDT.to_string(),
@@ -55,11 +56,12 @@ fn rebalance_fails() -> anyhow::Result<()> {
                                 share: Decimal::percent(50),
                             },
                         ],
-                        ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                             pool_id: 7,
                             lower_tick: INITIAL_LOWER_TICK,
                             upper_tick: INITIAL_UPPER_TICK,
                             position_id: None,
+                            _phantom: std::marker::PhantomData,
                         }),
                     },
                     share: Decimal::one(),
@@ -77,9 +79,9 @@ fn rebalance_fails() -> anyhow::Result<()> {
 fn rebalance_success() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let new_strat = BalanceStrategy(vec![
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+    let new_strat = BalanceStrategyBase(vec![
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -90,17 +92,18 @@ fn rebalance_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -111,11 +114,12 @@ fn rebalance_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
@@ -146,9 +150,9 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
         deposit_coins.clone(),
     )?;
 
-    let new_strat = BalanceStrategy(vec![
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+    let new_strat = BalanceStrategyBase(vec![
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -159,17 +163,18 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -180,11 +185,12 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id: new_pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
@@ -224,7 +230,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
     )?;
-    let common_yield_source = YieldSource {
+    let common_yield_source = YieldSourceBase {
         asset_distribution: vec![
             AssetShare {
                 denom: USDT.to_string(),
@@ -235,21 +241,22 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
                 share: Decimal::percent(50),
             },
         ],
-        ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
             pool_id, // Pool Id needs to exist
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
             position_id: None,
+            _phantom: std::marker::PhantomData,
         }),
     };
 
-    let strat = BalanceStrategy(vec![
-        BalanceStrategyElement {
+    let strat = BalanceStrategyBase(vec![
+        BalanceStrategyElementBase {
             yield_source: common_yield_source.clone(),
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -260,11 +267,12 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id: new_pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
@@ -273,7 +281,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
 
     carrot_app.update_strategy(deposit_coins.clone(), strat.clone())?;
 
-    let new_strat = BalanceStrategy(vec![BalanceStrategyElement {
+    let new_strat = BalanceStrategyBase(vec![BalanceStrategyElementBase {
         yield_source: common_yield_source.clone(),
         share: Decimal::percent(100),
     }]);
@@ -316,7 +324,7 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
     )?;
-    let moving_strategy = YieldSource {
+    let moving_strategy = YieldSourceBase {
         asset_distribution: vec![
             AssetShare {
                 denom: USDT.to_string(),
@@ -327,17 +335,18 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
                 share: Decimal::percent(50),
             },
         ],
-        ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
             pool_id: new_pool_id,
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
             position_id: None,
+            _phantom: std::marker::PhantomData,
         }),
     };
 
-    let strat = BalanceStrategy(vec![
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+    let strat = BalanceStrategyBase(vec![
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -348,16 +357,17 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
+        BalanceStrategyElementBase {
             yield_source: moving_strategy.clone(),
             share: Decimal::percent(50),
         },

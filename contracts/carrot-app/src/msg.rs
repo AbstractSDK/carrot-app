@@ -6,7 +6,10 @@ use crate::{
     autocompound::AutocompoundConfig,
     contract::App,
     distribution::deposit::OneDepositStrategy,
-    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy},
+    yield_sources::{
+        yield_type::{YieldType, YieldTypeUnchecked},
+        AssetShare, BalanceStrategyUnchecked,
+    },
 };
 
 // This is used for type safety and re-exporting the contract endpoint structs.
@@ -16,7 +19,7 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 #[cosmwasm_schema::cw_serde]
 pub struct AppInstantiateMsg {
     /// Strategy to use to dispatch the deposited funds
-    pub balance_strategy: BalanceStrategy,
+    pub balance_strategy: BalanceStrategyUnchecked,
     /// Configuration of the aut-compounding procedure
     pub autocompound_config: AutocompoundConfig,
     /// Target dex to swap things on
@@ -51,7 +54,7 @@ pub enum AppExecuteMsg {
     Autocompound {},
     /// Rebalances all investments according to a new balance strategy
     UpdateStrategy {
-        strategy: BalanceStrategy,
+        strategy: BalanceStrategyUnchecked,
         funds: Vec<Coin>,
     },
 
@@ -145,7 +148,7 @@ pub struct AssetsBalanceResponse {
 
 #[cw_serde]
 pub struct StrategyResponse {
-    pub strategy: BalanceStrategy,
+    pub strategy: BalanceStrategyUnchecked,
 }
 
 #[cw_serde]
@@ -155,7 +158,7 @@ pub struct PositionsResponse {
 
 #[cw_serde]
 pub struct PositionResponse {
-    pub ty: YieldType,
+    pub ty: YieldTypeUnchecked,
     pub balance: AssetsBalanceResponse,
     pub liquidity: Uint128,
 }

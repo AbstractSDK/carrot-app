@@ -3,14 +3,38 @@ use cosmwasm_std::{Coin, CosmosMsg, Deps, SubMsg, Uint128};
 
 use crate::contract::{App, AppResult};
 
-use super::{mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParams, ShareType};
+use super::{
+    mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase, Checked, ShareType,
+    Unchecked,
+};
 
+// This however is not checkable by itself, because the check also depends on the asset share distribution
 #[cw_serde]
-pub enum YieldType {
-    ConcentratedLiquidityPool(ConcentratedPoolParams),
+pub enum YieldTypeBase<T> {
+    ConcentratedLiquidityPool(ConcentratedPoolParamsBase<T>),
     /// For Mars, you just need to deposit in the RedBank
     /// You need to indicate the denom of the funds you want to deposit
     Mars(MarsDepositParams),
+}
+
+pub type YieldTypeUnchecked = YieldTypeBase<Unchecked>;
+pub type YieldType = YieldTypeBase<Checked>;
+
+impl From<YieldType> for YieldTypeUnchecked {
+    fn from(value: YieldType) -> Self {
+        match value {
+            YieldTypeBase::ConcentratedLiquidityPool(params) => {
+                YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                    pool_id: params.pool_id,
+                    lower_tick: params.lower_tick,
+                    upper_tick: params.upper_tick,
+                    position_id: params.position_id,
+                    _phantom: std::marker::PhantomData,
+                })
+            }
+            YieldTypeBase::Mars(params) => YieldTypeBase::Mars(params),
+        }
+    }
 }
 
 impl YieldType {
@@ -97,7 +121,4 @@ pub trait YieldTypeImplementation {
     /// CL pools use that to know the best funds deposit ratio
     /// Mars doesn't use that, because the share is fixed to 1
     fn share_type(&self) -> ShareType;
-
-    /// Verifies the yield type is valid
-    fn check(&self, deps: Deps) -> AppResult<()>;
 }

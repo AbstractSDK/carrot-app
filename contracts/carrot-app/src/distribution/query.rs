@@ -50,21 +50,21 @@ impl BalanceStrategy {
         }
 
         // Finally, we dispatch the total_value to get investment shares
-        Ok(BalanceStrategy(
-            self.0
-                .iter()
-                .zip(all_strategy_values)
-                .map(
-                    |(original_strategy, (value, shares))| BalanceStrategyElement {
-                        yield_source: YieldSource {
-                            asset_distribution: shares,
-                            ty: original_strategy.yield_source.ty.clone(),
-                        },
-                        share: Decimal::from_ratio(value, all_strategies_value),
+        Ok(self
+            .0
+            .iter()
+            .zip(all_strategy_values)
+            .map(
+                |(original_strategy, (value, shares))| BalanceStrategyElement {
+                    yield_source: YieldSource {
+                        asset_distribution: shares,
+                        ty: original_strategy.yield_source.ty.clone(),
                     },
-                )
-                .collect(),
-        ))
+                    share: Decimal::from_ratio(value, all_strategies_value),
+                },
+            )
+            .collect::<Vec<_>>()
+            .into())
     }
 
     /// This function applies the underlying shares inside yield sources to each yield source depending on the current strategy state

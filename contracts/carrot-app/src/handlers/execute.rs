@@ -5,7 +5,7 @@ use crate::{
     helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     state::{AUTOCOMPOUND_STATE, CONFIG},
-    yield_sources::{AssetShare, BalanceStrategy},
+    yield_sources::{AssetShare, BalanceStrategyUnchecked, Checkable},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_sdk::ExecutorMsg;
@@ -14,10 +14,7 @@ use cosmwasm_std::{
     WasmMsg,
 };
 
-use super::{
-    internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step},
-    query::query_strategy,
-};
+use super::internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step};
 use abstract_app::traits::AccountIdentification;
 
 pub fn execute_handler(
@@ -101,7 +98,7 @@ fn update_strategy(
     deps: DepsMut,
     env: Env,
     _info: MessageInfo,
-    strategy: BalanceStrategy,
+    strategy: BalanceStrategyUnchecked,
     funds: Vec<Coin>,
     app: App,
 ) -> AppResult {
@@ -110,8 +107,7 @@ fn update_strategy(
     let old_strategy = config.balance_strategy;
 
     // We check the new strategy
-    strategy.check(deps.as_ref(), &app)?;
-    deps.api.debug("After strategy check");
+    let strategy = strategy.check(deps.as_ref(), &app)?;
 
     // We execute operations to rebalance the funds between the strategies
     let mut available_funds: Coins = funds.try_into()?;
@@ -172,7 +168,7 @@ fn update_strategy(
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
-    let strategy = query_strategy(deps.as_ref())?.strategy;
+    let strategy = CONFIG.load(deps.storage)?.balance_strategy;
 
     // We withdraw all rewards from protocols
     let (all_rewards, collect_rewards_msgs) = strategy.withdraw_rewards(deps.as_ref(), &app)?;
@@ -243,7 +239,7 @@ pub fn _inner_deposit(
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     // We query the target strategy depending on the existing deposits
-    let mut current_strategy_status = query_strategy(deps)?.strategy;
+    let mut current_strategy_status = CONFIG.load(deps.storage)?.balance_strategy;
     current_strategy_status.apply_current_strategy_shares(deps, app)?;
 
     // We correct it if the user asked to correct the share parameters of each strategy
@@ -261,7 +257,7 @@ pub fn _inner_advanced_deposit(
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     // This is the storage strategy for all assets
-    let target_strategy = query_strategy(deps)?.strategy;
+    let target_strategy = CONFIG.load(deps.storage)?.balance_strategy;
 
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
@@ -313,8 +309,9 @@ fn _inner_withdraw(
 
     // We withdraw the necessary share from all registered investments
     let withdraw_msgs =
-        query_strategy(deps.as_ref())?
-            .strategy
+        CONFIG
+            .load(deps.storage)?
+            .balance_strategy
             .withdraw(deps.as_ref(), withdraw_share, app)?;
 
     Ok(withdraw_msgs.into_iter().collect())

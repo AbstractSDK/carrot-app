@@ -57,7 +57,7 @@ impl BalanceStrategy {
 
                 // If value now is greater than the target value, we need to withdraw some funds from the protocol
                 if target_value < value_now {
-                    let this_withdraw_value = target_value - value_now;
+                    let this_withdraw_value = value_now - target_value;
                     // In the following line, total_value can't be zero, otherwise the if condition wouldn't be met
                     let this_withdraw_share = Decimal::from_ratio(withdraw_value, total_value);
                     let this_withdraw_funds =

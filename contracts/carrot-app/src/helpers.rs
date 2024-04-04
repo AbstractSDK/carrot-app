@@ -38,7 +38,7 @@ pub const CLOSE_PER_MILLE: u64 = 1;
 
 /// Returns wether actual is close to expected within CLOSE_PER_MILLE per mille
 pub fn close_to(expected: Decimal, actual: Decimal) -> bool {
-    let close_coeff = expected * Decimal::permille(CLOSE_PER_MILLE);
+    let close_coeff = Decimal::permille(CLOSE_PER_MILLE);
 
     if expected == Decimal::zero() {
         return actual < close_coeff;

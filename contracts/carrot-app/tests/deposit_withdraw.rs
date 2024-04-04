@@ -5,8 +5,9 @@ use abstract_client::Application;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
-        mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParams, yield_type::YieldType,
-        AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource,
+        mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase,
+        yield_type::YieldTypeBase, AssetShare, BalanceStrategyBase, BalanceStrategyElementBase,
+        YieldSourceBase,
     },
     AppInterface,
 };
@@ -146,9 +147,9 @@ fn deposit_multiple_assets() -> anyhow::Result<()> {
 fn deposit_multiple_positions() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let new_strat = BalanceStrategy(vec![
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+    let new_strat = BalanceStrategyBase(vec![
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -159,17 +160,18 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -180,11 +182,12 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: 2 * INITIAL_LOWER_TICK,
                     upper_tick: 2 * INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
@@ -216,9 +219,9 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
 fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let new_strat = BalanceStrategy(vec![
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+    let new_strat = BalanceStrategyBase(vec![
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -229,17 +232,18 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -250,22 +254,23 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: 2 * INITIAL_LOWER_TICK,
                     upper_tick: 2 * INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElement {
-            yield_source: YieldSource {
+        BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![AssetShare {
                     denom: USDT.to_string(),
                     share: Decimal::percent(100),
                 }],
-                ty: YieldType::Mars(MarsDepositParams {
+                ty: YieldTypeBase::Mars(MarsDepositParams {
                     denom: USDT.to_string(),
                 }),
             },
@@ -294,15 +299,18 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
     );
     Ok(())
 }
-// #[test]
-// fn create_position_on_instantiation() -> anyhow::Result<()> {
-//     let (_, carrot_app) = setup_test_tube(true)?;
-//     carrot_app.deposit(vec![coin(258, USDT.to_owned()), coin(234, USDC.to_owned())])?;
 
-//     let position: OsmosisPositionResponse = carrot_app.position()?;
-//     assert!(position.position.is_some());
-//     Ok(())
-// }
+#[test]
+fn create_position_on_instantiation() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(true)?;
+
+    let position = carrot_app.positions()?;
+    assert!(!position.positions.is_empty());
+
+    let balance = carrot_app.balance()?;
+    assert!(balance.total_value > Uint128::from(20_000u128) * Decimal::percent(99));
+    Ok(())
+}
 
 // #[test]
 // fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {

@@ -3,6 +3,7 @@ use crate::{
     contract::{App, AppResult},
     msg::AppInstantiateMsg,
     state::{Config, AUTOCOMPOUND_STATE, CONFIG},
+    yield_sources::Checkable,
 };
 use abstract_app::abstract_sdk::{features::AbstractNameService, AbstractResponse};
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
@@ -16,9 +17,6 @@ pub fn instantiate_handler(
     app: App,
     msg: AppInstantiateMsg,
 ) -> AppResult {
-    // We check the balance strategy is valid
-    msg.balance_strategy.check(deps.as_ref(), &app)?;
-
     // We don't check the dex on instantiation
 
     // We query the ANS for useful information on the tokens and pool
@@ -31,7 +29,7 @@ pub fn instantiate_handler(
 
     let config: Config = Config {
         dex: msg.dex,
-        balance_strategy: msg.balance_strategy,
+        balance_strategy: msg.balance_strategy.check(deps.as_ref(), &app)?,
         autocompound_config: msg.autocompound_config,
     };
     CONFIG.save(deps.storage, &config)?;

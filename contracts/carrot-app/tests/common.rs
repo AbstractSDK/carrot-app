@@ -5,11 +5,14 @@ use abstract_client::{AbstractClient, Application, Namespace};
 use carrot_app::autocompound::{AutocompoundConfig, AutocompoundRewardsConfig};
 use carrot_app::contract::OSMOSIS;
 use carrot_app::msg::AppInstantiateMsg;
-use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParams;
-use carrot_app::yield_sources::yield_type::YieldType;
-use carrot_app::yield_sources::{AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource};
-use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
+use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParamsBase;
+use carrot_app::yield_sources::yield_type::YieldTypeBase;
+use carrot_app::yield_sources::{
+    AssetShare, BalanceStrategyBase, BalanceStrategyElementBase, YieldSourceBase,
+};
+use cosmwasm_std::{coin, coins, Coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
+use cw_orch::environment::MutCwEnv;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
 use cw_orch::{
     anyhow,
@@ -45,8 +48,8 @@ pub const SPREAD_FACTOR: u64 = 1;
 pub const INITIAL_LOWER_TICK: i64 = -100000;
 pub const INITIAL_UPPER_TICK: i64 = 10000;
 // Deploys abstract and other contracts
-pub fn deploy<Chain: CwEnv + Stargate>(
-    chain: Chain,
+pub fn deploy<Chain: MutCwEnv + Stargate>(
+    mut chain: Chain,
     pool_id: u64,
     gas_pool_id: u64,
     initial_deposit: Option<Vec<Coin>>,
@@ -87,6 +90,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // We deploy the carrot_app
     let publisher = client
         .publisher_builder(Namespace::new("abstract")?)
+        .install_on_sub_account(false)
         .build()?;
     // The dex adapter
     let dex_adapter = publisher
@@ -109,6 +113,10 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // The savings app
     publisher.publish_app::<carrot_app::contract::interface::AppInterface<Chain>>()?;
 
+    if let Some(deposit) = &initial_deposit {
+        chain.add_balance(publisher.account().proxy()?.to_string(), deposit.clone())?;
+    }
+
     let init_msg = AppInstantiateMsg {
         // 5 mins
         autocompound_config: AutocompoundConfig {
@@ -121,8 +129,8 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 max_gas_balance: Uint128::new(10000),
             },
         },
-        balance_strategy: BalanceStrategy(vec![BalanceStrategyElement {
-            yield_source: YieldSource {
+        balance_strategy: BalanceStrategyBase(vec![BalanceStrategyElementBase {
+            yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
                         denom: USDT.to_string(),
@@ -133,11 +141,12 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldType::ConcentratedLiquidityPool(ConcentratedPoolParams {
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    _phantom: std::marker::PhantomData,
                 }),
             },
             share: Decimal::one(),
@@ -284,9 +293,15 @@ pub fn setup_test_tube(
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let initial_deposit = create_position.then(||
-        // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
-        vec![coin(1_000_000, USDT),coin(1_000_000, USDC)]);
+    let initial_deposit: Option<Vec<Coin>> = create_position
+        .then(|| {
+            // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
+            let mut initial_coins = Coins::default();
+            initial_coins.add(coin(10_000, USDT))?;
+            initial_coins.add(coin(10_000, USDC))?;
+            Ok::<_, anyhow::Error>(initial_coins.into())
+        })
+        .transpose()?;
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, initial_deposit)?;
 
     Ok((pool_id, carrot_app))

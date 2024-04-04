@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{marker::PhantomData, str::FromStr};
 
 use crate::{
     contract::{App, AppResult},
@@ -24,10 +24,10 @@ use osmosis_std::{
     },
 };
 
-use super::{yield_type::YieldTypeImplementation, ShareType};
+use super::{yield_type::YieldTypeImplementation, Checkable, Checked, ShareType, Unchecked};
 
 #[cw_serde]
-pub struct ConcentratedPoolParams {
+pub struct ConcentratedPoolParamsBase<T> {
     // This is part of the pool parameters
     pub pool_id: u64,
     // This is part of the pool parameters
@@ -38,19 +38,32 @@ pub struct ConcentratedPoolParams {
     // This is not actually a parameter but rather state
     // This can be used as a parameter for existing positions
     pub position_id: Option<u64>,
+    pub _phantom: PhantomData<T>,
 }
 
-impl YieldTypeImplementation for ConcentratedPoolParams {
-    fn check(&self, deps: Deps) -> AppResult<()> {
+pub type ConcentratedPoolParamsUnchecked = ConcentratedPoolParamsBase<Unchecked>;
+pub type ConcentratedPoolParams = ConcentratedPoolParamsBase<Checked>;
+
+impl Checkable for ConcentratedPoolParamsUnchecked {
+    type CheckOutput = ConcentratedPoolParams;
+    fn check(self, deps: Deps, _app: &App) -> AppResult<ConcentratedPoolParams> {
         let _pool: Pool = PoolmanagerQuerier::new(&deps.querier)
             .pool(self.pool_id)
             .map_err(|_| AppError::PoolNotFound {})?
             .pool
             .ok_or(AppError::PoolNotFound {})?
             .try_into()?;
-        Ok(())
+        Ok(ConcentratedPoolParams {
+            pool_id: self.pool_id,
+            lower_tick: self.lower_tick,
+            upper_tick: self.upper_tick,
+            position_id: self.position_id,
+            _phantom: PhantomData,
+        })
     }
+}
 
+impl YieldTypeImplementation for ConcentratedPoolParams {
     fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         // We verify there is a position stored
         if self.position(deps).is_ok() {

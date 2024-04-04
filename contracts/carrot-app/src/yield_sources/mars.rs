@@ -10,7 +10,7 @@ use cw_asset::AssetInfo;
 use abstract_money_market_standard::query::MoneyMarketAnsQuery;
 
 use super::yield_type::YieldTypeImplementation;
-use super::ShareType;
+use super::{Checkable, ShareType};
 
 pub const MARS_MONEY_MARKET: &str = "mars";
 
@@ -18,6 +18,15 @@ pub const MARS_MONEY_MARKET: &str = "mars";
 pub struct MarsDepositParams {
     pub denom: String,
 }
+
+impl Checkable for MarsDepositParams {
+    type CheckOutput = MarsDepositParams;
+
+    fn check(self, _deps: Deps, _app: &App) -> AppResult<Self::CheckOutput> {
+        Ok(self)
+    }
+}
+
 impl YieldTypeImplementation for MarsDepositParams {
     fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         let ans = app.name_service(deps);
@@ -80,9 +89,5 @@ impl YieldTypeImplementation for MarsDepositParams {
 
     fn share_type(&self) -> super::ShareType {
         ShareType::Fixed
-    }
-
-    fn check(&self, _deps: Deps) -> AppResult<()> {
-        Ok(())
     }
 }

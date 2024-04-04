@@ -89,15 +89,18 @@ pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
     let config = CONFIG.load(deps.storage)?;
 
     Ok(StrategyResponse {
-        strategy: config.balance_strategy,
+        strategy: config.balance_strategy.into(),
     })
 }
 
 pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
-    let strategy = query_strategy(deps)?.strategy;
+    let config = CONFIG.load(deps.storage)?;
 
     Ok(StrategyResponse {
-        strategy: strategy.query_current_status(deps, app)?,
+        strategy: config
+            .balance_strategy
+            .query_current_status(deps, app)?
+            .into(),
     })
 }
 
@@ -108,7 +111,9 @@ fn query_config(deps: Deps) -> AppResult<Config> {
 pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
     let mut funds = Coins::default();
     let mut total_value = Uint128::zero();
-    query_strategy(deps)?.strategy.0.iter().try_for_each(|s| {
+
+    let config = CONFIG.load(deps.storage)?;
+    config.balance_strategy.0.iter().try_for_each(|s| {
         let deposit_value = s
             .yield_source
             .ty
@@ -129,7 +134,7 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
 }
 
 fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
-    let strategy = query_strategy(deps)?.strategy;
+    let strategy = CONFIG.load(deps.storage)?.balance_strategy;
 
     let mut rewards = Coins::default();
     strategy.0.into_iter().try_for_each(|s| {
@@ -147,8 +152,9 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
 
 pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
     Ok(PositionsResponse {
-        positions: query_strategy(deps)?
-            .strategy
+        positions: CONFIG
+            .load(deps.storage)?
+            .balance_strategy
             .0
             .into_iter()
             .map(|s| {
@@ -164,7 +170,7 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
                     .sum::<AppResult<Uint128>>()?;
 
                 Ok::<_, AppError>(PositionResponse {
-                    ty: s.yield_source.ty,
+                    ty: s.yield_source.ty.into(),
                     balance: AssetsBalanceResponse {
                         balances: balance,
                         total_value,

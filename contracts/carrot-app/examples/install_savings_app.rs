@@ -14,7 +14,7 @@ use carrot_app::{
     autocompound::{AutocompoundConfig, AutocompoundRewardsConfig},
     contract::OSMOSIS,
     msg::AppInstantiateMsg,
-    yield_sources::BalanceStrategy,
+    yield_sources::{BalanceStrategy, BalanceStrategyBase},
 };
 use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 
@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
                 max_gas_balance: Uint128::new(3000000),
             },
         },
-        balance_strategy: BalanceStrategy(vec![]),
+        balance_strategy: BalanceStrategyBase(vec![]),
         deposit: Some(coins(100, "usdc")),
         dex: OSMOSIS.to_string(),
     };
