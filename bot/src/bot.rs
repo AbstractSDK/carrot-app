@@ -55,14 +55,13 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectIncentives::TYPE_URL,
     MsgCollectSpreadRewards::TYPE_URL,
 ];
-
-const APR_REFERENCE_INSTANCE: &str =
-    "osmo1rhvdhjxx25x3v4gan68h3n0an3wsa94zjj4yjnxc5yx2vt6q3scsfjgykp";
 // TODO: Get these values from ans
 const USDT_OSMOSIS_DENOM: &str =
     "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
 const USDC_OSMOSIS_DENOM: &str =
     "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
+const USDC_OSMOSIS_AXL_DENOM: &str =
+    "ibc/D189335C6E4A68B513C10AB227BF1C1D38C746766278BA3EEB4FB14124F1D858";
 
 pub struct Bot {
     pub daemon: Daemon,
@@ -72,8 +71,6 @@ pub struct Bot {
     last_fetch: SystemTime,
     // Autocompound information
     contract_instances_to_ac: HashSet<(String, CarrotInstance)>,
-    // Used for APR calculation
-    apr_reference_contract: Addr,
     pub autocompound_cooldown: Duration,
     // metrics
     metrics: Metrics,
@@ -137,7 +134,6 @@ impl Bot {
             fetch_contracts_cooldown,
             last_fetch: SystemTime::UNIX_EPOCH,
             contract_instances_to_ac: Default::default(),
-            apr_reference_contract: Addr::unchecked(APR_REFERENCE_INSTANCE),
             autocompound_cooldown,
             metrics,
         }
@@ -171,8 +167,6 @@ impl Bot {
 
         let mut fetch_instances_count = 0;
 
-        let ref_contract = self.apr_reference_contract.clone();
-
         let ver_req = VersionReq::parse(VERSION_REQ).unwrap();
         log!(Level::Debug, "version requirement: {ver_req}");
         for app_info in saving_modules.modules {
@@ -187,15 +181,6 @@ impl Bot {
             ))?;
             fetch_instances_count += contract_addrs.len();
 
-            self.metrics.reference_contract_balance.set(
-                utils::get_carrot_balance(daemon.clone(), &Addr::unchecked(ref_contract.clone()))
-                    .unwrap_or(Uint128::zero())
-                    .u128()
-                    .try_into() // There is a risk of overflow here
-                    .unwrap(),
-            );
-
-            let mut total_value_locked = Uint128::zero();
             for contract_addr in contract_addrs.iter() {
                 let address = Addr::unchecked(contract_addr.clone());
                 let balance_result = utils::get_carrot_balance(daemon.clone(), &address);
@@ -203,9 +188,6 @@ impl Bot {
                     Ok(value) => value,
                     Err(_) => Uint128::zero(), // Handle potential errors
                 };
-
-                // Update total_value_locked
-                total_value_locked += balance;
 
                 // Update contract_balance GaugeVec with label
                 let label = labels! {"contract_address"=> contract_addr.as_ref(),"contract_version"=> version.as_ref()};
@@ -215,10 +197,6 @@ impl Bot {
                     .with(&label)
                     .set(balance.u128().try_into().unwrap());
             }
-            // Finally, set the total_value_locked metric after the loop
-            self.metrics
-                .total_value_locked
-                .set(total_value_locked.u128().try_into().unwrap());
 
             // Skip if version mismatches
             if semver::Version::parse(&version)
@@ -398,13 +376,21 @@ mod utils {
             response
                 .balances
                 .iter()
-                .filter(|c| c.denom.eq(USDT_OSMOSIS_DENOM) || c.denom.eq(USDC_OSMOSIS_DENOM))
+                .filter(|c| {
+                    c.denom.eq(USDT_OSMOSIS_DENOM)
+                        || c.denom.eq(USDC_OSMOSIS_DENOM)
+                        || c.denom.eq(USDC_OSMOSIS_AXL_DENOM)
+                })
                 .map(|c| match c.denom.as_str() {
                     USDT_OSMOSIS_DENOM => ValuedCoin {
                         coin: c.clone(),
                         usd_value: Uint128::one(),
                     },
                     USDC_OSMOSIS_DENOM => ValuedCoin {
+                        coin: c.clone(),
+                        usd_value: Uint128::one(),
+                    },
+                    USDC_OSMOSIS_AXL_DENOM => ValuedCoin {
                         coin: c.clone(),
                         usd_value: Uint128::one(),
                     },

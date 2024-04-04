@@ -10,10 +10,6 @@ pub struct Metrics {
     pub autocompounded_count: IntCounterVec,
     pub autocompounded_error_count: IntCounterVec,
     pub contract_instances_to_autocompound: IntGauge,
-    // Total value locked by all instance
-    pub total_value_locked: IntGauge,
-    // The balance of the instance used to calculate the APR
-    pub reference_contract_balance: IntGauge,
     // balance of every instance
     pub contract_balance: IntGaugeVec,
 }
@@ -51,16 +47,6 @@ impl Metrics {
             "Number of instances that are eligible to be compounded",
         )
         .unwrap();
-        let total_value_locked = IntGauge::new(
-            "carrot_app_bot_total_value_locked",
-            "Total value locked by all carrot instances",
-        )
-        .unwrap();
-        let reference_contract_balance = IntGauge::new(
-            "carrot_app_bot_reference_contract_balance",
-            "balance of the reference contract to calculate the apr",
-        )
-        .unwrap();
         let contract_balance = IntGaugeVec::new(
             Opts::new(
                 "carrot_app_bot_contract_balance",
@@ -83,12 +69,6 @@ impl Metrics {
             .register(Box::new(contract_instances_to_autocompound.clone()))
             .unwrap();
         registry
-            .register(Box::new(total_value_locked.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(reference_contract_balance.clone()))
-            .unwrap();
-        registry
             .register(Box::new(contract_balance.clone()))
             .unwrap();
         Self {
@@ -97,8 +77,6 @@ impl Metrics {
             autocompounded_count,
             autocompounded_error_count,
             contract_instances_to_autocompound,
-            total_value_locked,
-            reference_contract_balance,
             contract_balance,
         }
     }
