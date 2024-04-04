@@ -22,8 +22,8 @@ use cw_asset::Asset;
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
-        MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
-        MsgWithdrawPosition,
+        FullPositionBreakdown, MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards,
+        MsgCreatePosition, MsgWithdrawPosition, Position,
     },
 };
 use std::str::FromStr;
@@ -205,14 +205,40 @@ fn withdraw(
     // Only the authorized addresses (admin ?) can withdraw
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
-        _inner_withdraw(deps, &env, amount, &app)?;
+    let position = get_osmosis_position(deps.as_ref())?;
+    let position_details = position.position.clone().unwrap();
+    // Get app's user and set up authz.
+    let user = get_user(deps.as_ref(), &app)?;
+    let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
 
-    Ok(app
+    // Collect all rewards/incentives if they exist
+    let (collect_rewards_msgs, rewards) = _inner_claim_rewards(
+        &env,
+        position.clone(),
+        position_details.clone(),
+        user.clone(),
+        authz.clone(),
+    )?;
+
+    // Withdraw funds
+    let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) =
+        _inner_withdraw(&env, amount, position, position_details, user, authz)?;
+
+    let partial_withdraw = withdraw_amount != total_amount;
+
+    let mut app_response = app
         .response("withdraw")
         .add_attribute("withdraw_amount", withdraw_amount)
         .add_attribute("total_amount", total_amount)
-        .add_message(withdraw_msg))
+        .add_message(withdraw_msg);
+
+    // Add the collect_rewards_msgs only if there are rewards AND if we are doing a partial withdraw
+    // Context: While partial position withdraws on osmosis keep the rewards unclaimed, full withdraws automatically withdraw rewards
+    if !rewards.is_empty() && partial_withdraw {
+        app_response = app_response.add_messages(collect_rewards_msgs);
+    }
+
+    Ok(app_response)
 }
 
 /// Auto-compound the position with earned fees and incentives.
@@ -221,47 +247,15 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     // Everyone can autocompound
 
     let position = get_osmosis_position(deps.as_ref())?;
-    let position_details = position.position.unwrap();
-
-    let mut rewards = cosmwasm_std::Coins::default();
-    let mut collect_rewards_msgs = vec![];
+    let position_details = position.clone().position.unwrap();
 
     // Get app's user and set up authz.
     let user = get_user(deps.as_ref(), &app)?;
     let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
 
-    // If there are external incentives, claim them.
-    if !position.claimable_incentives.is_empty() {
-        let asset0_denom = position.asset0.unwrap().denom;
-        let asset1_denom = position.asset1.unwrap().denom;
-
-        for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
-            if coin.denom == asset0_denom || coin.denom == asset1_denom {
-                rewards.add(coin)?;
-            }
-        }
-        collect_rewards_msgs.push(authz.execute(
-            &env.contract.address,
-            MsgCollectIncentives {
-                position_ids: vec![position_details.position_id],
-                sender: user.to_string(),
-            },
-        ));
-    }
-
-    // If there is income from swap fees, claim them.
-    if !position.claimable_spread_rewards.is_empty() {
-        for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
-            rewards.add(coin)?;
-        }
-        collect_rewards_msgs.push(authz.execute(
-            &env.contract.address,
-            MsgCollectSpreadRewards {
-                position_ids: vec![position_details.position_id],
-                sender: position_details.address.clone(),
-            },
-        ))
-    }
+    // Collect all rewards/incentives if they exist
+    let (collect_rewards_msgs, rewards) =
+        _inner_claim_rewards(&env, position, position_details, user, authz)?;
 
     // If there are no rewards, we can't do anything
     if rewards.is_empty() {
@@ -309,15 +303,59 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     Ok(response)
 }
 
+fn _inner_claim_rewards(
+    env: &Env,
+    position: FullPositionBreakdown,
+    position_details: Position,
+    user: cosmwasm_std::Addr,
+    authz: abstract_sdk::AuthZ,
+) -> AppResult<(Vec<CosmosMsg>, cosmwasm_std::Coins)> {
+    let mut rewards = cosmwasm_std::Coins::default();
+    let mut collect_rewards_msgs = vec![];
+
+    // If there are external incentives, claim them.
+    if !position.claimable_incentives.is_empty() {
+        let asset0_denom = position.asset0.unwrap().denom;
+        let asset1_denom = position.asset1.unwrap().denom;
+
+        for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
+            if coin.denom == asset0_denom || coin.denom == asset1_denom {
+                rewards.add(coin)?;
+            }
+        }
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
+            MsgCollectIncentives {
+                position_ids: vec![position_details.position_id],
+                sender: user.to_string(),
+            },
+        ));
+    }
+
+    // If there is income from swap fees, claim them.
+    if !position.claimable_spread_rewards.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
+            rewards.add(coin)?;
+        }
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
+            MsgCollectSpreadRewards {
+                position_ids: vec![position_details.position_id],
+                sender: position_details.address.clone(),
+            },
+        ))
+    }
+    Ok((collect_rewards_msgs, rewards))
+}
+
 fn _inner_withdraw(
-    deps: DepsMut,
     env: &Env,
     amount: Option<Uint128>,
-    app: &App,
+    position: FullPositionBreakdown,
+    position_details: Position,
+    user: cosmwasm_std::Addr,
+    authz: abstract_sdk::AuthZ,
 ) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
-    let position = get_osmosis_position(deps.as_ref())?;
-    let position_details = position.position.unwrap();
-
     let total_liquidity = position_details.liquidity.replace('.', "");
 
     let liquidity_amount = if let Some(amount) = amount {
@@ -326,10 +364,9 @@ fn _inner_withdraw(
         // TODO: it's decimals inside contracts
         total_liquidity.clone()
     };
-    let user = get_user(deps.as_ref(), app)?;
 
     // We need to execute withdraw on the user's behalf
-    let msg = app.auth_z(deps.as_ref(), Some(user.clone()))?.execute(
+    let msg = authz.execute(
         &env.contract.address,
         MsgWithdrawPosition {
             position_id: position_details.position_id,
