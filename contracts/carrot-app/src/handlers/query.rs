@@ -31,9 +31,14 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
 fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
 
-    let (status, position) =
-        get_position_status(deps, &env, config.autocompound_cooldown_seconds.u64())?;
-    let (spread_rewards, incentives) = if let Some(position) = position {
+    let position = POSITION.may_load(deps.storage)?;
+    let (status, osmosis_position) = get_position_status(
+        deps,
+        &env,
+        config.autocompound_cooldown_seconds.u64(),
+        position,
+    )?;
+    let (spread_rewards, incentives) = if let Some(position) = osmosis_position {
         (
             try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)?,
             try_proto_to_cosmwasm_coins(position.claimable_incentives)?,
@@ -94,7 +99,13 @@ fn query_config(deps: Deps) -> AppResult<Config> {
 }
 
 fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
-    let pool = get_osmosis_position(deps)?;
+    let Some(position) = POSITION.may_load(deps.storage)? else {
+        return Ok(AssetsBalanceResponse {
+            balances: vec![],
+            liquidity: "0".to_string(),
+        });
+    };
+    let pool = get_osmosis_position(deps, position.position_id)?;
 
     let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
     let liquidity = pool.position.unwrap().liquidity.replace('.', "");

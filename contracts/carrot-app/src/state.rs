@@ -83,15 +83,13 @@ pub struct Position {
 
 pub fn get_position(deps: Deps) -> AppResult<Position> {
     POSITION
-        .load(deps.storage)
-        .map_err(|_| AppError::NoPosition {})
+        .may_load(deps.storage)?
+        .ok_or(AppError::NoPosition {})
 }
 
-pub fn get_osmosis_position(deps: Deps) -> AppResult<FullPositionBreakdown> {
-    let position = get_position(deps)?;
-
+pub fn get_osmosis_position(deps: Deps, position_id: u64) -> AppResult<FullPositionBreakdown> {
     Ok(ConcentratedliquidityQuerier::new(&deps.querier)
-        .position_by_id(position.position_id)?
+        .position_by_id(position_id)?
         .position
         .unwrap())
 }
@@ -101,13 +99,12 @@ pub fn get_position_status(
     deps: Deps,
     env: &Env,
     cooldown_seconds: u64,
+    position: Option<Position>,
 ) -> AppResult<(CompoundStatus, Option<FullPositionBreakdown>)> {
-    let position = POSITION.may_load(deps.storage)?;
     let status = match position {
         Some(position) => {
-            let Ok(position_response) = ConcentratedliquidityQuerier::new(&deps.querier)
-                .position_by_id(position.position_id)
-            else {
+            // If saved position but can't query - return position id
+            let Ok(position_response) = get_osmosis_position(deps, position.position_id) else {
                 return Ok((
                     CompoundStatus::PositionNotAvailable(position.position_id),
                     None,
@@ -115,13 +112,13 @@ pub fn get_position_status(
             };
             let ready_on = position.last_compound.plus_seconds(cooldown_seconds);
             if env.block.time >= ready_on {
-                (CompoundStatus::Ready {}, position_response.position)
+                (CompoundStatus::Ready {}, Some(position_response))
             } else {
                 (
                     CompoundStatus::Cooldown(
                         (env.block.time.seconds() - ready_on.seconds()).into(),
                     ),
-                    position_response.position,
+                    Some(position_response),
                 )
             }
         }
