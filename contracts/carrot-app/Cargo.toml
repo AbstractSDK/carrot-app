@@ -1,6 +1,6 @@
 [package]
 name = "carrot-app"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
   "Adair <adair@abstract.money>",
