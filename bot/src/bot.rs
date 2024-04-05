@@ -1,6 +1,8 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
 use carrot_app::{
-    msg::{AppExecuteMsg, AppQueryMsg, CompoundStatusResponse, ExecuteMsg, QueryMsg},
+    msg::{
+        AppExecuteMsg, AppQueryMsg, CompoundStatus, CompoundStatusResponse, ExecuteMsg, QueryMsg,
+    },
     AppInterface,
 };
 use semver::VersionReq;
@@ -243,13 +245,12 @@ impl Bot {
             let label = labels! {"contract_version"=> version.as_ref()};
             match autocompound_instance(&self.daemon, (id, addr)) {
                 // Successful autocompound
-                Ok(true) => self.metrics.autocompounded_count.with(&label).inc(),
+                Ok(CompoundStatus::Ready {}) => {
+                    self.metrics.autocompounded_count.with(&label).inc()
+                }
                 // Checked contract not ready for autocompound
-                Ok(false) => {
-                    log!(
-                        Level::Info,
-                        "Skipped {contract}: not ready for autocompound"
-                    );
+                Ok(status) => {
+                    log!(Level::Info, "Skipped {contract}: {status:?}");
                     self.metrics
                         .autocompounded_not_ready_count
                         .with(&label)
@@ -268,7 +269,10 @@ impl Bot {
     }
 }
 
-fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Result<bool> {
+fn autocompound_instance(
+    daemon: &Daemon,
+    instance: (&str, &Addr),
+) -> anyhow::Result<CompoundStatus> {
     let (id, address) = instance;
     let app = AppInterface::new(id, daemon.clone());
     app.set_address(address);
@@ -290,10 +294,9 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
             &[],
             address,
         )?;
-        Ok(true)
-    } else {
-        Ok(false)
     }
+
+    Ok(resp.status)
 }
 
 mod utils {
