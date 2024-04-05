@@ -1,6 +1,7 @@
 use crate::{
     check::Checkable,
     contract::{App, AppResult},
+    distribution::deposit::generate_deposit_strategy,
     error::AppError,
     handlers::query::query_balance,
     helpers::assert_contract,
@@ -73,10 +74,7 @@ fn deposit(
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
 
-    // let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
-    let deposit_msgs =
-        _inner_advanced_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
-
+    let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
     Ok(app.response("deposit").add_messages(deposit_msgs))
 }
 
@@ -206,32 +204,51 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     Ok(response.add_messages(executor_reward_messages))
 }
 
-/// The deposit process goes through the following steps
-/// 1. We query the target strategy in storage
-/// 2. We correct the expected token shares of each strategy, in case there are corrections passed to the function
-/// 3. We deposit funds according to that strategy
-///
-/// This approach is not perfect. TO show the flaws, take an example where you allocate 50% into mars, 50% into osmosis and both give similar rewards.
-/// Assume we deposited 2x inside the app.
-/// When an auto-compounding happens, they both get y as rewards, mars is already auto-compounding and osmosis' rewards are redeposited inside the pool
-/// Step | Mars | Osmosis | Rewards|
-/// Deposit | x | x | 0 |
-/// Withdraw Rewards | x + y | x| y |
-/// Re-deposit | x + y + y/2 | x + y/2 | 0 |
-/// The final ratio is not the 50/50 ratio we target
-///
-/// PROPOSITION : We could also have this kind of deposit flow
-/// 1a. We query the target strategy in storage (target strategy)
-/// 1b. We query the current status of the strategy (current strategy)
-/// 1c. We create a temporary strategy object to allocate the funds from this deposit into the various strategies
-/// --> the goal of those 3 steps is to correct the funds allocation faster towards the target strategy
-/// 2. We correct the expected token shares of each strategy, in case there are corrections passed to the function
-/// 3. We deposit funds according to that strategy
-/// This time :
-/// Step | Mars | Osmosis | Rewards|
-/// Deposit | x | x | 0 |
-/// Withdraw Rewards | x + y | x| y |
-/// Re-deposit | x + y | x + y | 0 |
+// /// UNUSED FOR NOW, replaces by _inner_advanced_deposit
+// /// The deposit process goes through the following steps
+// /// 1. We query the target strategy in storage
+// /// 2. We correct the expected token shares of each strategy, in case there are corrections passed to the function
+// /// 3. We deposit funds according to that strategy
+// ///
+// /// This approach is not perfect. TO show the flaws, take an example where you allocate 50% into mars, 50% into osmosis and both give similar rewards.
+// /// Assume we deposited 2x inside the app.
+// /// When an auto-compounding happens, they both get y as rewards, mars is already auto-compounding and osmosis' rewards are redeposited inside the pool
+// /// Step | Mars | Osmosis | Rewards|
+// /// Deposit | x | x | 0 |
+// /// Withdraw Rewards | x + y | x| y |
+// /// Re-deposit | x + y + y/2 | x + y/2 | 0 |
+// /// The final ratio is not the 50/50 ratio we target
+// ///
+// /// PROPOSITION : We could also have this kind of deposit flow
+// /// 1a. We query the target strategy in storage (target strategy)
+// /// 1b. We query the current status of the strategy (current strategy)
+// /// 1c. We create a temporary strategy object to allocate the funds from this deposit into the various strategies
+// /// --> the goal of those 3 steps is to correct the funds allocation faster towards the target strategy
+// /// 2. We correct the expected token shares of each strategy, in case there are corrections passed to the function
+// /// 3. We deposit funds according to that strategy
+// /// This time :
+// /// Step | Mars | Osmosis | Rewards|
+// /// Deposit | x | x | 0 |
+// /// Withdraw Rewards | x + y | x| y |
+// /// Re-deposit | x + y | x + y | 0 |
+// pub fn _inner_deposit(
+//     deps: Deps,
+//     env: &Env,
+//     funds: Vec<Coin>,
+//     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
+//     app: &App,
+// ) -> AppResult<Vec<CosmosMsg>> {
+//     // We query the target strategy depending on the existing deposits
+//     let mut current_strategy_status = CONFIG.load(deps.storage)?.balance_strategy;
+//     current_strategy_status.apply_current_strategy_shares(deps, app)?;
+
+//     // We correct it if the user asked to correct the share parameters of each strategy
+//     current_strategy_status.correct_with(yield_source_params);
+
+//     // We fill the strategies with the current deposited funds and get messages to execute those deposits
+//     current_strategy_status.fill_all_and_get_messages(deps, env, funds, app)
+// }
+
 pub fn _inner_deposit(
     deps: Deps,
     env: &Env,
@@ -239,55 +256,18 @@ pub fn _inner_deposit(
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
-    // We query the target strategy depending on the existing deposits
-    let mut current_strategy_status = CONFIG.load(deps.storage)?.balance_strategy;
-    current_strategy_status.apply_current_strategy_shares(deps, app)?;
+    let (withdraw_strategy, deposit_msgs) =
+        generate_deposit_strategy(deps, funds, yield_source_params, app)?;
+    let deposit_withdraw_msgs = withdraw_strategy
+        .into_iter()
+        .map(|(el, share)| el.withdraw(deps, Some(share), app).map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
+    let deposit_msgs = deposit_msgs
+        .into_iter()
+        .map(|msg| msg.to_cosmos_msg(env))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    // We correct it if the user asked to correct the share parameters of each strategy
-    current_strategy_status.correct_with(yield_source_params);
-
-    // We fill the strategies with the current deposited funds and get messages to execute those deposits
-    current_strategy_status.fill_all_and_get_messages(deps, env, funds, app)
-}
-
-pub fn _inner_advanced_deposit(
-    deps: Deps,
-    env: &Env,
-    funds: Vec<Coin>,
-    yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
-    app: &App,
-) -> AppResult<Vec<CosmosMsg>> {
-    // This is the storage strategy for all assets
-    let target_strategy = CONFIG.load(deps.storage)?.balance_strategy;
-
-    // This is the current distribution of funds inside the strategies
-    let current_strategy_status = target_strategy.query_current_status(deps, app)?;
-
-    let mut usable_funds: Coins = funds.try_into()?;
-    let (withdraw_msgs, this_deposit_strategy) = target_strategy.current_deposit_strategy(
-        deps,
-        &mut usable_funds,
-        current_strategy_status,
-        app,
-    )?;
-
-    let mut this_deposit_strategy = if let Some(this_deposit_strategy) = this_deposit_strategy {
-        this_deposit_strategy
-    } else {
-        return Ok(withdraw_msgs);
-    };
-
-    // We query the yield source shares
-    this_deposit_strategy.apply_current_strategy_shares(deps, app)?;
-
-    // We correct it if the user asked to correct the share parameters of each strategy
-    this_deposit_strategy.correct_with(yield_source_params);
-
-    // We fill the strategies with the current deposited funds and get messages to execute those deposits
-    let deposit_msgs =
-        this_deposit_strategy.fill_all_and_get_messages(deps, env, usable_funds.into(), app)?;
-
-    Ok([withdraw_msgs, deposit_msgs].concat())
+    Ok([deposit_withdraw_msgs, deposit_msgs].concat())
 }
 
 fn _inner_withdraw(

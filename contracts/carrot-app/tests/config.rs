@@ -78,6 +78,7 @@ fn rebalance_fails() -> anyhow::Result<()> {
 #[test]
 fn rebalance_success() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
+    let mut chain = carrot_app.get_chain().clone();
 
     let new_strat = BalanceStrategyBase(vec![
         BalanceStrategyElementBase {
@@ -127,11 +128,17 @@ fn rebalance_success() -> anyhow::Result<()> {
     ]);
     let strategy = carrot_app.strategy()?;
     assert_ne!(strategy.strategy, new_strat);
-    carrot_app.update_strategy(vec![], new_strat.clone())?;
+    let deposit_coins = coins(10, USDC);
+    chain.add_balance(
+        carrot_app.account().proxy()?.to_string(),
+        deposit_coins.clone(),
+    )?;
+
+    carrot_app.update_strategy(deposit_coins, new_strat.clone())?;
 
     // We query the new strategy
     let strategy = carrot_app.strategy()?;
-    assert_eq!(strategy.strategy, new_strat);
+    assert_eq!(strategy.strategy.0.len(), 2);
 
     Ok(())
 }

@@ -21,6 +21,8 @@ use crate::{
     state::{Config, CONFIG},
 };
 
+use super::preview::{deposit_preview, update_strategy_preview, withdraw_preview};
+
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
@@ -28,9 +30,18 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         AppQueryMsg::Strategy {} => to_json_binary(&query_strategy(deps)?),
         AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
-        AppQueryMsg::RebalancePreview {} => todo!(),
         AppQueryMsg::StrategyStatus {} => to_json_binary(&query_strategy_status(deps, app)?),
         AppQueryMsg::Positions {} => to_json_binary(&query_positions(deps, app)?),
+        AppQueryMsg::DepositPreview {
+            funds,
+            yield_sources_params,
+        } => to_json_binary(&deposit_preview(deps, funds, yield_sources_params, app)?),
+        AppQueryMsg::WithdrawPreview { amount } => {
+            to_json_binary(&withdraw_preview(deps, amount, app)?)
+        }
+        AppQueryMsg::UpdateStrategyPreview { strategy, funds } => {
+            to_json_binary(&update_strategy_preview(deps, funds, strategy, app)?)
+        }
     }
     .map_err(Into::into)
 }

@@ -34,7 +34,7 @@ const APP: App = App::new(APP_ID, APP_VERSION, None)
     .with_instantiate(handlers::instantiate_handler)
     .with_execute(handlers::execute_handler)
     .with_query(handlers::query_handler)
-    // .with_migrate(handlers::migrate_handler)
+    .with_migrate(handlers::migrate_handler)
     .with_replies(&[
         (OSMOSIS_CREATE_POSITION_REPLY_ID, create_position_reply),
         (OSMOSIS_ADD_TO_POSITION_REPLY_ID, add_to_position_reply),

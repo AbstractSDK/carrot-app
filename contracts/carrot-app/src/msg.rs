@@ -1,14 +1,14 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Uint128, Uint64};
+use cosmwasm_std::{wasm_execute, Coin, CosmosMsg, Decimal, Env, Uint128, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
-    contract::App,
+    contract::{App, AppResult},
     distribution::deposit::OneDepositStrategy,
     state::ConfigUnchecked,
     yield_sources::{
         yield_type::{YieldType, YieldTypeUnchecked},
-        AssetShare, BalanceStrategyUnchecked,
+        AssetShare, BalanceStrategyElementUnchecked, BalanceStrategyUnchecked,
     },
 };
 
@@ -50,8 +50,8 @@ pub enum AppExecuteMsg {
     Autocompound {},
     /// Rebalances all investments according to a new balance strategy
     UpdateStrategy {
-        strategy: BalanceStrategyUnchecked,
         funds: Vec<Coin>,
+        strategy: BalanceStrategyUnchecked,
     },
 
     /// Only called by the contract internally   
@@ -64,8 +64,8 @@ pub enum AppExecuteMsg {
 pub enum InternalExecuteMsg {
     DepositOneStrategy {
         swap_strategy: OneDepositStrategy,
-        yield_type: YieldType,
         yield_index: usize,
+        yield_type: YieldType,
     },
     /// Execute one Deposit Swap Step
     ExecuteOneDepositSwapStep {
@@ -75,8 +75,8 @@ pub enum InternalExecuteMsg {
     },
     /// Finalize the deposit after all swaps are executed
     FinalizeDeposit {
-        yield_type: YieldType,
         yield_index: usize,
+        yield_type: YieldType,
     },
 }
 impl From<InternalExecuteMsg>
@@ -87,6 +87,17 @@ impl From<InternalExecuteMsg>
 {
     fn from(value: InternalExecuteMsg) -> Self {
         Self::Module(AppExecuteMsg::Internal(value))
+    }
+}
+
+impl InternalExecuteMsg {
+    pub fn to_cosmos_msg(&self, env: &Env) -> AppResult<CosmosMsg> {
+        Ok(wasm_execute(
+            env.contract.address.clone(),
+            &ExecuteMsg::Module(AppExecuteMsg::Internal(self.clone())),
+            vec![],
+        )?
+        .into())
     }
 }
 
@@ -118,10 +129,25 @@ pub enum AppQueryMsg {
     /// Returns [`StrategyResponse`]
     #[returns(StrategyResponse)]
     StrategyStatus {},
+
+    // **** Simulation Endpoints *****/
+    // **** These allow to preview what will happen under the hood for each operation inside the Carrot App *****/
+    // Their arguments match the arguments of the corresponding Execute Endpoint
+    #[returns(DepositPreviewResponse)]
+    DepositPreview {
+        funds: Vec<Coin>,
+        yield_sources_params: Option<Vec<Option<Vec<AssetShare>>>>,
+    },
+    #[returns(WithdrawPreviewResponse)]
+    WithdrawPreview { amount: Option<Uint128> },
+
     /// Returns a preview of the rebalance distribution
     /// Returns [`RebalancePreviewResponse`]
-    #[returns(RebalancePreviewResponse)]
-    RebalancePreview {},
+    #[returns(UpdateStrategyPreviewResponse)]
+    UpdateStrategyPreview {
+        funds: Vec<Coin>,
+        strategy: BalanceStrategyUnchecked,
+    },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -185,4 +211,13 @@ impl CompoundStatus {
 }
 
 #[cw_serde]
-pub struct RebalancePreviewResponse {}
+pub struct DepositPreviewResponse {
+    pub withdraw: Vec<(BalanceStrategyElementUnchecked, Decimal)>,
+    pub deposit: Vec<InternalExecuteMsg>,
+}
+
+#[cw_serde]
+pub struct WithdrawPreviewResponse {}
+
+#[cw_serde]
+pub struct UpdateStrategyPreviewResponse {}
