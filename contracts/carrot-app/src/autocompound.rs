@@ -1,22 +1,18 @@
 use std::marker::PhantomData;
 
-use abstract_app::abstract_sdk::Resolve;
+use abstract_app::abstract_core::objects::AssetEntry;
 use abstract_app::objects::AnsAsset;
-use abstract_app::traits::AbstractNameService;
-use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{Execution, TransferInterface};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{
-    ensure, Addr, CosmosMsg, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64,
-};
+use cosmwasm_std::{Addr, CosmosMsg, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
 
+use crate::check::{Checked, Unchecked};
 use crate::contract::App;
+use crate::contract::AppResult;
 use crate::handlers::swap_helpers::swap_msg;
 use crate::msg::CompoundStatus;
 use crate::state::{Config, AUTOCOMPOUND_STATE};
-use crate::yield_sources::{Checked, Unchecked};
-use crate::{contract::AppResult, error::AppError};
 
 pub type AutocompoundConfig = AutocompoundConfigBase<Checked>;
 pub type AutocompoundConfigUnchecked = AutocompoundConfigBase<Unchecked>;
@@ -60,54 +56,6 @@ pub struct AutocompoundRewardsConfigBase<T> {
 
 pub type AutocompoundRewardsConfigUnchecked = AutocompoundRewardsConfigBase<Unchecked>;
 pub type AutocompoundRewardsConfig = AutocompoundRewardsConfigBase<Checked>;
-
-impl From<AutocompoundRewardsConfig> for AutocompoundRewardsConfigUnchecked {
-    fn from(value: AutocompoundRewardsConfig) -> Self {
-        Self {
-            gas_asset: value.gas_asset,
-            swap_asset: value.swap_asset,
-            reward: value.reward,
-            min_gas_balance: value.min_gas_balance,
-            max_gas_balance: value.max_gas_balance,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl AutocompoundRewardsConfigUnchecked {
-    pub fn check(
-        self,
-        deps: Deps,
-        app: &App,
-        dex_name: &str,
-    ) -> AppResult<AutocompoundRewardsConfig> {
-        ensure!(
-            self.reward <= self.min_gas_balance,
-            AppError::RewardConfigError(
-                "reward should be lower or equal to the min_gas_balance".to_owned()
-            )
-        );
-        ensure!(
-            self.max_gas_balance > self.min_gas_balance,
-            AppError::RewardConfigError(
-                "max_gas_balance has to be bigger than min_gas_balance".to_owned()
-            )
-        );
-
-        // Check swap asset has pairing into gas asset
-        DexAssetPairing::new(self.gas_asset.clone(), self.swap_asset.clone(), dex_name)
-            .resolve(&deps.querier, app.name_service(deps).host())?;
-
-        Ok(AutocompoundRewardsConfig {
-            gas_asset: self.gas_asset,
-            swap_asset: self.swap_asset,
-            reward: self.reward,
-            min_gas_balance: self.min_gas_balance,
-            max_gas_balance: self.max_gas_balance,
-            _phantom: PhantomData,
-        })
-    }
-}
 
 /// Autocompound related methods
 impl Config {

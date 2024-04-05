@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, str::FromStr};
 
 use crate::{
+    check::{Checked, Unchecked},
     contract::{App, AppResult},
     error::AppError,
     handlers::swap_helpers::DEFAULT_SLIPPAGE,
@@ -14,17 +15,13 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{ensure, Coin, Coins, CosmosMsg, Decimal, Deps, ReplyOn, SubMsg, Uint128};
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
-    types::osmosis::{
-        concentratedliquidity::v1beta1::{
-            ConcentratedliquidityQuerier, FullPositionBreakdown, MsgAddToPosition,
-            MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition, MsgWithdrawPosition,
-            Pool,
-        },
-        poolmanager::v1beta1::PoolmanagerQuerier,
+    types::osmosis::concentratedliquidity::v1beta1::{
+        ConcentratedliquidityQuerier, FullPositionBreakdown, MsgAddToPosition,
+        MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition, MsgWithdrawPosition,
     },
 };
 
-use super::{yield_type::YieldTypeImplementation, Checkable, Checked, ShareType, Unchecked};
+use super::{yield_type::YieldTypeImplementation, ShareType};
 
 #[cw_serde]
 pub struct ConcentratedPoolParamsBase<T> {
@@ -43,25 +40,6 @@ pub struct ConcentratedPoolParamsBase<T> {
 
 pub type ConcentratedPoolParamsUnchecked = ConcentratedPoolParamsBase<Unchecked>;
 pub type ConcentratedPoolParams = ConcentratedPoolParamsBase<Checked>;
-
-impl Checkable for ConcentratedPoolParamsUnchecked {
-    type CheckOutput = ConcentratedPoolParams;
-    fn check(self, deps: Deps, _app: &App) -> AppResult<ConcentratedPoolParams> {
-        let _pool: Pool = PoolmanagerQuerier::new(&deps.querier)
-            .pool(self.pool_id)
-            .map_err(|_| AppError::PoolNotFound {})?
-            .pool
-            .ok_or(AppError::PoolNotFound {})?
-            .try_into()?;
-        Ok(ConcentratedPoolParams {
-            pool_id: self.pool_id,
-            lower_tick: self.lower_tick,
-            upper_tick: self.upper_tick,
-            position_id: self.position_id,
-            _phantom: PhantomData,
-        })
-    }
-}
 
 impl YieldTypeImplementation for ConcentratedPoolParams {
     fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {

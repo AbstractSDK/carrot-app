@@ -1,4 +1,5 @@
 pub mod autocompound;
+pub mod check;
 pub mod contract;
 pub mod distribution;
 pub mod error;

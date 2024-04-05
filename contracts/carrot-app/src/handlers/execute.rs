@@ -1,11 +1,12 @@
 use crate::{
+    check::Checkable,
     contract::{App, AppResult},
     error::AppError,
     handlers::query::query_balance,
     helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     state::{AUTOCOMPOUND_STATE, CONFIG},
-    yield_sources::{AssetShare, BalanceStrategyUnchecked, Checkable},
+    yield_sources::{AssetShare, BalanceStrategyUnchecked},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_sdk::ExecutorMsg;

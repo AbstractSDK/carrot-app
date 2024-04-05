@@ -1,12 +1,12 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Coin, CosmosMsg, Deps, SubMsg, Uint128};
 
-use crate::contract::{App, AppResult};
-
-use super::{
-    mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase, Checked, ShareType,
-    Unchecked,
+use crate::{
+    check::{Checked, Unchecked},
+    contract::{App, AppResult},
 };
+
+use super::{mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase, ShareType};
 
 // This however is not checkable by itself, because the check also depends on the asset share distribution
 #[cw_serde]
@@ -19,23 +19,6 @@ pub enum YieldTypeBase<T> {
 
 pub type YieldTypeUnchecked = YieldTypeBase<Unchecked>;
 pub type YieldType = YieldTypeBase<Checked>;
-
-impl From<YieldType> for YieldTypeUnchecked {
-    fn from(value: YieldType) -> Self {
-        match value {
-            YieldTypeBase::ConcentratedLiquidityPool(params) => {
-                YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                    pool_id: params.pool_id,
-                    lower_tick: params.lower_tick,
-                    upper_tick: params.upper_tick,
-                    position_id: params.position_id,
-                    _phantom: std::marker::PhantomData,
-                })
-            }
-            YieldTypeBase::Mars(params) => YieldTypeBase::Mars(params),
-        }
-    }
-}
 
 impl YieldType {
     pub fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {

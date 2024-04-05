@@ -1,9 +1,9 @@
 use crate::{
     autocompound::AutocompoundState,
+    check::Checkable,
     contract::{App, AppResult},
     msg::AppInstantiateMsg,
     state::{AUTOCOMPOUND_STATE, CONFIG},
-    yield_sources::Checkable,
 };
 use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
