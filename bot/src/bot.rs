@@ -241,21 +241,34 @@ impl Bot {
             let version = &contract.version;
             let addr = &contract.address;
             let label = labels! {"contract_version"=> version.as_ref()};
-            let result = autocompound_instance(&self.daemon, (id, addr));
-            if let Err(err) = result {
-                log!(
-                    Level::Error,
-                    "error ocurred for {contract} carrot-app: {err:?}"
-                );
-                self.metrics.autocompounded_error_count.with(&label).inc();
-            } else {
-                self.metrics.autocompounded_count.with(&label).inc();
+            match autocompound_instance(&self.daemon, (id, addr)) {
+                // Successful autocompound
+                Ok(true) => self.metrics.autocompounded_count.with(&label).inc(),
+                // Checked contract not ready for autocompound
+                Ok(false) => {
+                    log!(
+                        Level::Info,
+                        "Skipped {contract}: not ready for autocompound"
+                    );
+                    self.metrics
+                        .autocompounded_not_ready_count
+                        .with(&label)
+                        .inc();
+                }
+                // Contract (or bot) errored during autocompound
+                Err(err) => {
+                    log!(
+                        Level::Error,
+                        "error ocurred for {contract} carrot-app: {err:?}"
+                    );
+                    self.metrics.autocompounded_error_count.with(&label).inc();
+                }
             }
         }
     }
 }
 
-fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Result<()> {
+fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Result<bool> {
     let (id, address) = instance;
     let app = AppInterface::new(id, daemon.clone());
     app.set_address(address);
@@ -277,8 +290,10 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
             &[],
             address,
         )?;
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    Ok(())
 }
 
 mod utils {
