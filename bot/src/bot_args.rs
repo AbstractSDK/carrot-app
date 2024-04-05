@@ -13,5 +13,5 @@ pub struct BotArgs {
     pub autocompound_cooldown: Duration,
     /// Custom grpc urls
     #[arg(long = "grpcs", value_name = "URL")]
-    pub grps_urls: Option<Vec<String>>,
+    pub grps_urls: Vec<String>,
 }

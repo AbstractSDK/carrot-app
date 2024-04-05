@@ -22,8 +22,8 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     let rt = Runtime::new()?;
     let registry = Registry::new();
     let mut chain_info = OSMOSIS_1;
-    let grpc_urls = if let Some(grpc_urls) = &bot_args.grps_urls {
-        grpc_urls.iter().map(String::as_ref).collect()
+    let grpc_urls = if !bot_args.grps_urls.is_empty() {
+        bot_args.grps_urls.iter().map(String::as_ref).collect()
     } else {
         chain_info.grpc_urls.to_vec()
     };
