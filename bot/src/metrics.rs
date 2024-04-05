@@ -8,6 +8,7 @@ pub struct Metrics {
     pub fetch_count: IntCounter,
     pub fetch_instances_count: IntGauge,
     pub autocompounded_count: IntCounterVec,
+    pub autocompounded_not_ready_count: IntCounterVec,
     pub autocompounded_error_count: IntCounterVec,
     pub contract_instances_to_autocompound: IntGauge,
     // balance of every instance
@@ -30,6 +31,14 @@ impl Metrics {
             Opts::new(
                 "carrot_app_bot_autocompounded_count",
                 "Number of times contracts have been autocompounded",
+            ),
+            &["contract_version"],
+        )
+        .unwrap();
+        let autocompounded_not_ready_count = IntCounterVec::new(
+            Opts::new(
+                "carrot_app_bot_autocompounded_not_ready_count",
+                "Number of times contracts have skipped autocompound without errors",
             ),
             &["contract_version"],
         )
@@ -63,6 +72,9 @@ impl Metrics {
             .register(Box::new(autocompounded_count.clone()))
             .unwrap();
         registry
+            .register(Box::new(autocompounded_not_ready_count.clone()))
+            .unwrap();
+        registry
             .register(Box::new(autocompounded_error_count.clone()))
             .unwrap();
         registry
@@ -75,6 +87,7 @@ impl Metrics {
             fetch_count,
             fetch_instances_count,
             autocompounded_count,
+            autocompounded_not_ready_count,
             autocompounded_error_count,
             contract_instances_to_autocompound,
             contract_balance,
