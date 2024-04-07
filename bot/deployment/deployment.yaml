@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: carrot-bot
-        image: octanetech/adminlte
+        image: nginx
         resources:
           limits:
             memory: "128Mi"
