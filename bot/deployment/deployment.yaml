@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carrot-bot
+  namespace: carrot
+spec:
+  selector:
+    matchLabels:
+      app: carrot-bot
+  template:
+    metadata:
+      labels:
+        app: carrot-bot
+    spec:
+      containers:
+      - name: carrot-bot
+        image: apache2:latest
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80
