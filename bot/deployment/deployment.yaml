@@ -14,10 +14,10 @@ spec:
     spec:
       containers:
       - name: carrot-bot
-        image: apache2:latest
+        image: octanetech/adminlte
         resources:
           limits:
             memory: "128Mi"
             cpu: "500m"
         ports:
-        - containerPort: 80
+        - containerPort: 8080
