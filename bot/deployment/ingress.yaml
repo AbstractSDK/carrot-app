@@ -18,9 +18,9 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: cm-acme-http-solver-lrbwn
+            name: carrot-bot
             port:
-              number: 8089
+              number: 8000
   tls:
   - hosts:
     - carrot-bot.carrot.abstract.money
