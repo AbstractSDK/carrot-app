@@ -15,6 +15,12 @@ spec:
       containers:
       - name: carrot-bot
         image: 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:3567b44c3193d3c4694a5ea430278edafa39be67
+        env:
+        - name: MY_SECRET_VAR
+          valueFrom:
+            secretKeyRef:
+              name: carrot-bot-mnemonic
+              key: mnemonic
         resources:
           limits:
             memory: "128Mi"
