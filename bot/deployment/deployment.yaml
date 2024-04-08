@@ -16,7 +16,7 @@ spec:
       - name: carrot-bot
         image: 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:3567b44c3193d3c4694a5ea430278edafa39be67
         env:
-        - name: MY_SECRET_VAR
+        - name: MAIN_MNEMONIC
           valueFrom:
             secretKeyRef:
               name: carrot-bot
