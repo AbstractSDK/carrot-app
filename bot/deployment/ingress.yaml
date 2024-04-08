@@ -1,0 +1,26 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: carrot-bot-ingress
+  namespace: carrot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: carrot-bot.abstract.money
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: carrot-bot
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - carrot-bot.abstract.money
+    secretName: carrot-bot-cert

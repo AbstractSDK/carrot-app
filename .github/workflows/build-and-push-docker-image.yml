@@ -1,0 +1,34 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ '*' ]  # Adjust branch(es) to trigger the workflow
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+jobs:
+
+  build-and-push:
+    runs-on: ubuntu-latest  # Adjust OS as needed
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v1.7.0
+        with:
+          role-to-assume: arn:aws:iam::537748208826:role/github-actions-ecr-access-role
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 537748208826.dkr.ecr.us-east-1.amazonaws.com
+
+      - name: Build and tag the image
+        run: |
+          docker build -t 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:<GITHUB_SHA>  .
+
+      - name: Push the image to ECR
+        run: |
+          docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:<GITHUB_SHA>
+
