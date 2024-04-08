@@ -30,3 +30,15 @@ abstract-client = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-testing = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-core = { git = "https://github.com/abstractsdk/abstract.git" }
 abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git" }
+
+
+[profile.release]
+rpath = false
+lto = true
+overflow-checks = true
+opt-level = 3
+debug = false
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
