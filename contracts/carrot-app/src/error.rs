@@ -42,6 +42,9 @@ pub enum AppError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Sender not contract. Only the contract can execute internal calls")]
+    SenderNotContract {},
+
     #[error("Wrong denom deposited, expected exactly {expected}, got {got:?}")]
     DepositError { expected: AssetInfo, got: Vec<Coin> },
 
