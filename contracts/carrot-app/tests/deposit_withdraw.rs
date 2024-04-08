@@ -6,8 +6,7 @@ use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
         mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase,
-        yield_type::YieldTypeBase, AssetShare, BalanceStrategyBase, BalanceStrategyElementBase,
-        YieldSourceBase,
+        yield_type::YieldTypeBase, AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase,
     },
     AppInterface,
 };
@@ -147,8 +146,8 @@ fn deposit_multiple_assets() -> anyhow::Result<()> {
 fn deposit_multiple_positions() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let new_strat = BalanceStrategyBase(vec![
-        BalanceStrategyElementBase {
+    let new_strat = StrategyBase(vec![
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -170,7 +169,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -219,8 +218,8 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
 fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let new_strat = BalanceStrategyBase(vec![
-        BalanceStrategyElementBase {
+    let new_strat = StrategyBase(vec![
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -242,7 +241,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -264,7 +263,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![AssetShare {
                     denom: USDT.to_string(),

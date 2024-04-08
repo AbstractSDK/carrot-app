@@ -8,7 +8,7 @@ use crate::{
     state::ConfigUnchecked,
     yield_sources::{
         yield_type::{YieldType, YieldTypeUnchecked},
-        AssetShare, BalanceStrategyElementUnchecked, BalanceStrategyUnchecked,
+        AssetShare, StrategyElementUnchecked, StrategyUnchecked,
     },
 };
 
@@ -20,6 +20,8 @@ abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
 pub struct AppInstantiateMsg {
     /// Future app configuration
     pub config: ConfigUnchecked,
+    /// Future app strategy
+    pub strategy: StrategyUnchecked,
     /// Create position with instantiation.
     /// Will not create position if omitted
     pub deposit: Option<Vec<Coin>>,
@@ -51,7 +53,7 @@ pub enum AppExecuteMsg {
     /// Rebalances all investments according to a new balance strategy
     UpdateStrategy {
         funds: Vec<Coin>,
-        strategy: BalanceStrategyUnchecked,
+        strategy: StrategyUnchecked,
     },
 
     /// Only called by the contract internally   
@@ -146,7 +148,7 @@ pub enum AppQueryMsg {
     #[returns(UpdateStrategyPreviewResponse)]
     UpdateStrategyPreview {
         funds: Vec<Coin>,
-        strategy: BalanceStrategyUnchecked,
+        strategy: StrategyUnchecked,
     },
 }
 
@@ -170,7 +172,7 @@ pub struct AssetsBalanceResponse {
 
 #[cw_serde]
 pub struct StrategyResponse {
-    pub strategy: BalanceStrategyUnchecked,
+    pub strategy: StrategyUnchecked,
 }
 
 #[cw_serde]
@@ -212,7 +214,7 @@ impl CompoundStatus {
 
 #[cw_serde]
 pub struct DepositPreviewResponse {
-    pub withdraw: Vec<(BalanceStrategyElementUnchecked, Decimal)>,
+    pub withdraw: Vec<(StrategyElementUnchecked, Decimal)>,
     pub deposit: Vec<InternalExecuteMsg>,
 }
 

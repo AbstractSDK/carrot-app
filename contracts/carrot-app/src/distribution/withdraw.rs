@@ -4,10 +4,10 @@ use cosmwasm_std::{Coin, Decimal, Deps};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    yield_sources::{BalanceStrategy, BalanceStrategyElement},
+    yield_sources::{Strategy, StrategyElement},
 };
 
-impl BalanceStrategy {
+impl Strategy {
     pub fn withdraw(
         self,
         deps: Deps,
@@ -21,7 +21,7 @@ impl BalanceStrategy {
     }
 }
 
-impl BalanceStrategyElement {
+impl StrategyElement {
     pub fn withdraw(
         self,
         deps: Deps,

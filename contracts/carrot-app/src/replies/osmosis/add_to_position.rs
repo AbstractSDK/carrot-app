@@ -6,7 +6,7 @@ use crate::{
     contract::{App, AppResult},
     error::AppError,
     handlers::internal::save_strategy,
-    state::{CONFIG, TEMP_CURRENT_YIELD},
+    state::{STRATEGY_CONFIG, TEMP_CURRENT_YIELD},
     yield_sources::yield_type::YieldType,
 };
 
@@ -25,7 +25,7 @@ pub fn add_to_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
 
     // We update the position
     let current_position_index = TEMP_CURRENT_YIELD.load(deps.storage)?;
-    let mut strategy = CONFIG.load(deps.storage)?.balance_strategy;
+    let mut strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     let current_yield = strategy.0.get_mut(current_position_index).unwrap();
 

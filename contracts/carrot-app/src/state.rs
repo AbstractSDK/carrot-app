@@ -4,9 +4,10 @@ use cw_storage_plus::Item;
 
 use crate::autocompound::{AutocompoundConfigBase, AutocompoundState};
 use crate::check::{Checked, Unchecked};
-use crate::yield_sources::BalanceStrategyBase;
+use crate::yield_sources::Strategy;
 
 pub const CONFIG: Item<Config> = Item::new("config");
+pub const STRATEGY_CONFIG: Item<Strategy> = Item::new("strategy_config");
 pub const AUTOCOMPOUND_STATE: Item<AutocompoundState> = Item::new("position");
 pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
 
@@ -21,7 +22,6 @@ pub type ConfigUnchecked = ConfigBase<Unchecked>;
 
 #[cw_serde]
 pub struct ConfigBase<T> {
-    pub balance_strategy: BalanceStrategyBase<T>,
     pub autocompound_config: AutocompoundConfigBase<T>,
     pub dex: String,
 }

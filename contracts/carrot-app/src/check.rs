@@ -82,7 +82,6 @@ mod config {
     impl From<Config> for ConfigUnchecked {
         fn from(value: Config) -> Self {
             Self {
-                balance_strategy: value.balance_strategy.into(),
                 autocompound_config: value.autocompound_config.into(),
                 dex: value.dex,
             }
@@ -98,7 +97,6 @@ mod config {
             app: &crate::contract::App,
         ) -> crate::contract::AppResult<Self::CheckOutput> {
             Ok(Config {
-                balance_strategy: self.balance_strategy.check(deps, app)?,
                 autocompound_config: AutocompoundConfigBase {
                     cooldown_seconds: self.autocompound_config.cooldown_seconds,
                     rewards: self
@@ -130,8 +128,8 @@ mod yield_sources {
                 ConcentratedPoolParams, ConcentratedPoolParamsBase, ConcentratedPoolParamsUnchecked,
             },
             yield_type::{YieldType, YieldTypeBase, YieldTypeUnchecked},
-            BalanceStrategy, BalanceStrategyElement, BalanceStrategyElementUnchecked,
-            BalanceStrategyUnchecked, YieldSource, YieldSourceUnchecked,
+            Strategy, StrategyElement, StrategyElementUnchecked, StrategyUnchecked, YieldSource,
+            YieldSourceUnchecked,
         },
     };
 
@@ -263,37 +261,37 @@ mod yield_sources {
         }
     }
 
-    mod balance_strategy {
+    mod strategy {
         use super::*;
 
-        impl From<BalanceStrategyElement> for BalanceStrategyElementUnchecked {
-            fn from(value: BalanceStrategyElement) -> Self {
+        impl From<StrategyElement> for StrategyElementUnchecked {
+            fn from(value: StrategyElement) -> Self {
                 Self {
                     yield_source: value.yield_source.into(),
                     share: value.share,
                 }
             }
         }
-        impl Checkable for BalanceStrategyElementUnchecked {
-            type CheckOutput = BalanceStrategyElement;
-            fn check(self, deps: Deps, app: &App) -> AppResult<BalanceStrategyElement> {
+        impl Checkable for StrategyElementUnchecked {
+            type CheckOutput = StrategyElement;
+            fn check(self, deps: Deps, app: &App) -> AppResult<StrategyElement> {
                 let yield_source = self.yield_source.check(deps, app)?;
-                Ok(BalanceStrategyElement {
+                Ok(StrategyElement {
                     yield_source,
                     share: self.share,
                 })
             }
         }
 
-        impl From<BalanceStrategy> for BalanceStrategyUnchecked {
-            fn from(value: BalanceStrategy) -> Self {
+        impl From<Strategy> for StrategyUnchecked {
+            fn from(value: Strategy) -> Self {
                 Self(value.0.into_iter().map(Into::into).collect())
             }
         }
 
-        impl Checkable for BalanceStrategyUnchecked {
-            type CheckOutput = BalanceStrategy;
-            fn check(self, deps: Deps, app: &App) -> AppResult<BalanceStrategy> {
+        impl Checkable for StrategyUnchecked {
+            type CheckOutput = Strategy;
+            fn check(self, deps: Deps, app: &App) -> AppResult<Strategy> {
                 // First we check the share sums the 100
                 let share_sum: Decimal = self.0.iter().map(|e| e.share).sum();
                 ensure!(

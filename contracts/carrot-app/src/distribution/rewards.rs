@@ -4,10 +4,10 @@ use cosmwasm_std::{Coin, Deps};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    yield_sources::BalanceStrategy,
+    yield_sources::Strategy,
 };
 
-impl BalanceStrategy {
+impl Strategy {
     pub fn withdraw_rewards(
         self,
         deps: Deps,

@@ -5,10 +5,10 @@ use crate::{
     error::AppError,
     exchange_rate::query_exchange_rate,
     msg::AssetsBalanceResponse,
-    yield_sources::{AssetShare, BalanceStrategy, BalanceStrategyElement, YieldSource},
+    yield_sources::{AssetShare, Strategy, StrategyElement, YieldSource},
 };
 
-impl BalanceStrategy {
+impl Strategy {
     // Returns the total balance
     pub fn current_balance(&self, deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
         let mut funds = Coins::default();
@@ -34,7 +34,7 @@ impl BalanceStrategy {
     }
 
     /// Returns the current status of the full strategy. It returns shares reflecting the underlying positions
-    pub fn query_current_status(&self, deps: Deps, app: &App) -> AppResult<BalanceStrategy> {
+    pub fn query_current_status(&self, deps: Deps, app: &App) -> AppResult<Strategy> {
         let all_strategy_values = self
             .0
             .iter()
@@ -54,15 +54,13 @@ impl BalanceStrategy {
             .0
             .iter()
             .zip(all_strategy_values)
-            .map(
-                |(original_strategy, (value, shares))| BalanceStrategyElement {
-                    yield_source: YieldSource {
-                        asset_distribution: shares,
-                        ty: original_strategy.yield_source.ty.clone(),
-                    },
-                    share: Decimal::from_ratio(value, all_strategies_value),
+            .map(|(original_strategy, (value, shares))| StrategyElement {
+                yield_source: YieldSource {
+                    asset_distribution: shares,
+                    ty: original_strategy.yield_source.ty.clone(),
                 },
-            )
+                share: Decimal::from_ratio(value, all_strategies_value),
+            })
             .collect::<Vec<_>>()
             .into())
     }
@@ -84,7 +82,7 @@ impl BalanceStrategy {
     }
 }
 
-impl BalanceStrategyElement {
+impl StrategyElement {
     /// Queries the current value distribution of a registered strategy
     /// If there is no deposit or the query for the user deposit value fails
     ///     the function returns 0 value with the registered asset distribution

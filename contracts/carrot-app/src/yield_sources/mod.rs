@@ -49,12 +49,12 @@ pub enum ShareType {
 // This represents a balance strategy
 // This object is used for storing the current strategy, retrieving the actual strategy status or expressing a target strategy when depositing
 #[cw_serde]
-pub struct BalanceStrategyBase<T>(pub Vec<BalanceStrategyElementBase<T>>);
+pub struct StrategyBase<T>(pub Vec<StrategyElementBase<T>>);
 
-pub type BalanceStrategyUnchecked = BalanceStrategyBase<Unchecked>;
-pub type BalanceStrategy = BalanceStrategyBase<Checked>;
+pub type StrategyUnchecked = StrategyBase<Unchecked>;
+pub type Strategy = StrategyBase<Checked>;
 
-impl BalanceStrategy {
+impl Strategy {
     pub fn all_denoms(&self) -> Vec<String> {
         self.0
             .clone()
@@ -65,15 +65,15 @@ impl BalanceStrategy {
 }
 
 #[cw_serde]
-pub struct BalanceStrategyElementBase<T> {
+pub struct StrategyElementBase<T> {
     pub yield_source: YieldSourceBase<T>,
     pub share: Decimal,
 }
-impl<T: Clone> From<Vec<BalanceStrategyElementBase<T>>> for BalanceStrategyBase<T> {
-    fn from(value: Vec<BalanceStrategyElementBase<T>>) -> Self {
+impl<T: Clone> From<Vec<StrategyElementBase<T>>> for StrategyBase<T> {
+    fn from(value: Vec<StrategyElementBase<T>>) -> Self {
         Self(value)
     }
 }
 
-pub type BalanceStrategyElementUnchecked = BalanceStrategyElementBase<Unchecked>;
-pub type BalanceStrategyElement = BalanceStrategyElementBase<Checked>;
+pub type StrategyElementUnchecked = StrategyElementBase<Unchecked>;
+pub type StrategyElement = StrategyElementBase<Checked>;

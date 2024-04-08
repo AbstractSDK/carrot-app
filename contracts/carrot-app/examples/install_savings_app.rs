@@ -18,7 +18,7 @@ use carrot_app::{
     contract::OSMOSIS,
     msg::AppInstantiateMsg,
     state::ConfigBase,
-    yield_sources::{BalanceStrategy, BalanceStrategyBase},
+    yield_sources::{Strategy, StrategyBase},
 };
 use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 
@@ -74,9 +74,9 @@ fn main() -> anyhow::Result<()> {
                     _phantom: std::marker::PhantomData,
                 },
             },
-            balance_strategy: BalanceStrategyBase(vec![]),
             dex: OSMOSIS.to_string(),
         },
+        strategy: StrategyBase(vec![]),
         deposit: Some(coins(100, "usdc")),
     };
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;

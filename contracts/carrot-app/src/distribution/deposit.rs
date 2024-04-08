@@ -6,8 +6,8 @@ use crate::{
     contract::{App, AppResult},
     exchange_rate::query_all_exchange_rates,
     helpers::{compute_total_value, compute_value},
-    state::CONFIG,
-    yield_sources::{yield_type::YieldType, AssetShare, BalanceStrategy, BalanceStrategyElement},
+    state::STRATEGY_CONFIG,
+    yield_sources::{yield_type::YieldType, AssetShare, Strategy, StrategyElement},
 };
 
 use cosmwasm_schema::cw_serde;
@@ -19,12 +19,9 @@ pub fn generate_deposit_strategy(
     funds: Vec<Coin>,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
-) -> AppResult<(
-    Vec<(BalanceStrategyElement, Decimal)>,
-    Vec<InternalExecuteMsg>,
-)> {
+) -> AppResult<(Vec<(StrategyElement, Decimal)>, Vec<InternalExecuteMsg>)> {
     // This is the storage strategy for all assets
-    let target_strategy = CONFIG.load(deps.storage)?.balance_strategy;
+    let target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
@@ -50,7 +47,7 @@ pub fn generate_deposit_strategy(
     Ok((withdraw_strategy, deposit_msgs))
 }
 
-impl BalanceStrategy {
+impl Strategy {
     // We determine the best balance strategy depending on the current deposits and the target strategy.
     // This method needs to be called on the stored strategy
     // We error if deposit value is non-zero here
@@ -60,7 +57,7 @@ impl BalanceStrategy {
         funds: &mut Coins,
         current_strategy_status: Self,
         app: &App,
-    ) -> AppResult<(Vec<(BalanceStrategyElement, Decimal)>, Self)> {
+    ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Self)> {
         let total_value = self.current_balance(deps, app)?.total_value;
         let deposit_value = compute_value(deps, &funds.to_vec(), app)?;
 
@@ -79,7 +76,7 @@ impl BalanceStrategy {
         // - Some funds need to be deposited into the strategy
 
         // First we generate the messages for withdrawing strategies that have too much funds
-        let withdraw_strategy: Vec<(BalanceStrategyElement, Decimal)> = current_strategy_status
+        let withdraw_strategy: Vec<(StrategyElement, Decimal)> = current_strategy_status
             .0
             .iter()
             .zip(self.0.clone())
@@ -113,7 +110,7 @@ impl BalanceStrategy {
 
         let available_value = withdraw_value + deposit_value;
 
-        let this_deposit_strategy: BalanceStrategy = current_strategy_status
+        let this_deposit_strategy: Strategy = current_strategy_status
             .0
             .into_iter()
             .zip(self.0.clone())
@@ -133,7 +130,7 @@ impl BalanceStrategy {
                         Decimal::from_ratio(target_value - value_now, available_value)
                     };
 
-                    Some(BalanceStrategyElement {
+                    Some(StrategyElement {
                         yield_source: target.yield_source.clone(),
                         share,
                     })

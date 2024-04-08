@@ -4,7 +4,7 @@ use crate::{
     contract::{App, AppResult},
     distribution::deposit::generate_deposit_strategy,
     msg::{DepositPreviewResponse, UpdateStrategyPreviewResponse, WithdrawPreviewResponse},
-    yield_sources::{AssetShare, BalanceStrategyUnchecked},
+    yield_sources::{AssetShare, StrategyUnchecked},
 };
 
 pub fn deposit_preview(
@@ -35,7 +35,7 @@ pub fn withdraw_preview(
 pub fn update_strategy_preview(
     deps: Deps,
     funds: Vec<Coin>,
-    strategy: BalanceStrategyUnchecked,
+    strategy: StrategyUnchecked,
     app: &App,
 ) -> AppResult<UpdateStrategyPreviewResponse> {
     Ok(UpdateStrategyPreviewResponse {})

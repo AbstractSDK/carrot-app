@@ -5,7 +5,7 @@ use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
         osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldTypeBase, AssetShare,
-        BalanceStrategyBase, BalanceStrategyElementBase, YieldSourceBase,
+        StrategyBase, StrategyElementBase, YieldSourceBase,
     },
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
@@ -21,8 +21,8 @@ fn rebalance_fails() -> anyhow::Result<()> {
     carrot_app
         .update_strategy(
             vec![],
-            BalanceStrategyBase(vec![
-                BalanceStrategyElementBase {
+            StrategyBase(vec![
+                StrategyElementBase {
                     yield_source: YieldSourceBase {
                         asset_distribution: vec![
                             AssetShare {
@@ -44,7 +44,7 @@ fn rebalance_fails() -> anyhow::Result<()> {
                     },
                     share: Decimal::one(),
                 },
-                BalanceStrategyElementBase {
+                StrategyElementBase {
                     yield_source: YieldSourceBase {
                         asset_distribution: vec![
                             AssetShare {
@@ -80,8 +80,8 @@ fn rebalance_success() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
     let mut chain = carrot_app.get_chain().clone();
 
-    let new_strat = BalanceStrategyBase(vec![
-        BalanceStrategyElementBase {
+    let new_strat = StrategyBase(vec![
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -103,7 +103,7 @@ fn rebalance_success() -> anyhow::Result<()> {
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -157,8 +157,8 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
         deposit_coins.clone(),
     )?;
 
-    let new_strat = BalanceStrategyBase(vec![
-        BalanceStrategyElementBase {
+    let new_strat = StrategyBase(vec![
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -180,7 +180,7 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -257,12 +257,12 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
         }),
     };
 
-    let strat = BalanceStrategyBase(vec![
-        BalanceStrategyElementBase {
+    let strat = StrategyBase(vec![
+        StrategyElementBase {
             yield_source: common_yield_source.clone(),
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -288,7 +288,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
 
     carrot_app.update_strategy(deposit_coins.clone(), strat.clone())?;
 
-    let new_strat = BalanceStrategyBase(vec![BalanceStrategyElementBase {
+    let new_strat = StrategyBase(vec![StrategyElementBase {
         yield_source: common_yield_source.clone(),
         share: Decimal::percent(100),
     }]);
@@ -351,8 +351,8 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
         }),
     };
 
-    let strat = BalanceStrategyBase(vec![
-        BalanceStrategyElementBase {
+    let strat = StrategyBase(vec![
+        StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
@@ -374,7 +374,7 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
             },
             share: Decimal::percent(50),
         },
-        BalanceStrategyElementBase {
+        StrategyElementBase {
             yield_source: moving_strategy.clone(),
             share: Decimal::percent(50),
         },

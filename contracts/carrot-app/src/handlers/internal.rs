@@ -1,24 +1,49 @@
 use crate::{
     contract::{App, AppResult},
     distribution::deposit::{DepositStep, OneDepositStrategy},
-    helpers::{add_funds, get_proxy_balance},
+    helpers::get_proxy_balance,
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     replies::REPLY_AFTER_SWAPS_STEP,
     state::{
-        CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN,
+        CONFIG, STRATEGY_CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS,
+        TEMP_EXPECTED_SWAP_COIN,
     },
-    yield_sources::{yield_type::YieldType, BalanceStrategy},
+    yield_sources::{yield_type::YieldType, Strategy},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::features::AbstractNameService;
-use cosmwasm_std::{wasm_execute, Coin, DepsMut, Env, StdError, SubMsg, Uint128};
+use cosmwasm_std::{wasm_execute, Coin, Coins, DepsMut, Env, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use crate::exchange_rate::query_exchange_rate;
 use abstract_app::traits::AccountIdentification;
 
-pub fn deposit_one_strategy(
+pub fn execute_internal_action(
+    deps: DepsMut,
+    env: Env,
+    internal_msg: InternalExecuteMsg,
+    app: App,
+) -> AppResult {
+    match internal_msg {
+        InternalExecuteMsg::DepositOneStrategy {
+            swap_strategy,
+            yield_type,
+            yield_index,
+        } => deposit_one_strategy(deps, env, swap_strategy, yield_index, yield_type, app),
+        InternalExecuteMsg::ExecuteOneDepositSwapStep {
+            asset_in,
+            denom_out,
+            expected_amount,
+        } => execute_one_deposit_step(deps, env, asset_in, denom_out, expected_amount, app),
+        InternalExecuteMsg::FinalizeDeposit {
+            yield_type,
+            yield_index,
+        } => execute_finalize_deposit(deps, yield_type, yield_index, app),
+    }
+}
+
+fn deposit_one_strategy(
     deps: DepsMut,
     env: Env,
     strategy: OneDepositStrategy,
@@ -33,8 +58,7 @@ pub fn deposit_one_strategy(
         deps.querier
             .query_all_balances(app.account_base(deps.as_ref())?.proxy)?
     ));
-
-    TEMP_DEPOSIT_COINS.save(deps.storage, &vec![])?;
+    let mut temp_deposit_coins = Coins::default();
 
     // We go through all deposit steps.
     // If the step is a swap, we execute with a reply to catch the amount change and get the exact deposit amount
@@ -62,13 +86,15 @@ pub fn deposit_one_strategy(
                     .map(|msg| Some(SubMsg::reply_on_success(msg, REPLY_AFTER_SWAPS_STEP))),
 
                     DepositStep::UseFunds { asset } => {
-                        TEMP_DEPOSIT_COINS.update(deps.storage, |funds| add_funds(funds, asset))?;
+                        temp_deposit_coins.add(asset)?;
                         Ok(None)
                     }
                 })
                 .collect::<Result<Vec<Option<SubMsg>>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    TEMP_DEPOSIT_COINS.save(deps.storage, &temp_deposit_coins.into())?;
 
     let msgs = msg.into_iter().flatten().flatten().collect::<Vec<_>>();
 
@@ -143,11 +169,7 @@ pub fn execute_finalize_deposit(
     Ok(app.response("one-deposit-step").add_submessages(msgs))
 }
 
-pub fn save_strategy(deps: DepsMut, strategy: BalanceStrategy) -> AppResult<()> {
-    CONFIG.update(deps.storage, |mut config| {
-        config.balance_strategy = strategy;
-        Ok::<_, StdError>(config)
-    })?;
-
+pub fn save_strategy(deps: DepsMut, strategy: Strategy) -> AppResult<()> {
+    STRATEGY_CONFIG.save(deps.storage, &strategy)?;
     Ok(())
 }

@@ -34,18 +34,16 @@ pub fn add_funds(funds: Vec<Coin>, to_add: Coin) -> StdResult<Vec<Coin>> {
     Ok(funds.into())
 }
 
-pub const CLOSE_PER_MILLE: u64 = 1;
+pub const CLOSE_COEFF: Decimal = Decimal::permille(1);
 
 /// Returns wether actual is close to expected within CLOSE_PER_MILLE per mille
 pub fn close_to(expected: Decimal, actual: Decimal) -> bool {
-    let close_coeff = Decimal::permille(CLOSE_PER_MILLE);
-
     if expected == Decimal::zero() {
-        return actual < close_coeff;
+        return actual < CLOSE_COEFF;
     }
 
-    actual > expected * (Decimal::one() - close_coeff)
-        && actual < expected * (Decimal::one() + close_coeff)
+    actual > expected * (Decimal::one() - CLOSE_COEFF)
+        && actual < expected * (Decimal::one() + CLOSE_COEFF)
 }
 
 pub fn compute_total_value(

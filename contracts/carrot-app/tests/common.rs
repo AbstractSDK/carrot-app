@@ -8,9 +8,7 @@ use carrot_app::msg::AppInstantiateMsg;
 use carrot_app::state::ConfigBase;
 use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParamsBase;
 use carrot_app::yield_sources::yield_type::YieldTypeBase;
-use carrot_app::yield_sources::{
-    AssetShare, BalanceStrategyBase, BalanceStrategyElementBase, YieldSourceBase,
-};
+use carrot_app::yield_sources::{AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase};
 use cosmwasm_std::{coin, coins, Coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::environment::MutCwEnv;
@@ -132,30 +130,30 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
                     _phantom: std::marker::PhantomData,
                 },
             },
-            balance_strategy: BalanceStrategyBase(vec![BalanceStrategyElementBase {
-                yield_source: YieldSourceBase {
-                    asset_distribution: vec![
-                        AssetShare {
-                            denom: USDT.to_string(),
-                            share: Decimal::percent(50),
-                        },
-                        AssetShare {
-                            denom: USDC.to_string(),
-                            share: Decimal::percent(50),
-                        },
-                    ],
-                    ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                        pool_id,
-                        lower_tick: INITIAL_LOWER_TICK,
-                        upper_tick: INITIAL_UPPER_TICK,
-                        position_id: None,
-                        _phantom: std::marker::PhantomData,
-                    }),
-                },
-                share: Decimal::one(),
-            }]),
             dex: OSMOSIS.to_string(),
         },
+        strategy: StrategyBase(vec![StrategyElementBase {
+            yield_source: YieldSourceBase {
+                asset_distribution: vec![
+                    AssetShare {
+                        denom: USDT.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                    AssetShare {
+                        denom: USDC.to_string(),
+                        share: Decimal::percent(50),
+                    },
+                ],
+                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                    pool_id,
+                    lower_tick: INITIAL_LOWER_TICK,
+                    upper_tick: INITIAL_UPPER_TICK,
+                    position_id: None,
+                    _phantom: std::marker::PhantomData,
+                }),
+            },
+            share: Decimal::one(),
+        }]),
         deposit: initial_deposit,
     };
 

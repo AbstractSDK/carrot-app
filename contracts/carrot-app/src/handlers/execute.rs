@@ -1,13 +1,14 @@
 use crate::{
+    autocompound::AutocompoundState,
     check::Checkable,
     contract::{App, AppResult},
     distribution::deposit::generate_deposit_strategy,
     error::AppError,
     handlers::query::query_balance,
     helpers::assert_contract,
-    msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
-    state::{AUTOCOMPOUND_STATE, CONFIG},
-    yield_sources::{AssetShare, BalanceStrategyUnchecked},
+    msg::{AppExecuteMsg, ExecuteMsg},
+    state::{AUTOCOMPOUND_STATE, CONFIG, STRATEGY_CONFIG},
+    yield_sources::{AssetShare, StrategyUnchecked},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_sdk::ExecutorMsg;
@@ -16,8 +17,9 @@ use cosmwasm_std::{
     WasmMsg,
 };
 
-use super::internal::{deposit_one_strategy, execute_finalize_deposit, execute_one_deposit_step};
 use abstract_app::traits::AccountIdentification;
+
+use super::internal::execute_internal_action;
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -38,25 +40,8 @@ pub fn execute_handler(
         }
         // Endpoints called by the contract directly
         AppExecuteMsg::Internal(internal_msg) => {
-            if info.sender != env.contract.address {
-                return Err(AppError::Unauthorized {});
-            }
-            match internal_msg {
-                InternalExecuteMsg::DepositOneStrategy {
-                    swap_strategy,
-                    yield_type,
-                    yield_index,
-                } => deposit_one_strategy(deps, env, swap_strategy, yield_index, yield_type, app),
-                InternalExecuteMsg::ExecuteOneDepositSwapStep {
-                    asset_in,
-                    denom_out,
-                    expected_amount,
-                } => execute_one_deposit_step(deps, env, asset_in, denom_out, expected_amount, app),
-                InternalExecuteMsg::FinalizeDeposit {
-                    yield_type,
-                    yield_index,
-                } => execute_finalize_deposit(deps, yield_type, yield_index, app),
-            }
+            assert_contract(&info, &env)?;
+            execute_internal_action(deps, env, internal_msg, app)
         }
     }
 }
@@ -75,6 +60,14 @@ fn deposit(
         .or(assert_contract(&info, &env))?;
 
     let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
+
+    AUTOCOMPOUND_STATE.save(
+        deps.storage,
+        &AutocompoundState {
+            last_compound: env.block.time,
+        },
+    )?;
+
     Ok(app.response("deposit").add_messages(deposit_msgs))
 }
 
@@ -97,13 +90,12 @@ fn update_strategy(
     deps: DepsMut,
     env: Env,
     _info: MessageInfo,
-    strategy: BalanceStrategyUnchecked,
+    strategy: StrategyUnchecked,
     funds: Vec<Coin>,
     app: App,
 ) -> AppResult {
     // We load it raw because we're changing the strategy
-    let mut config = CONFIG.load(deps.storage)?;
-    let old_strategy = config.balance_strategy;
+    let old_strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     // We check the new strategy
     let strategy = strategy.check(deps.as_ref(), &app)?;
@@ -139,8 +131,7 @@ fn update_strategy(
         .try_for_each(|f| f.into_iter().try_for_each(|f| available_funds.add(f)))?;
 
     // 2. We replace the strategy with the new strategy
-    config.balance_strategy = strategy;
-    CONFIG.save(deps.storage, &config)?;
+    STRATEGY_CONFIG.save(deps.storage, &strategy)?;
 
     // 3. We deposit the funds into the new strategy
     let deposit_msgs = _inner_deposit(deps.as_ref(), &env, available_funds.into(), None, &app)?;
@@ -167,7 +158,7 @@ fn update_strategy(
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
-    let strategy = CONFIG.load(deps.storage)?.balance_strategy;
+    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     // We withdraw all rewards from protocols
     let (all_rewards, collect_rewards_msgs) = strategy.withdraw_rewards(deps.as_ref(), &app)?;
@@ -196,10 +187,12 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
     let executor_reward_messages =
         config.get_executor_reward_messages(deps.as_ref(), &env, info, &app)?;
 
-    AUTOCOMPOUND_STATE.update(deps.storage, |mut state| {
-        state.last_compound = env.block.time;
-        Ok::<_, AppError>(state)
-    })?;
+    AUTOCOMPOUND_STATE.save(
+        deps.storage,
+        &AutocompoundState {
+            last_compound: env.block.time,
+        },
+    )?;
 
     Ok(response.add_messages(executor_reward_messages))
 }
@@ -239,7 +232,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
 //     app: &App,
 // ) -> AppResult<Vec<CosmosMsg>> {
 //     // We query the target strategy depending on the existing deposits
-//     let mut current_strategy_status = CONFIG.load(deps.storage)?.balance_strategy;
+//     let mut current_strategy_status = CONFIG.load(deps.storage)?.strategy;
 //     current_strategy_status.apply_current_strategy_shares(deps, app)?;
 
 //     // We correct it if the user asked to correct the share parameters of each strategy
@@ -290,9 +283,8 @@ fn _inner_withdraw(
 
     // We withdraw the necessary share from all registered investments
     let withdraw_msgs =
-        CONFIG
+        STRATEGY_CONFIG
             .load(deps.storage)?
-            .balance_strategy
             .withdraw(deps.as_ref(), withdraw_share, app)?;
 
     Ok(withdraw_msgs.into_iter().collect())

@@ -1,9 +1,8 @@
 use crate::{
-    autocompound::AutocompoundState,
     check::Checkable,
     contract::{App, AppResult},
     msg::AppInstantiateMsg,
-    state::{AUTOCOMPOUND_STATE, CONFIG},
+    state::CONFIG,
 };
 use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
@@ -21,12 +20,6 @@ pub fn instantiate_handler(
     let config = msg.config.check(deps.as_ref(), &app)?;
 
     CONFIG.save(deps.storage, &config)?;
-    AUTOCOMPOUND_STATE.save(
-        deps.storage,
-        &AutocompoundState {
-            last_compound: env.block.time,
-        },
-    )?;
 
     let mut response = app.response("instantiate_savings_app");
 
