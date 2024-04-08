@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: carrot-bot
-        image: nginx
+        image: 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot
         resources:
           limits:
             memory: "128Mi"
