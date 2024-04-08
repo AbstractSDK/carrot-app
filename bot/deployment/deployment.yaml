@@ -19,8 +19,8 @@ spec:
         - name: MY_SECRET_VAR
           valueFrom:
             secretKeyRef:
-              name: carrot-bot-mnemonic
-              key: mnemonic
+              name: carrot-bot
+              key: bot-mnemonic
         resources:
           limits:
             memory: "128Mi"
