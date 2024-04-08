@@ -20,7 +20,7 @@ spec:
           service:
             name: carrot-bot
             port:
-              number: 8000
+              number: 80
   tls:
   - hosts:
     - carrot-bot.carrot.abstract.money
