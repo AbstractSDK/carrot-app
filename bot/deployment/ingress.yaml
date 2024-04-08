@@ -11,7 +11,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: carrot-bot.abstract.money
+  - host: carrot-bot.carrot.abstract.money
     http:
       paths:
       - path: /
@@ -23,5 +23,5 @@ spec:
               number: 80
   tls:
   - hosts:
-    - carrot-bot.abstract.money
+    - carrot-bot.carrot.abstract.money
     secretName: carrot-bot-cert
