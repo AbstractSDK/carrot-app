@@ -26,9 +26,9 @@ jobs:
 
       - name: Build and tag the image
         run: |
-          docker build -t 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:<GITHUB_SHA>  .
+          docker build -t 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA  .
 
       - name: Push the image to ECR
         run: |
-          docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:<GITHUB_SHA>
+          docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA
 
