@@ -1,7 +1,8 @@
 use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
+use abstract_app::objects::AnsAsset;
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{ensure, Addr, Deps, Env, MessageInfo, Timestamp, Uint128, Uint64};
+use cosmwasm_std::{ensure, Addr, Decimal, Deps, Env, MessageInfo, Timestamp, Uint128, Uint64};
 use cw_storage_plus::Item;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     ConcentratedliquidityQuerier, FullPositionBreakdown,
@@ -12,6 +13,15 @@ use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 pub const CONFIG: Item<Config> = Item::new("config2");
 pub const POSITION: Item<Position> = Item::new("position");
 pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
+
+// Temp state
+pub const TEMP_WITHDRAW_TO_ASSET: Item<WithdrawToAssetPayload> = Item::new("wta");
+
+#[cw_serde]
+pub struct WithdrawToAssetPayload {
+    pub expected_return: AnsAsset,
+    pub max_spread: Decimal,
+}
 
 #[cw_serde]
 pub struct Config {

@@ -1,7 +1,7 @@
 use abstract_app::abstract_sdk::AbstractSdkError;
 use abstract_app::AppError as AbstractAppError;
 use abstract_app::{abstract_core::AbstractError, objects::ans_host::AnsHostError};
-use cosmwasm_std::{Coin, Decimal, StdError};
+use cosmwasm_std::{Coin, ConversionOverflowError, Decimal, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
 use cw_utils::ParseReplyError;
@@ -32,6 +32,9 @@ pub enum AppError {
 
     #[error("{0}")]
     ParseReplyError(#[from] ParseReplyError),
+
+    #[error("{0}")]
+    ConversionOverflowError(#[from] ConversionOverflowError),
 
     #[error(transparent)]
     ProstDecodeError(#[from] prost::DecodeError),
@@ -68,4 +71,7 @@ pub enum AppError {
 
     #[error("Operation exceeds max spread limit, price: {price}")]
     MaxSpreadAssertion { price: Decimal },
+
+    #[error("Not enough liquidity for withdraw to asset")]
+    NotEnoughForWithdrawTo {},
 }

@@ -44,10 +44,12 @@ use prost_types::Any;
 pub const LOTS: u128 = 100_000_000_000_000;
 
 // Asset 0
-pub const USDT: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
+pub const USDT: &str = "USDT";
+pub const USDT_DENOM: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
 
 // Asset 1
-pub const USDC: &str = "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
+pub const USDC: &str = "USDC";
+pub const USDC_DENOM: &str = "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
 
 pub const REWARD_DENOM: &str = "reward";
 pub const REWARD_ASSET: &str = "rew";
@@ -66,14 +68,14 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     gas_pool_id: u64,
     create_position: Option<CreatePositionMessage>,
 ) -> anyhow::Result<Application<Chain, carrot_app::AppInterface<Chain>>> {
-    let asset0 = USDT.to_owned();
-    let asset1 = USDC.to_owned();
+    let asset0 = USDT_DENOM.to_owned();
+    let asset1 = USDC_DENOM.to_owned();
     // We register the pool inside the Abstract ANS
     let client = AbstractClient::builder(chain.clone())
         .dex(DEX_NAME)
         .assets(vec![
-            (USDC.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
-            (USDT.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
+            (USDT.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
+            (USDC.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
             (
                 REWARD_ASSET.to_string(),
                 AssetInfoUnchecked::Native(REWARD_DENOM.to_owned()),
@@ -224,11 +226,11 @@ pub fn create_position<Chain: CwEnv>(
 }
 
 pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
-    chain.add_balance(chain.sender(), coins(LOTS, USDC))?;
-    chain.add_balance(chain.sender(), coins(LOTS, USDT))?;
+    chain.add_balance(chain.sender(), coins(LOTS, USDC_DENOM))?;
+    chain.add_balance(chain.sender(), coins(LOTS, USDT_DENOM))?;
 
-    let asset0 = USDT.to_owned();
-    let asset1 = USDC.to_owned();
+    let asset0 = USDT_DENOM.to_owned();
+    let asset1 = USDC_DENOM.to_owned();
     // Message for an actual chain (creating concentrated pool)
     // let create_pool_response = chain.commit_any::<MsgCreateConcentratedPoolResponse>(
     //     vec![Any {
@@ -252,8 +254,8 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 description: "Create concentrated uosmo:usdc pool, so that we can trade it"
                     .to_string(),
                 pool_records: vec![PoolRecord {
-                    denom0: USDT.to_owned(),
-                    denom1: USDC.to_owned(),
+                    denom0: USDT_DENOM.to_owned(),
+                    denom1: USDC_DENOM.to_owned(),
                     tick_spacing: TICK_SPACING,
                     spread_factor: Decimal::percent(SPREAD_FACTOR).atomics().to_string(),
                 }],
@@ -327,9 +329,9 @@ pub fn setup_test_tube(
         CreatePositionMessage {
         lower_tick: INITIAL_LOWER_TICK,
         upper_tick: INITIAL_UPPER_TICK,
-        funds: coins(100_000, USDT),
-        asset0: coin(1_000_000, USDT),
-        asset1: coin(1_000_000, USDC),
+        funds: coins(100_000, USDT_DENOM),
+        asset0: coin(1_000_000, USDT_DENOM),
+        asset1: coin(1_000_000, USDC_DENOM),
             max_spread: None,
             belief_price0: None,
             belief_price1: None,
@@ -367,11 +369,11 @@ pub fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
 
     let dex_spend_limit = vec![
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: USDC.to_owned(),
+            denom: USDC_DENOM.to_owned(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: USDT.to_owned(),
+            denom: USDT_DENOM.to_owned(),
             amount: LOTS.to_string(),
         },
         cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {

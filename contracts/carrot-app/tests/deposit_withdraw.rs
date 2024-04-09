@@ -1,12 +1,13 @@
 mod common;
 
-use crate::common::{create_position, setup_test_tube, USDC, USDT};
+use crate::common::{create_position, setup_test_tube, USDC, USDC_DENOM, USDT, USDT_DENOM};
+use abstract_app::objects::AssetEntry;
 use abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, PositionResponse,
 };
 use common::DEX_NAME;
-use cosmwasm_std::{coin, coins, Decimal, Uint128};
+use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint256};
 use cw_orch::{
     anyhow,
     osmosis_test_tube::osmosis_test_tube::{
@@ -26,9 +27,9 @@ fn deposit_lands() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(deposit_amount, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(deposit_amount, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
     // Check almost everything landed
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
@@ -79,9 +80,9 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
@@ -97,8 +98,8 @@ fn withdraw_position() -> anyhow::Result<()> {
         .unwrap();
 
     // Withdraw half of liquidity
-    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
-    let half_of_liquidity = liquidity_amount / Uint128::new(2);
+    let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint256::from_u128(2);
     carrot_app.withdraw(half_of_liquidity)?;
 
     let balance_usdc_after_half_withdraw = chain
@@ -140,9 +141,9 @@ fn deposit_both_assets() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     carrot_app.deposit(
@@ -179,7 +180,6 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
         .position
         .unwrap();
     let position = position_breakdown.position.unwrap();
-
     cl.withdraw_position(
         MsgWithdrawPosition {
             position_id: position.position_id,
@@ -218,9 +218,9 @@ fn deposit_slippage() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(deposit_amount, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(deposit_amount, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Do the deposit of asset0 with incorrect belief_price1
@@ -275,13 +275,12 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     let chain = carrot_app.get_chain().clone();
-
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Do some swaps
@@ -307,8 +306,8 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
 
     // Withdraw half of liquidity
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
-    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
-    let half_of_liquidity = liquidity_amount / Uint128::new(2);
+    let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint256::from_u128(2);
     carrot_app.withdraw(half_of_liquidity)?;
 
     // Check rewards claimed
@@ -327,9 +326,9 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Do some swaps
@@ -377,5 +376,73 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
     let status = carrot_app.compound_status()?;
     assert!(!status.spread_rewards.is_empty());
 
+    Ok(())
+}
+
+#[test]
+fn withdraw_to_asset() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    let chain = carrot_app.get_chain().clone();
+
+    // Create position
+    create_position(
+        &carrot_app,
+        coins(100_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
+    )?;
+    let withdraw_amount = 10_000u128;
+    let max_fee = Uint128::new(withdraw_amount).mul_floor(Decimal::percent(3));
+
+    // Withdraw to asset1
+    {
+        let asset0_balance_before = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?;
+        let asset1_balance_before = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
+
+        carrot_app.withdraw_to_asset(Uint128::new(withdraw_amount), AssetEntry::new(USDC), None)?;
+
+        let asset0_balance_after = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?;
+        let asset1_balance_after = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
+
+        assert_eq!(asset0_balance_before, asset0_balance_after);
+        assert!(
+            asset1_balance_after[0].amount - asset1_balance_before[0].amount
+                >= Uint128::new(10_000) - max_fee
+        );
+    }
+
+    // Withdraw to asset0
+    {
+        let asset0_balance_before = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?;
+        let asset1_balance_before = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
+
+        carrot_app.withdraw_to_asset(Uint128::new(withdraw_amount), AssetEntry::new(USDT), None)?;
+
+        let asset0_balance_after = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?;
+        let asset1_balance_after = chain
+            .bank_querier()
+            .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
+
+        assert_eq!(asset1_balance_before, asset1_balance_after);
+        assert!(
+            asset0_balance_after[0].amount - asset0_balance_before[0].amount
+                >= Uint128::new(10_000) - max_fee
+        );
+    }
     Ok(())
 }

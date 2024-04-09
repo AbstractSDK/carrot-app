@@ -7,7 +7,8 @@ use crate::{
     handlers,
     msg::{AppExecuteMsg, AppInstantiateMsg, AppMigrateMsg, AppQueryMsg},
     replies::{
-        add_to_position_reply, create_position_reply, ADD_TO_POSITION_ID, CREATE_POSITION_ID,
+        add_to_position_reply, create_position_reply, withdraw_to_asset_reply, ADD_TO_POSITION_ID,
+        CREATE_POSITION_ID, WITHDRAW_TO_ASSET_ID,
     },
 };
 
@@ -37,6 +38,7 @@ const APP: App = App::new(APP_ID, APP_VERSION, None)
     .with_replies(&[
         (CREATE_POSITION_ID, create_position_reply),
         (ADD_TO_POSITION_ID, add_to_position_reply),
+        (WITHDRAW_TO_ASSET_ID, withdraw_to_asset_reply),
     ])
     .with_dependencies(&[DEX_DEPENDENCY]);
 

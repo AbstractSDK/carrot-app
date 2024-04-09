@@ -2,21 +2,23 @@ use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
+    handlers::swap_helpers::DEFAULT_SLIPPAGE,
     helpers::{get_balance, get_user},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
-    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
+    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID, WITHDRAW_TO_ASSET_ID},
     state::{
         assert_contract, get_osmosis_position, get_position, get_position_status,
-        AutocompoundRewardsConfig, Config, CONFIG, POSITION,
+        AutocompoundRewardsConfig, Config, WithdrawToAssetPayload, CONFIG, POSITION,
+        TEMP_WITHDRAW_TO_ASSET,
     },
 };
-use abstract_app::abstract_sdk::AuthZInterface;
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
+use abstract_app::{abstract_sdk::AuthZInterface, objects::AssetEntry};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg, Uint128,
-    Uint64, WasmMsg,
+    ensure, to_json_binary, Coin, CosmosMsg, Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo,
+    SubMsg, Uint128, Uint256, Uint64, WasmMsg,
 };
 use cw_asset::Asset;
 use osmosis_std::{
@@ -65,6 +67,11 @@ pub fn execute_handler(
         ),
         AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
         AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
+        AppExecuteMsg::WithdrawToAsset {
+            amount,
+            to_asset,
+            max_spread,
+        } => withdraw_to_asset(deps, env, info, amount, to_asset, max_spread, app),
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
     }
 }
@@ -204,7 +211,7 @@ fn withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: Option<Uint128>,
+    amount: Option<Uint256>,
     app: App,
 ) -> AppResult {
     // Only the authorized addresses (admin ?) can withdraw
@@ -253,8 +260,110 @@ fn withdraw(
     Ok(app_response)
 }
 
-/// Auto-compound the position with earned fees and incentives.
+fn withdraw_to_asset(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    amount: Uint128,
+    to_asset: AssetEntry,
+    max_spread: Option<Decimal>,
+    app: App,
+) -> Result<cosmwasm_std::Response, AppError> {
+    // Only the authorized addresses (admin ?) can withdraw
+    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
+    let position = get_position(deps.as_ref())?;
+    let osmosis_position = get_osmosis_position(deps.as_ref(), position.position_id)?;
+    let position_details = osmosis_position.position.clone().unwrap();
+    let dex = app.ans_dex(deps.as_ref(), OSMOSIS.to_owned());
+    let config = CONFIG.load(deps.storage)?;
+    let amount0: Uint128 = osmosis_position.asset0.clone().unwrap().amount.parse()?;
+    let amount1: Uint128 = osmosis_position.asset1.clone().unwrap().amount.parse()?;
+
+    // We start by checking how much of asset0 we need for that amount
+    let amount0_required = if config.pool_config.asset0 == to_asset {
+        amount
+    } else {
+        let sim_swap = dex.simulate_swap(
+            AnsAsset {
+                name: to_asset.clone(),
+                amount,
+            },
+            config.pool_config.asset0.clone(),
+        )?;
+        sim_swap.return_amount + sim_swap.spread_amount + sim_swap.usage_fee
+    };
+    // Simulating swap all of asset1 to asset0 for easier calculation
+    let simulate_swap_response = dex.simulate_swap(
+        AnsAsset {
+            name: config.pool_config.asset1,
+            amount: amount1,
+        },
+        config.pool_config.asset0,
+    )?;
+    // Add amounts and check if we have enough
+    let total_amount0 = amount0 + simulate_swap_response.return_amount;
+    ensure!(
+        total_amount0 >= amount0_required,
+        AppError::NotEnoughForWithdrawTo {}
+    );
+    // Find out ratio of `total_amount` to required amount to figure out how much % liquidity we need to withdraw
+    let ratio = Decimal256::from_ratio(amount0_required, total_amount0);
+    let liquidity: Decimal256 = position_details.liquidity.parse()?;
+    let liquidity_withdraw = (liquidity * ratio).ceil().atomics();
+
+    // Get app's user and set up authz.
+    let user = get_user(deps.as_ref(), &app)?;
+    let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
+    // Collect all rewards/incentives if they exist
+    let (collect_rewards_msgs, rewards) = _inner_claim_rewards(
+        &env,
+        osmosis_position.clone(),
+        position_details.clone(),
+        user.clone(),
+        authz.clone(),
+    )?;
+
+    // Withdraw funds
+    let (withdraw_msg, withdraw_amount, total_amount, _withdrawn_funds) = _inner_withdraw(
+        &env,
+        Some(liquidity_withdraw),
+        osmosis_position,
+        position_details,
+        user,
+        authz,
+    )?;
+
+    let partial_withdraw = withdraw_amount != total_amount;
+
+    let mut app_response = app
+        .response("withdraw_to_asset")
+        .add_attribute("withdraw_amount", withdraw_amount)
+        .add_attribute("total_amount", total_amount)
+        .add_attribute("amount0_required", amount0_required)
+        .add_submessage(SubMsg::reply_on_success(withdraw_msg, WITHDRAW_TO_ASSET_ID));
+
+    // Add the collect_rewards_msgs only if there are rewards AND if we are doing a partial withdraw
+    // Context: While partial position withdraws on osmosis keep the rewards unclaimed, full withdraws automatically withdraw rewards
+    if !rewards.is_empty() && partial_withdraw {
+        app_response = app_response.add_messages(collect_rewards_msgs);
+    }
+
+    TEMP_WITHDRAW_TO_ASSET.save(
+        deps.storage,
+        &WithdrawToAssetPayload {
+            expected_return: AnsAsset {
+                name: to_asset,
+                amount,
+            },
+            max_spread: max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+        },
+    )?;
+
+    Ok(app_response)
+}
+
+/// Auto-compound the position with earned fees and incentives.
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
     let config = CONFIG.load(deps.storage)?;
@@ -398,19 +507,19 @@ fn _inner_claim_rewards(
 
 fn _inner_withdraw(
     env: &Env,
-    amount: Option<Uint128>,
+    amount: Option<Uint256>,
     osmosis_position: FullPositionBreakdown,
     position_details: Position,
     user: cosmwasm_std::Addr,
     authz: abstract_sdk::AuthZ,
-) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
-    let total_liquidity = position_details.liquidity.replace('.', "");
+) -> AppResult<(CosmosMsg, Uint256, Uint256, [Coin; 2])> {
+    // TODO: it's decimals inside contracts
+    let total_liquidity: Uint256 = position_details.liquidity.replace('.', "").parse()?;
 
     let liquidity_amount = if let Some(amount) = amount {
-        amount.to_string()
+        amount
     } else {
-        // TODO: it's decimals inside contracts
-        total_liquidity.clone()
+        total_liquidity
     };
 
     // We need to execute withdraw on the user's behalf
@@ -419,35 +528,27 @@ fn _inner_withdraw(
         MsgWithdrawPosition {
             position_id: position_details.position_id,
             sender: user.to_string(),
-            liquidity_amount: liquidity_amount.clone(),
+            liquidity_amount: liquidity_amount.to_string(),
         },
     );
 
-    let withdrawn_funds = vec![
-        try_proto_to_cosmwasm_coins(osmosis_position.asset0)?
-            .first()
-            .map(|c| {
-                Ok::<_, AppError>(Coin {
-                    denom: c.denom.clone(),
-                    amount: c.amount * Uint128::from_str(&liquidity_amount)?
-                        / Uint128::from_str(&total_liquidity)?,
-                })
-            })
-            .transpose()?,
-        try_proto_to_cosmwasm_coins(osmosis_position.asset1)?
-            .first()
-            .map(|c| {
-                Ok::<_, AppError>(Coin {
-                    denom: c.denom.clone(),
-                    amount: c.amount * Uint128::from_str(&liquidity_amount)?
-                        / Uint128::from_str(&total_liquidity)?,
-                })
-            })
-            .transpose()?,
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    let asset0_osmosis = osmosis_position.asset0.unwrap();
+    let asset1_osmosis = osmosis_position.asset1.unwrap();
+
+    let withdrawn_funds = [
+        Coin {
+            denom: asset0_osmosis.denom,
+            amount: Uint128::try_from(
+                Uint256::from_str(&asset0_osmosis.amount)? * liquidity_amount / total_liquidity,
+            )?,
+        },
+        Coin {
+            denom: asset1_osmosis.denom,
+            amount: Uint128::try_from(
+                Uint256::from_str(&asset1_osmosis.amount)? * liquidity_amount / total_liquidity,
+            )?,
+        },
+    ];
 
     Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
 }
