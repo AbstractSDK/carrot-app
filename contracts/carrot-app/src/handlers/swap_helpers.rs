@@ -20,12 +20,11 @@ pub struct AssetsForPosition {
     pub asset1: Coin,
 }
 
-impl Into<Vec<osmosis_std::types::cosmos::base::v1beta1::Coin>> for AssetsForPosition {
-    fn into(self) -> Vec<osmosis_std::types::cosmos::base::v1beta1::Coin> {
-        // Need to have it sorted
-        let coins = match self.asset0.denom.cmp(&self.asset1.denom) {
-            std::cmp::Ordering::Less => [self.asset0, self.asset1],
-            _ => [self.asset1, self.asset0],
+impl From<AssetsForPosition> for Vec<osmosis_std::types::cosmos::base::v1beta1::Coin> {
+    fn from(value: AssetsForPosition) -> Self {
+        let coins = match value.asset0.denom.cmp(&value.asset1.denom) {
+            std::cmp::Ordering::Less => [value.asset0, value.asset1],
+            _ => [value.asset1, value.asset0],
         };
         cosmwasm_to_proto_coins(coins)
     }
