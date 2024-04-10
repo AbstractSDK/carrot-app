@@ -41,7 +41,7 @@ fn deposit_lands() -> anyhow::Result<()> {
 
     // Do the deposit
     carrot_app.deposit(
-        vec![coin(deposit_amount, USDT.to_owned())],
+        vec![coin(deposit_amount, USDT_DENOM.to_owned())],
         None,
         None,
         None,
@@ -56,7 +56,7 @@ fn deposit_lands() -> anyhow::Result<()> {
 
     // Do the second deposit
     carrot_app.deposit(
-        vec![coin(deposit_amount, USDT.to_owned())],
+        vec![coin(deposit_amount, USDT_DENOM.to_owned())],
         None,
         None,
         None,
@@ -88,12 +88,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -104,12 +104,12 @@ fn withdraw_position() -> anyhow::Result<()> {
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -120,12 +120,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     carrot_app.withdraw_all()?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_full_withdraw = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -147,7 +147,10 @@ fn deposit_both_assets() -> anyhow::Result<()> {
     )?;
 
     carrot_app.deposit(
-        vec![coin(258, USDT.to_owned()), coin(234, USDC.to_owned())],
+        vec![
+            coin(258, USDT_DENOM.to_owned()),
+            coin(234, USDC_DENOM.to_owned()),
+        ],
         None,
         None,
         None,
@@ -226,7 +229,7 @@ fn deposit_slippage() -> anyhow::Result<()> {
     // Do the deposit of asset0 with incorrect belief_price1
     let e = carrot_app
         .deposit(
-            vec![coin(deposit_amount, USDT.to_owned())],
+            vec![coin(deposit_amount, USDT_DENOM.to_owned())],
             None,
             Some(Decimal::zero()),
             None,
@@ -237,7 +240,7 @@ fn deposit_slippage() -> anyhow::Result<()> {
     // Do the deposit of asset1 with incorrect belief_price0
     let e = carrot_app
         .deposit(
-            vec![coin(deposit_amount, USDC.to_owned())],
+            vec![coin(deposit_amount, USDC_DENOM.to_owned())],
             Some(Decimal::zero()),
             None,
             None,
@@ -247,14 +250,14 @@ fn deposit_slippage() -> anyhow::Result<()> {
 
     // Do the deposits of asset0 with correct belief_price
     carrot_app.deposit(
-        vec![coin(deposit_amount, USDT.to_owned())],
+        vec![coin(deposit_amount, USDT_DENOM.to_owned())],
         None,
         Some(Decimal::one()),
         Some(Decimal::percent(10)),
     )?;
     // Do the deposits of asset1 with correct belief_price
     carrot_app.deposit(
-        vec![coin(deposit_amount, USDT.to_owned())],
+        vec![coin(deposit_amount, USDT_DENOM.to_owned())],
         Some(Decimal::one()),
         None,
         Some(Decimal::percent(10)),
@@ -291,8 +294,8 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, USDC.to_owned()),
-            coin(200_000, USDT.to_owned()),
+            coin(200_000, USDC_DENOM.to_owned()),
+            coin(200_000, USDT_DENOM.to_owned()),
         ],
     )?;
     for _ in 0..10 {
@@ -339,8 +342,8 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, USDC.to_owned()),
-            coin(200_000, USDT.to_owned()),
+            coin(200_000, USDC_DENOM.to_owned()),
+            coin(200_000, USDT_DENOM.to_owned()),
         ],
     )?;
     for _ in 0..10 {

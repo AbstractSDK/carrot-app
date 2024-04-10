@@ -279,7 +279,7 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 upper_tick: INITIAL_UPPER_TICK,
                 tokens_provided: vec![
                     v1beta1::Coin {
-                        denom: asset1,
+                        denom: asset1.clone(),
                         amount: "10_000_000".to_owned(),
                     },
                     v1beta1::Coin {
@@ -296,14 +296,14 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
 
     let gamm = Gamm::new(&*test_tube);
     let rewards_pool_provider = test_tube.init_account(&[
-        Coin::new(1_000_000_000, asset0.clone()),
+        Coin::new(1_000_000_000, asset1.clone()),
         Coin::new(2_000_000_000, REWARD_DENOM),
         Coin::new(LOTS, GAS_DENOM),
     ])?;
 
     let gas_pool_response = gamm.create_basic_pool(
         &[
-            Coin::new(1_000_000_000, asset0),
+            Coin::new(1_000_000_000, asset1),
             Coin::new(2_000_000_000, REWARD_DENOM),
         ],
         &rewards_pool_provider,

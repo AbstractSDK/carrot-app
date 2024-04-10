@@ -2,7 +2,6 @@ use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
-    handlers::swap_helpers::DEFAULT_SLIPPAGE,
     helpers::{get_balance, get_user},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID, WITHDRAW_TO_ASSET_ID},
@@ -356,7 +355,7 @@ fn withdraw_to_asset(
                 name: to_asset,
                 amount,
             },
-            max_spread: max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+            max_spread,
         },
     )?;
 
@@ -513,13 +512,13 @@ fn _inner_withdraw(
     user: cosmwasm_std::Addr,
     authz: abstract_sdk::AuthZ,
 ) -> AppResult<(CosmosMsg, Uint256, Uint256, [Coin; 2])> {
-    // TODO: it's decimals inside contracts
-    let total_liquidity: Uint256 = position_details.liquidity.replace('.', "").parse()?;
+    let total_liquidity: Decimal256 = position_details.liquidity.parse()?;
+    let total_liquidity_atomics: Uint256 = total_liquidity.atomics();
 
     let liquidity_amount = if let Some(amount) = amount {
         amount
     } else {
-        total_liquidity
+        total_liquidity_atomics
     };
 
     // We need to execute withdraw on the user's behalf
@@ -539,18 +538,25 @@ fn _inner_withdraw(
         Coin {
             denom: asset0_osmosis.denom,
             amount: Uint128::try_from(
-                Uint256::from_str(&asset0_osmosis.amount)? * liquidity_amount / total_liquidity,
+                Uint256::from_str(&asset0_osmosis.amount)? * liquidity_amount
+                    / total_liquidity_atomics,
             )?,
         },
         Coin {
             denom: asset1_osmosis.denom,
             amount: Uint128::try_from(
-                Uint256::from_str(&asset1_osmosis.amount)? * liquidity_amount / total_liquidity,
+                Uint256::from_str(&asset1_osmosis.amount)? * liquidity_amount
+                    / total_liquidity_atomics,
             )?,
         },
     ];
 
-    Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
+    Ok((
+        msg,
+        liquidity_amount,
+        total_liquidity_atomics,
+        withdrawn_funds,
+    ))
 }
 
 /// This function creates a position for the user,
@@ -669,6 +675,7 @@ pub fn autocompound_executor_rewards(
             env,
             AnsAsset::new(rewards_config.swap_asset, swap_amount),
             rewards_config.gas_asset,
+            None,
             app,
         )?;
         rewards_messages.extend(msgs);

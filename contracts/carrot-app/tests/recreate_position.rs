@@ -2,7 +2,7 @@ mod common;
 
 use crate::common::{
     create_position, give_authorizations, setup_test_tube, INITIAL_LOWER_TICK, INITIAL_UPPER_TICK,
-    USDC, USDC_DENOM, USDT, USDT_DENOM,
+    USDC, USDC_DENOM, USDT_DENOM,
 };
 use abstract_app::objects::{AccountId, AssetEntry};
 use abstract_client::{AbstractClient, Environment};
@@ -237,9 +237,9 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
         create_position: Some(CreatePositionMessage {
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
-            funds: coins(100_000, USDC),
-            asset0: coin(1_000_672_899, USDT),
-            asset1: coin(10_000_000_000, USDC),
+            funds: coins(100_000, USDC_DENOM),
+            asset0: coin(1_000_672_899, USDT_DENOM),
+            asset1: coin(10_000_000_000, USDC_DENOM),
             max_spread: None,
             belief_price0: None,
             belief_price1: None,

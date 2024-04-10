@@ -20,7 +20,7 @@ pub const TEMP_WITHDRAW_TO_ASSET: Item<WithdrawToAssetPayload> = Item::new("wta"
 #[cw_serde]
 pub struct WithdrawToAssetPayload {
     pub expected_return: AnsAsset,
-    pub max_spread: Decimal,
+    pub max_spread: Option<Decimal>,
 }
 
 #[cw_serde]

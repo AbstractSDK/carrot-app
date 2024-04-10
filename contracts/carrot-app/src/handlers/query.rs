@@ -10,7 +10,7 @@ use osmosis_std::try_proto_to_cosmwasm_coins;
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
-    handlers::swap_helpers::DEFAULT_SLIPPAGE,
+    handlers::swap_helpers::DEFAULT_MAX_SPREAD,
     helpers::{get_balance, get_user},
     msg::{AppQueryMsg, AssetsBalanceResponse, CompoundStatusResponse, PositionResponse},
     state::{get_osmosis_position, get_position_status, Config, CONFIG, POSITION},
@@ -159,7 +159,7 @@ pub fn query_price(
         let price = Decimal::from_ratio(amount0, simulation_result.return_amount);
         if let Some(belief_price) = belief_price1 {
             ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_MAX_SPREAD),
                 AppError::MaxSpreadAssertion { price }
             );
         }
@@ -173,7 +173,7 @@ pub fn query_price(
         let price = Decimal::from_ratio(simulation_result.return_amount, amount1);
         if let Some(belief_price) = belief_price0 {
             ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
+                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_MAX_SPREAD),
                 AppError::MaxSpreadAssertion { price }
             );
         }

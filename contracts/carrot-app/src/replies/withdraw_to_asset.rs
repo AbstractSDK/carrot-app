@@ -35,6 +35,7 @@ pub fn withdraw_to_asset_reply(deps: DepsMut, env: Env, app: App, reply: Reply) 
                 amount: response.amount0.parse()?,
             },
             payload.expected_return.name.clone(),
+            payload.max_spread,
             &app,
         )?);
     }
@@ -47,6 +48,7 @@ pub fn withdraw_to_asset_reply(deps: DepsMut, env: Env, app: App, reply: Reply) 
                 amount: response.amount1.parse()?,
             },
             payload.expected_return.name,
+            payload.max_spread,
             &app,
         )?);
     }

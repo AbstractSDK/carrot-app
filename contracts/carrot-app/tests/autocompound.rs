@@ -2,8 +2,8 @@ mod common;
 
 use crate::common::incentives::Incentives;
 use crate::common::{
-    create_position, setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC_DENOM,
-    USDT_DENOM,
+    create_position, setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC, USDC_DENOM,
+    USDT, USDT_DENOM,
 };
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
@@ -75,18 +75,8 @@ fn check_autocompound() -> anyhow::Result<()> {
         ],
     )?;
     for _ in 0..10 {
-        dex.ans_swap(
-            (USDC_DENOM, 50_000),
-            USDT_DENOM,
-            DEX_NAME.to_string(),
-            &account,
-        )?;
-        dex.ans_swap(
-            (USDT_DENOM, 50_000),
-            USDC_DENOM,
-            DEX_NAME.to_string(),
-            &account,
-        )?;
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
     }
 
     // Check autocompound adds liquidity from the rewards and user balance remain unchanged
@@ -111,11 +101,11 @@ fn check_autocompound() -> anyhow::Result<()> {
         .unwrap();
 
     // Autocompound
-    chain.wait_seconds(300)?;
-    carrot_app.autocompound()?;
+    chain.wait_seconds(300).unwrap();
+    carrot_app.autocompound().unwrap();
 
     // Save new balances
-    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance().unwrap();
     let balance_usdc_after_autocompound = chain
         .bank_querier()
         .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
@@ -197,18 +187,8 @@ fn stranger_autocompound() -> anyhow::Result<()> {
         ],
     )?;
     for _ in 0..10 {
-        dex.ans_swap(
-            (USDC_DENOM, 50_000),
-            USDT_DENOM,
-            DEX_NAME.to_string(),
-            &account,
-        )?;
-        dex.ans_swap(
-            (USDT_DENOM, 50_000),
-            USDC_DENOM,
-            DEX_NAME.to_string(),
-            &account,
-        )?;
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
     }
 
     // Check autocompound adds liquidity from the rewards, user balance remain unchanged
