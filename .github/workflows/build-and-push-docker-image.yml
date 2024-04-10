@@ -1,10 +1,8 @@
-name: Build and Push Docker Image
+name: Build and Push Docker Image with Tags
 
 on:
-  pull_request:
-permissions:
-      id-token: write   # This is required for requesting the JWT
-      contents: read    # This is required for actions/checkout
+  push:  # Trigger on push events (including tags)
+
 jobs:
 
   build-and-push:
@@ -12,6 +10,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@v1.7.0
         with:
@@ -23,11 +22,33 @@ jobs:
         run: |
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 537748208826.dkr.ecr.us-east-1.amazonaws.com
 
-      - name: Build and tag the image
+      - name: Build base image
+        run: |
+          docker build -t base-image .  # Replace with your base image build command (if applicable)
+
+      - name: Build and tag the image (default for non-tags)
         run: |
           docker build -t 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA  .
 
-      - name: Push the image to ECR
+      - name: Build and tag with 'latest' for main branch
+        if: github.ref == 'refs/heads/main'  # Checks if the push is to the main branch
         run: |
-          docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA
+          docker tag 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:latest
 
+      - name: Build and tag with git tag version
+        if: startsWith(github.ref, 'refs/tags/')  # Checks if the push is a git tag
+        run: |
+          # Extract the tag name from the ref
+          tag_name=${GITHUB_REF##refs/tags/}
+          docker tag 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$tag_name
+
+      - name: Push the image(s) to ECR
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:latest
+          fi
+          docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA
+          if [[ startsWith ${{ github.ref }} == 'refs/tags/' ]]; then
+            tag_name=${GITHUB_REF##refs/tags/}
+            docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$tag_name
+          fi
