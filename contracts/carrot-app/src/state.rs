@@ -116,7 +116,7 @@ pub fn get_position_status(
             } else {
                 (
                     CompoundStatus::Cooldown(
-                        (env.block.time.seconds() - ready_on.seconds()).into(),
+                        (ready_on.seconds() - env.block.time.seconds()).into(),
                     ),
                     Some(position_response),
                 )
