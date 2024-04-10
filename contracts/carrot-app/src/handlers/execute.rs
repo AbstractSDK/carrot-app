@@ -2,7 +2,7 @@ use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
-    helpers::{get_balance, get_user},
+    helpers::{cosmwasm_to_proto_coins_sorted, get_balance, get_user},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
@@ -20,7 +20,7 @@ use cosmwasm_std::{
 };
 use cw_asset::Asset;
 use osmosis_std::{
-    cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
+    try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
         FullPositionBreakdown, MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards,
         MsgCreatePosition, MsgWithdrawPosition, Position,
@@ -501,7 +501,7 @@ pub(crate) fn _create_position(
     let sender = get_user(deps, app)?;
 
     // 2. Create a position
-    let tokens = cosmwasm_to_proto_coins(resulting_assets);
+    let tokens_provided = cosmwasm_to_proto_coins_sorted(resulting_assets);
     let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
@@ -509,7 +509,7 @@ pub(crate) fn _create_position(
             sender: sender.to_string(),
             lower_tick,
             upper_tick,
-            tokens_provided: tokens,
+            tokens_provided,
             token_min_amount0: "0".to_string(),
             token_min_amount1: "0".to_string(),
         },
