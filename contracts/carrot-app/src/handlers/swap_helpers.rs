@@ -148,7 +148,6 @@ pub(crate) fn tokens_to_swap(
         )
     };
 
-    // TODO, compute the resulting balance to be able to deposit back into the pool
     Ok((offer_asset, ask_asset, assets_for_position))
 }
 
