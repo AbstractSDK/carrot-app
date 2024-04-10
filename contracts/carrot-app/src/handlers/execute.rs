@@ -2,7 +2,7 @@ use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
-    helpers::{cosmwasm_to_proto_coins_sorted, get_balance, get_user},
+    helpers::{get_balance, get_user},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
@@ -168,7 +168,7 @@ fn deposit(
     // When depositing, we start by adapting the available funds to the expected pool funds ratio
     // We do so by computing the swap information
 
-    let (swap_msgs, resulting_assets) = swap_to_enter_position(
+    let (swap_msgs, assets_for_position) = swap_to_enter_position(
         deps.as_ref(),
         &env,
         funds,
@@ -187,8 +187,8 @@ fn deposit(
         MsgAddToPosition {
             position_id: position.position_id,
             sender: user.to_string(),
-            amount0: resulting_assets[0].amount.to_string(),
-            amount1: resulting_assets[1].amount.to_string(),
+            amount0: assets_for_position.asset0.amount.to_string(),
+            amount1: assets_for_position.asset1.amount.to_string(),
             token_min_amount0: "0".to_string(),
             token_min_amount1: "0".to_string(),
         },
@@ -487,7 +487,7 @@ pub(crate) fn _create_position(
     } = create_position_msg;
 
     // 1. Swap the assets
-    let (swap_msgs, resulting_assets) = swap_to_enter_position(
+    let (swap_msgs, assets_for_position) = swap_to_enter_position(
         deps,
         env,
         funds,
@@ -501,7 +501,6 @@ pub(crate) fn _create_position(
     let sender = get_user(deps, app)?;
 
     // 2. Create a position
-    let tokens_provided = cosmwasm_to_proto_coins_sorted(resulting_assets);
     let create_msg = app.auth_z(deps, Some(sender.clone()))?.execute(
         &env.contract.address,
         MsgCreatePosition {
@@ -509,7 +508,7 @@ pub(crate) fn _create_position(
             sender: sender.to_string(),
             lower_tick,
             upper_tick,
-            tokens_provided,
+            tokens_provided: assets_for_position.into(),
             token_min_amount0: "0".to_string(),
             token_min_amount1: "0".to_string(),
         },
