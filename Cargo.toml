@@ -10,3 +10,14 @@ abstract-interface = { version = "0.21.0" }
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0" }
 abstract-client = { version = "0.21.0" }
 cw-asset = { version = "3.0" }
+
+[profile.release]
+rpath = false
+lto = true
+overflow-checks = true
+opt-level = 3
+debug = false
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
