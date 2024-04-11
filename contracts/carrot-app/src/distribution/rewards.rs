@@ -4,7 +4,7 @@ use cosmwasm_std::{Coin, Deps};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    yield_sources::Strategy,
+    yield_sources::{yield_type::YieldTypeImplementation, Strategy},
 };
 
 impl Strategy {
@@ -16,7 +16,7 @@ impl Strategy {
         let (rewards, msgs): (Vec<Vec<Coin>>, _) = self
             .0
             .into_iter()
-            .map(|s| {
+            .map(|mut s| {
                 let (rewards, raw_msgs) = s.yield_source.ty.withdraw_rewards(deps, app)?;
 
                 Ok::<_, AppError>((

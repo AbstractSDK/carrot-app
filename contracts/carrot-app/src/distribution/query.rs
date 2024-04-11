@@ -5,7 +5,9 @@ use crate::{
     error::AppError,
     exchange_rate::query_exchange_rate,
     msg::AssetsBalanceResponse,
-    yield_sources::{AssetShare, Strategy, StrategyElement, YieldSource},
+    yield_sources::{
+        yield_type::YieldTypeImplementation, AssetShare, Strategy, StrategyElement, YieldSource,
+    },
 };
 
 impl Strategy {

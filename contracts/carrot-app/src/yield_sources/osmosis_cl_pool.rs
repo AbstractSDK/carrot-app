@@ -44,7 +44,7 @@ pub type ConcentratedPoolParamsUnchecked = ConcentratedPoolParamsBase<Unchecked>
 pub type ConcentratedPoolParams = ConcentratedPoolParamsBase<Checked>;
 
 impl YieldTypeImplementation for ConcentratedPoolParams {
-    fn deposit(mut self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+    fn deposit(&mut self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         // We verify there is a position stored
         if let Ok(position) = self.position(deps) {
             self.raw_deposit(deps, funds, app, position)
@@ -55,7 +55,7 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
     }
 
     fn withdraw(
-        mut self,
+        &mut self,
         deps: Deps,
         amount: Option<Uint128>,
         app: &App,
@@ -82,7 +82,11 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         .into()])
     }
 
-    fn withdraw_rewards(mut self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    fn withdraw_rewards(
+        &mut self,
+        deps: Deps,
+        app: &App,
+    ) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
         let position = self.position(deps)?;
         let position_details = position.position.unwrap();
 

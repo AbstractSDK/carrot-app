@@ -4,7 +4,7 @@ use cosmwasm_std::{Coin, Decimal, Deps};
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    yield_sources::{Strategy, StrategyElement},
+    yield_sources::{yield_type::YieldTypeImplementation, Strategy, StrategyElement},
 };
 
 impl Strategy {

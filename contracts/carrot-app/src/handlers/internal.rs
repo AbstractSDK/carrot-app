@@ -8,7 +8,10 @@ use crate::{
         CONFIG, STRATEGY_CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS,
         TEMP_EXPECTED_SWAP_COIN,
     },
-    yield_sources::{yield_type::YieldType, Strategy},
+    yield_sources::{
+        yield_type::{YieldType, YieldTypeImplementation},
+        Strategy,
+    },
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
@@ -148,7 +151,7 @@ pub fn execute_one_deposit_step(
 
 pub fn execute_finalize_deposit(
     deps: DepsMut,
-    yield_type: YieldType,
+    mut yield_type: YieldType,
     yield_index: usize,
     app: App,
 ) -> AppResult {
