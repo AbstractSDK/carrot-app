@@ -13,7 +13,7 @@ use crate::{
     handlers::swap_helpers::DEFAULT_SLIPPAGE,
     helpers::{get_balance, get_user},
     msg::{AppQueryMsg, AssetsBalanceResponse, CompoundStatusResponse, PositionResponse},
-    state::{get_osmosis_position, get_position_status, Config, CONFIG, POSITION},
+    state::{CarrotPosition, Config, CONFIG},
 };
 
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
@@ -31,17 +31,13 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
 fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
 
-    let position = POSITION.may_load(deps.storage)?;
-    let (status, osmosis_position) = get_position_status(
-        deps,
-        &env,
-        config.autocompound_cooldown_seconds.u64(),
-        position,
-    )?;
-    let (spread_rewards, incentives) = if let Some(position) = osmosis_position {
+    let (status, maybe_carrot_position) =
+        CarrotPosition::compound_status(deps, &env, config.autocompound_cooldown_seconds.u64())?;
+
+    let (spread_rewards, incentives) = if let Some(carrot_position) = maybe_carrot_position {
         (
-            try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)?,
-            try_proto_to_cosmwasm_coins(position.claimable_incentives)?,
+            try_proto_to_cosmwasm_coins(carrot_position.position.claimable_spread_rewards)?,
+            try_proto_to_cosmwasm_coins(carrot_position.position.claimable_incentives)?,
         )
     } else {
         (vec![], vec![])
@@ -52,12 +48,12 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         .gas_asset
         .resolve(&deps.querier, &app.ans_host(deps)?)?;
 
-    let reward = Asset::new(gas_denom.clone(), config.autocompound_rewards_config.reward);
-
+    // Get user gas balance
     let user = get_user(deps, app)?;
-
     let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
 
+    // Get rewards available
+    let reward = Asset::new(gas_denom.clone(), config.autocompound_rewards_config.reward);
     let rewards_available = if user_gas_balance >= reward.amount {
         true
     } else {
@@ -89,9 +85,8 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
 }
 
 fn query_position(deps: Deps) -> AppResult<PositionResponse> {
-    let position = POSITION.may_load(deps.storage)?;
-
-    Ok(PositionResponse { position })
+    let position_id = CarrotPosition::may_load(deps)?.map(|carrot_position| carrot_position.id);
+    Ok(PositionResponse { position_id })
 }
 
 fn query_config(deps: Deps) -> AppResult<Config> {
@@ -99,16 +94,24 @@ fn query_config(deps: Deps) -> AppResult<Config> {
 }
 
 fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
-    let Some(position) = POSITION.may_load(deps.storage)? else {
+    let Some(carrot_position) = CarrotPosition::may_load(deps)? else {
         return Ok(AssetsBalanceResponse {
             balances: vec![],
             liquidity: "0".to_string(),
         });
     };
-    let pool = get_osmosis_position(deps, position.position_id)?;
 
-    let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
-    let liquidity = pool.position.unwrap().liquidity.replace('.', "");
+    let balances = try_proto_to_cosmwasm_coins(vec![
+        carrot_position.position.asset0.unwrap(),
+        carrot_position.position.asset1.unwrap(),
+    ])?;
+    // TODO: Use Decimal256 instead?
+    let liquidity = carrot_position
+        .position
+        .position
+        .unwrap()
+        .liquidity
+        .replace('.', "");
     Ok(AssetsBalanceResponse {
         balances,
         liquidity,

@@ -134,7 +134,7 @@ fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()
     let cl = ConcentratedLiquidity::new(&*test_tube);
     let position_breakdown = cl
         .query_position_by_id(&PositionByIdRequest {
-            position_id: position.position.unwrap().position_id,
+            position_id: position.position_id.unwrap(),
         })?
         .position
         .unwrap();
@@ -158,7 +158,7 @@ fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()
     )?;
 
     let position = carrot_app.position()?;
-    assert!(position.position.is_some());
+    assert!(position.position_id.is_some());
     Ok(())
 }
 
@@ -206,7 +206,7 @@ fn install_on_sub_account() -> anyhow::Result<()> {
     )?;
 
     let position: PositionResponse = carrot_app.position()?;
-    assert!(position.position.is_some());
+    assert!(position.position_id.is_some());
     Ok(())
 }
 
@@ -260,6 +260,6 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
     let carrot_app = account.application::<carrot_app::AppInterface<_>>()?;
 
     let position: PositionResponse = carrot_app.position()?;
-    assert!(position.position.is_some());
+    assert!(position.position_id.is_some());
     Ok(())
 }

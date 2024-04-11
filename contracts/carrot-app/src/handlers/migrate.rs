@@ -6,10 +6,11 @@ use cw_storage_plus::Item;
 use crate::{
     contract::{App, AppResult},
     msg::AppMigrateMsg,
-    state::{AutocompoundRewardsConfig, Config, PoolConfig, CONFIG},
+    state::{AutocompoundRewardsConfig, CarrotPosition, Config, PoolConfig, CONFIG},
 };
 
-pub const OLD_CONFIG: Item<OldConfig> = Item::new("config");
+const OLD_CONFIG: Item<OldConfig> = Item::new("config");
+const OLD_POSITION: Item<OldPosition> = Item::new("position");
 
 #[cw_serde]
 pub struct OldConfig {
@@ -27,9 +28,16 @@ pub struct OldPoolConfig {
     pub asset1: AssetEntry,
 }
 
+#[cw_serde]
+pub struct OldPosition {
+    pub owner: cosmwasm_std::Addr,
+    pub position_id: u64,
+    pub last_compound: cosmwasm_std::Timestamp,
+}
+
 /// Handle the app migrate msg
 /// The top-level Abstract app does version checking and dispatches to this handler
-pub fn migrate_handler(deps: DepsMut, _env: Env, app: App, _msg: AppMigrateMsg) -> AppResult {
+pub fn migrate_handler(deps: DepsMut, mut env: Env, app: App, _msg: AppMigrateMsg) -> AppResult {
     // Migrate old config
     let maybe_old_config = OLD_CONFIG.may_load(deps.storage)?;
     if let Some(old_config) = maybe_old_config {
@@ -44,6 +52,11 @@ pub fn migrate_handler(deps: DepsMut, _env: Env, app: App, _msg: AppMigrateMsg) 
         };
         CONFIG.save(deps.storage, &new_config)?;
         OLD_CONFIG.remove(deps.storage);
+    }
+    if let Some(old_position) = OLD_POSITION.may_load(deps.storage)? {
+        // save_position uses ENV for determining time, so need to trick it here a little
+        env.block.time = old_position.last_compound;
+        CarrotPosition::save_position(deps, env, old_position.position_id)?;
     }
 
     Ok(app.response("migrate"))
