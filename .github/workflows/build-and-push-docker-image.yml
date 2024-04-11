@@ -46,13 +46,8 @@ jobs:
           tag_name=${GITHUB_REF##refs/tags/}
           docker tag 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$tag_name
 
-      - name: Check if push to main branch
-        id: check_main_branch
-        run: |
-          echo "::set-output name=is_main_branch::$(echo ${{ github.ref }} | grep -q 'refs/heads/main')"
-
       - name: Push image with 'latest' tag for main branch
-        if: steps.check_main_branch.outputs.is_main_branch == 'true'
+        if: github.ref == 'refs/heads/main'
         run: |
           docker tag 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:latest
           docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:latest
