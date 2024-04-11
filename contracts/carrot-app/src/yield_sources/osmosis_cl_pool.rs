@@ -163,6 +163,10 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
     fn share_type(&mut self) -> super::ShareType {
         ShareType::Dynamic
     }
+
+    fn clear_cache(&mut self) {
+        self.position_cache = None;
+    }
 }
 
 impl ConcentratedPoolParams {
@@ -265,10 +269,6 @@ impl ConcentratedPoolParams {
             self.position_cache = Some(position.clone());
             Ok(position)
         }
-    }
-
-    fn set_position(&mut self, position: FullPositionBreakdown) {
-        self.position_cache = Some(position);
     }
 }
 

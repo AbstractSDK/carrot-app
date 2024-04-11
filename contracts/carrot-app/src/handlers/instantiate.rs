@@ -2,15 +2,15 @@ use crate::{
     check::Checkable,
     contract::{App, AppResult},
     msg::AppInstantiateMsg,
-    state::{CONFIG, STRATEGY_CONFIG},
+    state::CONFIG,
 };
 use abstract_app::abstract_sdk::AbstractResponse;
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
 
-use super::execute::_inner_deposit;
+use super::{execute::_inner_deposit, internal::save_strategy};
 
 pub fn instantiate_handler(
-    deps: DepsMut,
+    mut deps: DepsMut,
     env: Env,
     _info: MessageInfo,
     app: App,
@@ -21,7 +21,7 @@ pub fn instantiate_handler(
 
     CONFIG.save(deps.storage, &config)?;
     let strategy = msg.strategy.check(deps.as_ref(), &app)?;
-    STRATEGY_CONFIG.save(deps.storage, &strategy)?;
+    save_strategy(deps.branch(), strategy)?;
 
     let mut response = app.response("instantiate_savings_app");
 

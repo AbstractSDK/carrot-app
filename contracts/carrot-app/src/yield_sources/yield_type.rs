@@ -84,6 +84,13 @@ impl YieldType {
             YieldType::Mars(params) => params.share_type(),
         }
     }
+
+    pub fn clear_cache(&mut self) {
+        match self {
+            YieldType::ConcentratedLiquidityPool(params) => params.clear_cache(),
+            YieldType::Mars(params) => params.clear_cache(),
+        }
+    }
 }
 
 pub trait YieldTypeImplementation {
@@ -104,4 +111,6 @@ pub trait YieldTypeImplementation {
     /// CL pools use that to know the best funds deposit ratio
     /// Mars doesn't use that, because the share is fixed to 1
     fn share_type(&mut self) -> ShareType;
+
+    fn clear_cache(&mut self);
 }

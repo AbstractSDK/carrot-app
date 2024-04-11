@@ -87,4 +87,7 @@ impl YieldTypeImplementation for MarsDepositParams {
     fn share_type(&mut self) -> super::ShareType {
         ShareType::Fixed
     }
+
+    // No cache for mars
+    fn clear_cache(&mut self) {}
 }

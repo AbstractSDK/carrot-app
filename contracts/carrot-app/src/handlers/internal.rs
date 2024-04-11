@@ -17,7 +17,6 @@ use cosmwasm_std::{wasm_execute, Coin, Coins, DepsMut, Env, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use crate::exchange_rate::query_exchange_rate;
-use abstract_app::traits::AccountIdentification;
 
 pub fn execute_internal_action(
     deps: DepsMut,
@@ -163,7 +162,13 @@ pub fn execute_finalize_deposit(
     Ok(app.response("finalize-deposit").add_submessages(msgs))
 }
 
-pub fn save_strategy(deps: DepsMut, strategy: Strategy) -> AppResult<()> {
+pub fn save_strategy(deps: DepsMut, mut strategy: Strategy) -> AppResult<()> {
+    // We need to correct positions for which the cache is not empty
+    // This is a security measure
+    strategy
+        .0
+        .iter_mut()
+        .for_each(|s| s.yield_source.ty.clear_cache());
     STRATEGY_CONFIG.save(deps.storage, &strategy)?;
     Ok(())
 }

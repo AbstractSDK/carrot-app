@@ -17,7 +17,7 @@ use cosmwasm_std::{
     WasmMsg,
 };
 
-use super::internal::execute_internal_action;
+use super::internal::{execute_internal_action, save_strategy};
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -85,7 +85,7 @@ fn withdraw(
 }
 
 fn update_strategy(
-    deps: DepsMut,
+    mut deps: DepsMut,
     env: Env,
     _info: MessageInfo,
     strategy: StrategyUnchecked,
@@ -126,7 +126,7 @@ fn update_strategy(
         .try_for_each(|f| f.into_iter().try_for_each(|f| available_funds.add(f)))?;
 
     // 2. We replace the strategy with the new strategy
-    STRATEGY_CONFIG.save(deps.storage, &strategy)?;
+    save_strategy(deps.branch(), strategy)?;
 
     // 3. We deposit the funds into the new strategy
     let deposit_msgs = _inner_deposit(deps.as_ref(), &env, available_funds.into(), None, &app)?;
