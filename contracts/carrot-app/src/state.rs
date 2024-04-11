@@ -38,7 +38,7 @@ impl CarrotPosition {
         Ok(maybe_position.map(|position| position.position_id))
     }
 
-    /// Load position returns `Ok(None)` if no valid position found
+    /// Load position, returns `Ok(None)` if no valid position found
     pub fn may_load(deps: Deps) -> StdResult<Option<Self>> {
         if let Some(id) = Self::may_load_id(deps.storage)? {
             if let Some(position) = load_osmosis_position(&deps.querier, id) {
@@ -48,7 +48,7 @@ impl CarrotPosition {
         Ok(None)
     }
 
-    /// Load position errors if no valid position found
+    /// Load position, errors if no valid position found
     pub fn load(deps: Deps) -> Result<Self, AppError> {
         Self::may_load(deps)?.ok_or(AppError::NoPosition {})
     }
