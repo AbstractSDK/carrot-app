@@ -197,6 +197,10 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     let status = carrot_app.compound_status()?;
     assert!(!status.spread_rewards.is_empty());
     assert!(status.incentives.iter().any(|c| c.denom == GAS_DENOM));
+    let CompoundStatus::Cooldown(cooldown) = status.status else {
+        panic!("Contract should be still on cooldown")
+    };
+    assert!(cooldown <= Uint64::new(300));
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;

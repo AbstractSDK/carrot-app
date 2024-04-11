@@ -2,6 +2,7 @@ use abstract_app::objects::{AnsAsset, AssetEntry};
 use abstract_dex_adapter::{msg::GenerateMessagesResponse, DexInterface};
 use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
+use osmosis_std::cosmwasm_to_proto_coins;
 const MAX_SPREAD_PERCENT: u64 = 20;
 pub const DEFAULT_SLIPPAGE: Decimal = Decimal::permille(5);
 
@@ -12,6 +13,22 @@ use crate::{
 };
 
 use super::query::query_price;
+
+/// Assets to be included to the position
+pub struct AssetsForPosition {
+    pub asset0: Coin,
+    pub asset1: Coin,
+}
+
+impl From<AssetsForPosition> for Vec<osmosis_std::types::cosmos::base::v1beta1::Coin> {
+    fn from(value: AssetsForPosition) -> Self {
+        let coins = match value.asset0.denom.cmp(&value.asset1.denom) {
+            std::cmp::Ordering::Less => [value.asset0, value.asset1],
+            _ => [value.asset1, value.asset0],
+        };
+        cosmwasm_to_proto_coins(coins)
+    }
+}
 
 pub(crate) fn swap_msg(
     deps: Deps,
@@ -49,7 +66,7 @@ pub(crate) fn tokens_to_swap(
     asset0: Coin, // Represents the amount of Coin 0 we would like the position to handle
     asset1: Coin, // Represents the amount of Coin 1 we would like the position to handle,
     price: Decimal, // Relative price (when swapping amount0 for amount1, equals amount0/amount1)
-) -> AppResult<(AnsAsset, AssetEntry, Vec<Coin>)> {
+) -> AppResult<(AnsAsset, AssetEntry, AssetsForPosition)> {
     let config = CONFIG.load(deps.storage)?;
 
     let x0 = amount_to_swap
@@ -89,7 +106,7 @@ pub(crate) fn tokens_to_swap(
     let x0_a1 = x0.amount * asset1.amount;
     let x1_a0 = x1.amount * asset0.amount;
 
-    let (offer_asset, ask_asset, mut resulting_balance) = if x0_a1 < x1_a0 {
+    let (offer_asset, ask_asset, assets_for_position) = if x0_a1 < x1_a0 {
         let numerator = x1_a0 - x0_a1;
         let denominator = asset0.amount + price * asset1.amount;
         let y1 = numerator / denominator;
@@ -97,16 +114,16 @@ pub(crate) fn tokens_to_swap(
         (
             AnsAsset::new(config.pool_config.asset1, y1),
             config.pool_config.asset0,
-            vec![
-                Coin {
+            AssetsForPosition {
+                asset0: Coin {
                     amount: x0.amount + price * y1,
                     denom: x0.denom,
                 },
-                Coin {
+                asset1: Coin {
                     amount: x1.amount - y1,
                     denom: x1.denom,
                 },
-            ],
+            },
         )
     } else {
         let numerator = x0_a1 - x1_a0;
@@ -117,22 +134,20 @@ pub(crate) fn tokens_to_swap(
         (
             AnsAsset::new(config.pool_config.asset0, numerator / denominator),
             config.pool_config.asset1,
-            vec![
-                Coin {
+            AssetsForPosition {
+                asset0: Coin {
                     amount: x0.amount - y0,
                     denom: x0.denom,
                 },
-                Coin {
+                asset1: Coin {
                     amount: x1.amount + Decimal::from_ratio(y0, 1u128) / price * Uint128::one(),
                     denom: x1.denom,
                 },
-            ],
+            },
         )
     };
 
-    resulting_balance.sort_by(|a, b| a.denom.cmp(&b.denom));
-    // TODO, compute the resulting balance to be able to deposit back into the pool
-    Ok((offer_asset, ask_asset, resulting_balance))
+    Ok((offer_asset, ask_asset, assets_for_position))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -146,14 +161,14 @@ pub fn swap_to_enter_position(
     max_spread: Option<Decimal>,
     belief_price0: Option<Decimal>,
     belief_price1: Option<Decimal>,
-) -> AppResult<(Vec<CosmosMsg>, Vec<Coin>)> {
+) -> AppResult<(Vec<CosmosMsg>, AssetsForPosition)> {
     let price = query_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
-    let (offer_asset, ask_asset, resulting_assets) =
+    let (offer_asset, ask_asset, assets_for_position) =
         tokens_to_swap(deps, funds, asset0, asset1, price)?;
 
     Ok((
         swap_msg(deps, env, offer_asset, ask_asset, app)?,
-        resulting_assets,
+        assets_for_position,
     ))
 }
 

@@ -3,7 +3,8 @@ mod common;
 use crate::common::{create_position, setup_test_tube, USDC, USDT};
 use abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
-    AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, PositionResponse,
+    AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, CreatePositionMessage,
+    PositionResponse,
 };
 use common::DEX_NAME;
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
@@ -22,7 +23,8 @@ fn deposit_lands() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
+    // Either missed position range or fees
+    let max_difference = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
     // Create position
     create_position(
         &carrot_app,
@@ -36,7 +38,7 @@ fn deposit_lands() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!(sum.u128() > deposit_amount - max_fee.u128());
+    assert!(sum.u128() > deposit_amount - max_difference.u128());
 
     // Do the deposit
     carrot_app.deposit(
@@ -51,7 +53,7 @@ fn deposit_lands() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 2);
+    assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 2);
 
     // Do the second deposit
     carrot_app.deposit(
@@ -66,7 +68,7 @@ fn deposit_lands() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
+    assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 3);
     Ok(())
 }
 
@@ -214,7 +216,7 @@ fn deposit_slippage() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     let deposit_amount = 5_000;
-    let max_fee = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
+    let max_difference = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
     // Create position
     create_position(
         &carrot_app,
@@ -266,7 +268,7 @@ fn deposit_slippage() -> anyhow::Result<()> {
         .balances
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
-    assert!(sum.u128() > (deposit_amount - max_fee.u128()) * 3);
+    assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 3);
     Ok(())
 }
 
@@ -377,5 +379,51 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
     let status = carrot_app.compound_status()?;
     assert!(!status.spread_rewards.is_empty());
 
+    Ok(())
+}
+
+#[test]
+fn shifted_position_create_deposit() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    let deposit_amount = 10_000;
+    let max_difference = Uint128::new(deposit_amount).mul_floor(Decimal::percent(3));
+
+    // Create one-way shifted position
+    carrot_app.create_position(CreatePositionMessage {
+        lower_tick: -37000,
+        upper_tick: 1000,
+        funds: coins(deposit_amount, USDT),
+        asset0: coin(205_000, USDT),
+        asset1: coin(753_000, USDC),
+        max_spread: None,
+        belief_price0: None,
+        belief_price1: None,
+    })?;
+
+    let balance = carrot_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert!(sum.u128() > (deposit_amount - max_difference.u128()));
+
+    // Deposit asset0
+    carrot_app.deposit(coins(deposit_amount, USDT), None, None, None)?;
+    let balance = carrot_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 2);
+
+    // Deposit asset1
+    carrot_app.deposit(coins(deposit_amount, USDT), None, None, None)?;
+    let balance = carrot_app.balance()?;
+    let sum = balance
+        .balances
+        .iter()
+        .fold(Uint128::zero(), |acc, e| acc + e.amount);
+    assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 3);
     Ok(())
 }
