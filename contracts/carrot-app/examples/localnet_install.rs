@@ -84,11 +84,11 @@ fn main() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: ION.to_string(),
+                        asset: AssetEntry::new(ION),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: OSMO.to_string(),
+                        asset: AssetEntry::new(OSMO),
                         share: Decimal::percent(50),
                     },
                 ],

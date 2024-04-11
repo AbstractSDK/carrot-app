@@ -103,4 +103,7 @@ pub enum AppError {
 
     #[error("Invalid strategy format, check shares and parameters")]
     InvalidStrategy {},
+
+    #[error("Expected native asset, got cw20")]
+    NonNativeAsset {},
 }

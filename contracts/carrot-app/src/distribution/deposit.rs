@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use cosmwasm_std::{coin, Coin, Coins, Decimal, Deps, Uint128};
+use cw_asset::AssetInfo;
 
 use crate::{
     contract::{App, AppResult},
     exchange_rate::query_all_exchange_rates,
-    helpers::{compute_total_value, compute_value},
+    helpers::{compute_total_value, compute_value, unwrap_native},
     state::STRATEGY_CONFIG,
     yield_sources::{yield_type::YieldType, AssetShare, Strategy, StrategyElement},
 };
@@ -13,6 +14,7 @@ use crate::{
 use cosmwasm_schema::cw_serde;
 
 use crate::{error::AppError, msg::InternalExecuteMsg};
+use abstract_app::traits::AbstractNameService;
 
 pub fn generate_deposit_strategy(
     deps: Deps,
@@ -158,11 +160,14 @@ impl Strategy {
     // This is the algorithm that is implemented here
     fn fill_sources(
         &self,
+        deps: Deps,
         funds: Vec<Coin>,
         exchange_rates: &HashMap<String, Decimal>,
+        app: &App,
     ) -> AppResult<(StrategyStatus, Coins)> {
         let total_value = compute_total_value(&funds, exchange_rates)?;
         let mut remaining_funds = Coins::default();
+        let ans = app.name_service(deps);
 
         // We create the vector that holds the funds information
         let mut yield_source_status = self
@@ -173,7 +178,9 @@ impl Strategy {
                     .yield_source
                     .asset_distribution
                     .iter()
-                    .map(|AssetShare { denom, share }| {
+                    .map(|AssetShare { asset, share }| {
+                        let denom = unwrap_native(&ans.query(asset)?)?;
+
                         // Amount to fill this denom completely is value / exchange_rate
                         // Value we want to put here is share * source.share * total_value
                         Ok::<_, AppError>(StrategyStatusElement {
@@ -181,7 +188,7 @@ impl Strategy {
                             raw_funds: Uint128::zero(),
                             remaining_amount: (share * source.share
                                 / exchange_rates
-                                    .get(denom)
+                                    .get(&denom)
                                     .ok_or(AppError::NoExchangeRate(denom.clone()))?)
                                 * total_value,
                         })
@@ -192,6 +199,7 @@ impl Strategy {
 
         for this_coin in funds {
             let mut remaining_amount = this_coin.amount;
+            let this_asset = ans.query(&AssetInfo::native(this_coin.denom.clone()))?;
             // We distribute those funds in to the accepting strategies
             for (strategy, status) in self.0.iter().zip(yield_source_status.iter_mut()) {
                 // Find the share for the specific denom inside the strategy
@@ -200,7 +208,7 @@ impl Strategy {
                     .asset_distribution
                     .iter()
                     .zip(status.iter_mut())
-                    .find(|(AssetShare { denom, share: _ }, _status)| this_coin.denom.eq(denom))
+                    .find(|(AssetShare { asset, share: _ }, _status)| this_asset.eq(asset))
                     .map(|(_, status)| status);
 
                 if let Some(status) = this_denom_status {
@@ -232,10 +240,10 @@ impl Strategy {
             funds
                 .iter()
                 .map(|f| f.denom.clone())
-                .chain(self.all_denoms()),
+                .chain(self.all_denoms(deps, app)?),
             app,
         )?;
-        let (status, remaining_funds) = self.fill_sources(funds, &exchange_rates)?;
+        let (status, remaining_funds) = self.fill_sources(deps, funds, &exchange_rates, app)?;
         status.fill_with_remaining_funds(remaining_funds, &exchange_rates)
     }
 

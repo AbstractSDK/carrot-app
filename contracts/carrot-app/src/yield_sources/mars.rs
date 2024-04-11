@@ -16,6 +16,7 @@ pub const MARS_MONEY_MARKET: &str = "mars";
 
 #[cw_serde]
 pub struct MarsDepositParams {
+    /// This should stay a denom because that's a parameter that's accepted by Mars when depositing/withdrawing
     pub denom: String,
 }
 

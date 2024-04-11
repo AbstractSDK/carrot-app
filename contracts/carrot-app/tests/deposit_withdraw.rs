@@ -1,6 +1,7 @@
 mod common;
 
 use crate::common::{setup_test_tube, USDC, USDT};
+use abstract_app::objects::AssetEntry;
 use abstract_client::Application;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
@@ -152,11 +153,11 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -174,11 +175,11 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -224,11 +225,11 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -246,11 +247,11 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -267,7 +268,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         StrategyElementBase {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![AssetShare {
-                    denom: USDT.to_string(),
+                    asset: AssetEntry::new(USDT),
                     share: Decimal::percent(100),
                 }],
                 params: YieldParamsBase::Mars(MarsDepositParams {

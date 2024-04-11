@@ -7,6 +7,15 @@ use abstract_app::traits::AccountIdentification;
 use abstract_app::{objects::AssetEntry, traits::AbstractNameService};
 use abstract_sdk::Resolve;
 use cosmwasm_std::{Addr, Coin, Coins, Decimal, Deps, Env, MessageInfo, StdResult, Uint128};
+use cw_asset::AssetInfo;
+
+pub fn unwrap_native(asset: &AssetInfo) -> AppResult<String> {
+    match asset {
+        cw_asset::AssetInfoBase::Native(denom) => Ok(denom.clone()),
+        cw_asset::AssetInfoBase::Cw20(_) => Err(AppError::NonNativeAsset {}),
+        _ => Err(AppError::NonNativeAsset {}),
+    }
+}
 
 pub fn assert_contract(info: &MessageInfo, env: &Env) -> AppResult<()> {
     if info.sender == env.contract.address {

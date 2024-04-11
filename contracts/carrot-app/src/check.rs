@@ -214,7 +214,7 @@ mod yield_sources {
                     AppError::InvalidEmptyStrategy {}
                 );
                 // We ensure all deposited tokens exist in ANS
-                let all_denoms = self.all_denoms();
+                let all_denoms = self.all_denoms(deps, app)?;
                 let ans = app.name_service(deps);
                 ans.host()
                     .query_assets_reverse(
@@ -244,9 +244,11 @@ mod yield_sources {
                             AppError::InvalidStrategy {}
                         );
                         // We verify the first element correspond to the mars deposit denom
+                        let ans = app.name_service(deps);
+                        let asset = ans.query(&AssetInfo::native(params.denom.clone()))?;
                         ensure_eq!(
-                            self.asset_distribution[0].denom,
-                            params.denom,
+                            self.asset_distribution[0].asset,
+                            asset,
                             AppError::InvalidStrategy {}
                         );
                         YieldParamsBase::Mars(params.check(deps, app)?)

@@ -136,11 +136,11 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],

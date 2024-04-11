@@ -1,6 +1,7 @@
 mod common;
 
 use crate::common::{create_pool, setup_test_tube, USDC, USDT};
+use abstract_app::objects::AssetEntry;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
@@ -26,11 +27,11 @@ fn rebalance_fails() -> anyhow::Result<()> {
                     yield_source: YieldSourceBase {
                         asset_distribution: vec![
                             AssetShare {
-                                denom: USDT.to_string(),
+                                asset: AssetEntry::new(USDT),
                                 share: Decimal::percent(50),
                             },
                             AssetShare {
-                                denom: USDC.to_string(),
+                                asset: AssetEntry::new(USDC),
                                 share: Decimal::percent(50),
                             },
                         ],
@@ -50,11 +51,11 @@ fn rebalance_fails() -> anyhow::Result<()> {
                     yield_source: YieldSourceBase {
                         asset_distribution: vec![
                             AssetShare {
-                                denom: USDT.to_string(),
+                                asset: AssetEntry::new(USDT),
                                 share: Decimal::percent(50),
                             },
                             AssetShare {
-                                denom: USDC.to_string(),
+                                asset: AssetEntry::new(USDC),
                                 share: Decimal::percent(50),
                             },
                         ],
@@ -89,11 +90,11 @@ fn rebalance_success() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -111,11 +112,11 @@ fn rebalance_success() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -166,11 +167,11 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -188,11 +189,11 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -244,11 +245,11 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
     let common_yield_source = YieldSourceBase {
         asset_distribution: vec![
             AssetShare {
-                denom: USDT.to_string(),
+                asset: AssetEntry::new(USDT),
                 share: Decimal::percent(50),
             },
             AssetShare {
-                denom: USDC.to_string(),
+                asset: AssetEntry::new(USDC),
                 share: Decimal::percent(50),
             },
         ],
@@ -270,11 +271,11 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],
@@ -338,11 +339,11 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
     let moving_strategy = YieldSourceBase {
         asset_distribution: vec![
             AssetShare {
-                denom: USDT.to_string(),
+                asset: AssetEntry::new(USDT),
                 share: Decimal::percent(50),
             },
             AssetShare {
-                denom: USDC.to_string(),
+                asset: AssetEntry::new(USDC),
                 share: Decimal::percent(50),
             },
         ],
@@ -360,11 +361,11 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
             yield_source: YieldSourceBase {
                 asset_distribution: vec![
                     AssetShare {
-                        denom: USDT.to_string(),
+                        asset: AssetEntry::new(USDT),
                         share: Decimal::percent(50),
                     },
                     AssetShare {
-                        denom: USDC.to_string(),
+                        asset: AssetEntry::new(USDC),
                         share: Decimal::percent(50),
                     },
                 ],

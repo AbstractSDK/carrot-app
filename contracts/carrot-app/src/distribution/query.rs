@@ -1,4 +1,5 @@
 use cosmwasm_std::{Coins, Decimal, Deps, Uint128};
+use cw_asset::AssetInfo;
 
 use crate::{
     contract::{App, AppResult},
@@ -9,6 +10,7 @@ use crate::{
         yield_type::YieldTypeImplementation, AssetShare, Strategy, StrategyElement, YieldSource,
     },
 };
+use abstract_app::traits::AbstractNameService;
 
 impl Strategy {
     // Returns the total balance
@@ -123,14 +125,18 @@ impl StrategyElement {
                 self.yield_source.asset_distribution.clone(),
             ));
         }
+        let ans = app.name_service(deps);
 
         let each_shares = each_value
             .into_iter()
-            .map(|(denom, amount)| AssetShare {
-                denom,
-                share: Decimal::from_ratio(amount, total_value),
+            .map(|(denom, amount)| {
+                let asset = ans.query(&AssetInfo::native(denom))?;
+                Ok::<_, AppError>(AssetShare {
+                    asset,
+                    share: Decimal::from_ratio(amount, total_value),
+                })
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
         Ok((total_value, each_shares))
     }
 }
