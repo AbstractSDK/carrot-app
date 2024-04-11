@@ -41,7 +41,7 @@ impl CarrotPosition {
     /// Load position, returns `Ok(None)` if no valid position found
     pub fn may_load(deps: Deps) -> StdResult<Option<Self>> {
         if let Some(id) = Self::may_load_id(deps.storage)? {
-            if let Some(position) = load_osmosis_position(&deps.querier, id) {
+            if let Some(position) = may_load_osmosis_position(&deps.querier, id) {
                 return Ok(Some(Self { id, position }));
             }
         }
@@ -69,7 +69,7 @@ impl CarrotPosition {
         let status = match Self::may_load_id(deps.storage)? {
             Some(id) => {
                 // If saved position but can't query - return position id
-                let Some(position) = load_osmosis_position(&deps.querier, id) else {
+                let Some(position) = may_load_osmosis_position(&deps.querier, id) else {
                     return Ok((CompoundStatus::PositionNotAvailable(id), None));
                 };
                 let ready_on = LAST_COMPOUND
@@ -92,8 +92,8 @@ impl CarrotPosition {
     }
 }
 
-// Helper to load osmosis position from id
-fn load_osmosis_position(
+// Helper to load osmosis position from id, returns `None` if position by id not found
+fn may_load_osmosis_position(
     querier: &QuerierWrapper,
     position_id: u64,
 ) -> Option<FullPositionBreakdown> {
