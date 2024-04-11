@@ -10,10 +10,10 @@ use crate::{
 
 impl Strategy {
     // Returns the total balance
-    pub fn current_balance(&self, deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
+    pub fn current_balance(&mut self, deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
         let mut funds = Coins::default();
         let mut total_value = Uint128::zero();
-        self.0.iter().try_for_each(|s| {
+        self.0.iter_mut().try_for_each(|s| {
             let deposit_value = s
                 .yield_source
                 .ty
@@ -34,10 +34,10 @@ impl Strategy {
     }
 
     /// Returns the current status of the full strategy. It returns shares reflecting the underlying positions
-    pub fn query_current_status(&self, deps: Deps, app: &App) -> AppResult<Strategy> {
+    pub fn query_current_status(&mut self, deps: Deps, app: &App) -> AppResult<Strategy> {
         let all_strategy_values = self
             .0
-            .iter()
+            .iter_mut()
             .map(|s| s.query_current_value(deps, app))
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -87,7 +87,7 @@ impl StrategyElement {
     /// If there is no deposit or the query for the user deposit value fails
     ///     the function returns 0 value with the registered asset distribution
     pub fn query_current_value(
-        &self,
+        &mut self,
         deps: Deps,
         app: &App,
     ) -> AppResult<(Uint128, Vec<AssetShare>)> {

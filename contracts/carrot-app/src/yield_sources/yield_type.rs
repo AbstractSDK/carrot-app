@@ -50,7 +50,7 @@ impl YieldType {
         }
     }
 
-    pub fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+    pub fn user_deposit(&mut self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         let user_deposit_result = match self {
             YieldType::ConcentratedLiquidityPool(params) => params.user_deposit(deps, app),
             YieldType::Mars(params) => params.user_deposit(deps, app),
@@ -58,7 +58,7 @@ impl YieldType {
         Ok(user_deposit_result.unwrap_or_default())
     }
 
-    pub fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+    pub fn user_rewards(&mut self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         let user_deposit_result = match self {
             YieldType::ConcentratedLiquidityPool(params) => params.user_rewards(deps, app),
             YieldType::Mars(params) => params.user_rewards(deps, app),
@@ -66,7 +66,7 @@ impl YieldType {
         Ok(user_deposit_result.unwrap_or_default())
     }
 
-    pub fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
+    pub fn user_liquidity(&mut self, deps: Deps, app: &App) -> AppResult<Uint128> {
         let user_deposit_result = match self {
             YieldType::ConcentratedLiquidityPool(params) => params.user_liquidity(deps, app),
             YieldType::Mars(params) => params.user_liquidity(deps, app),
@@ -78,7 +78,7 @@ impl YieldType {
     /// This is specifically useful for auto-compound as we're not able to input target amounts
     /// CL pools use that to know the best funds deposit ratio
     /// Mars doesn't use that, because the share is fixed to 1
-    pub fn share_type(&self) -> ShareType {
+    pub fn share_type(&mut self) -> ShareType {
         match self {
             YieldType::ConcentratedLiquidityPool(params) => params.share_type(),
             YieldType::Mars(params) => params.share_type(),
@@ -93,15 +93,15 @@ pub trait YieldTypeImplementation {
 
     fn withdraw_rewards(self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)>;
 
-    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
+    fn user_deposit(&mut self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
 
-    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
+    fn user_rewards(&mut self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
 
-    fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128>;
+    fn user_liquidity(&mut self, deps: Deps, app: &App) -> AppResult<Uint128>;
 
     /// Indicate the default funds allocation
     /// This is specifically useful for auto-compound as we're not able to input target amounts
     /// CL pools use that to know the best funds deposit ratio
     /// Mars doesn't use that, because the share is fixed to 1
-    fn share_type(&self) -> ShareType;
+    fn share_type(&mut self) -> ShareType;
 }

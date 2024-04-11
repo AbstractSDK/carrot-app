@@ -75,8 +75,8 @@ fn main() -> anyhow::Result<()> {
             .bank_send(account.proxy()?.as_str(), coins(10_000, "uosmo")),
     )?;
 
-    // carrot.deposit(coins(10_000, "uosmo"), None)?;
     carrot.deposit(coins(10_000, "uosmo"), None)?;
+    // carrot.deposit(coins(10_000, "uosmo"), None)?;
 
     // carrot.withdraw(None)?;
 

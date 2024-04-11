@@ -23,7 +23,7 @@ impl Strategy {
 
 impl StrategyElement {
     pub fn withdraw(
-        self,
+        mut self,
         deps: Deps,
         withdraw_share: Option<Decimal>,
         app: &App,
@@ -48,7 +48,7 @@ impl StrategyElement {
     }
 
     pub fn withdraw_preview(
-        &self,
+        &mut self,
         deps: Deps,
         withdraw_share: Option<Decimal>,
         app: &App,

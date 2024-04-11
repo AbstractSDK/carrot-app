@@ -160,7 +160,6 @@ pub fn execute_finalize_deposit(
 
     let msgs = yield_type.deposit(deps.as_ref(), available_deposit_coins, &app)?;
 
-    deps.api.debug("End finalize deposit");
     Ok(app.response("finalize-deposit").add_submessages(msgs))
 }
 

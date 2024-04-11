@@ -21,7 +21,7 @@ pub fn generate_deposit_strategy(
     app: &App,
 ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Vec<InternalExecuteMsg>)> {
     // This is the storage strategy for all assets
-    let target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let mut target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
@@ -52,7 +52,7 @@ impl Strategy {
     // This method needs to be called on the stored strategy
     // We error if deposit value is non-zero here
     pub fn current_deposit_strategy(
-        &self,
+        &mut self,
         deps: Deps,
         funds: &mut Coins,
         current_strategy_status: Self,
@@ -80,7 +80,7 @@ impl Strategy {
             .0
             .iter()
             .zip(self.0.clone())
-            .map(|(target, current)| {
+            .map(|(target, mut current)| {
                 // We need to take into account the total value added by the current shares
                 let value_now = current.share * total_value;
                 let target_value = target.share * (total_value + deposit_value);

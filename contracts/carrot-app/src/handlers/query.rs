@@ -106,7 +106,7 @@ pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
 }
 
 pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
-    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let mut strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     Ok(StrategyResponse {
         strategy: strategy.query_current_status(deps, app)?.into(),
@@ -121,8 +121,8 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
     let mut funds = Coins::default();
     let mut total_value = Uint128::zero();
 
-    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
-    strategy.0.iter().try_for_each(|s| {
+    let mut strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    strategy.0.iter_mut().try_for_each(|s| {
         let deposit_value = s
             .yield_source
             .ty
@@ -146,7 +146,7 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
     let strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
     let mut rewards = Coins::default();
-    strategy.0.into_iter().try_for_each(|s| {
+    strategy.0.into_iter().try_for_each(|mut s| {
         let this_rewards = s.yield_source.ty.user_rewards(deps, app)?;
         for fund in this_rewards {
             rewards.add(fund)?;
@@ -165,7 +165,7 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
             .load(deps.storage)?
             .0
             .into_iter()
-            .map(|s| {
+            .map(|mut s| {
                 let balance = s.yield_source.ty.user_deposit(deps, app)?;
                 let liquidity = s.yield_source.ty.user_liquidity(deps, app)?;
 

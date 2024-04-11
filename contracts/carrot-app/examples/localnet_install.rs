@@ -97,6 +97,7 @@ fn main() -> anyhow::Result<()> {
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
+                    position_cache: None,
                     _phantom: std::marker::PhantomData,
                 }),
             },

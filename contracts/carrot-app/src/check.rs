@@ -154,6 +154,7 @@ mod yield_sources {
                     upper_tick: self.upper_tick,
                     position_id: self.position_id,
                     _phantom: PhantomData,
+                    position_cache: self.position_cache,
                 })
             }
         }
@@ -179,6 +180,7 @@ mod yield_sources {
                             upper_tick: params.upper_tick,
                             position_id: params.position_id,
                             _phantom: std::marker::PhantomData,
+                            position_cache: params.position_cache,
                         })
                     }
                     YieldTypeBase::Mars(params) => YieldTypeBase::Mars(params),

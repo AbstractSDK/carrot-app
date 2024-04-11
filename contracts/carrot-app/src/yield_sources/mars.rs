@@ -30,7 +30,12 @@ impl YieldTypeImplementation for MarsDepositParams {
         )])
     }
 
-    fn withdraw(self, deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec<CosmosMsg>> {
+    fn withdraw(
+        mut self,
+        deps: Deps,
+        amount: Option<Uint128>,
+        app: &App,
+    ) -> AppResult<Vec<CosmosMsg>> {
         let ans = app.name_service(deps);
 
         let amount = if let Some(amount) = amount {
@@ -51,7 +56,7 @@ impl YieldTypeImplementation for MarsDepositParams {
         Ok((vec![], vec![]))
     }
 
-    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+    fn user_deposit(&mut self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         let ans = app.name_service(deps);
         let asset = ans.query(&AssetInfo::native(self.denom.clone()))?;
         let user = app.account_base(deps)?.proxy;
@@ -69,17 +74,17 @@ impl YieldTypeImplementation for MarsDepositParams {
         Ok(coins(deposit.u128(), self.denom.clone()))
     }
 
-    fn user_rewards(&self, _deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+    fn user_rewards(&mut self, _deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
         // No rewards, because mars is already auto-compounding
 
         Ok(vec![])
     }
 
-    fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
+    fn user_liquidity(&mut self, deps: Deps, app: &App) -> AppResult<Uint128> {
         Ok(self.user_deposit(deps, app)?[0].amount)
     }
 
-    fn share_type(&self) -> super::ShareType {
+    fn share_type(&mut self) -> super::ShareType {
         ShareType::Fixed
     }
 }

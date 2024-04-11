@@ -17,8 +17,6 @@ use cosmwasm_std::{
     WasmMsg,
 };
 
-use abstract_app::traits::AccountIdentification;
-
 use super::internal::execute_internal_action;
 
 pub fn execute_handler(
@@ -112,7 +110,7 @@ fn update_strategy(
     let (withdrawn_funds, withdraw_msgs): (Vec<Vec<Coin>>, Vec<Option<ExecutorMsg>>) =
         all_stale_sources
             .into_iter()
-            .map(|s| {
+            .map(|mut s| {
                 Ok::<_, AppError>((
                     s.withdraw_preview(deps.as_ref(), None, &app)
                         .unwrap_or_default(),

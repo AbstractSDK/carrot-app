@@ -35,6 +35,8 @@ pub struct ConcentratedPoolParamsBase<T> {
     // This is not actually a parameter but rather state
     // This can be used as a parameter for existing positions
     pub position_id: Option<u64>,
+    // This is a cache to avoid querying the position information as this query is expensive
+    pub position_cache: Option<FullPositionBreakdown>,
     pub _phantom: PhantomData<T>,
 }
 
@@ -42,7 +44,7 @@ pub type ConcentratedPoolParamsUnchecked = ConcentratedPoolParamsBase<Unchecked>
 pub type ConcentratedPoolParams = ConcentratedPoolParamsBase<Checked>;
 
 impl YieldTypeImplementation for ConcentratedPoolParams {
-    fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+    fn deposit(mut self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         // We verify there is a position stored
         if let Ok(position) = self.position(deps) {
             self.raw_deposit(deps, funds, app, position)
@@ -52,7 +54,12 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         }
     }
 
-    fn withdraw(self, deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec<CosmosMsg>> {
+    fn withdraw(
+        mut self,
+        deps: Deps,
+        amount: Option<Uint128>,
+        app: &App,
+    ) -> AppResult<Vec<CosmosMsg>> {
         let position = self.position(deps)?;
         let position_details = position.position.unwrap();
 
@@ -75,7 +82,7 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         .into()])
     }
 
-    fn withdraw_rewards(self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    fn withdraw_rewards(mut self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
         let position = self.position(deps)?;
         let position_details = position.position.unwrap();
 
@@ -114,7 +121,7 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
     }
 
     /// This may return 0, 1 or 2 elements depending on the position's status
-    fn user_deposit(&self, deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+    fn user_deposit(&mut self, deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
         let position = self.position(deps)?;
 
         Ok([
@@ -131,7 +138,7 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         .collect())
     }
 
-    fn user_rewards(&self, deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+    fn user_rewards(&mut self, deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
         let position = self.position(deps)?;
 
         let mut rewards = cosmwasm_std::Coins::default();
@@ -146,14 +153,14 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         Ok(rewards.into())
     }
 
-    fn user_liquidity(&self, deps: Deps, _app: &App) -> AppResult<Uint128> {
+    fn user_liquidity(&mut self, deps: Deps, _app: &App) -> AppResult<Uint128> {
         let position = self.position(deps)?;
         let total_liquidity = position.position.unwrap().liquidity.replace('.', "");
 
         Ok(Uint128::from_str(&total_liquidity)?)
     }
 
-    fn share_type(&self) -> super::ShareType {
+    fn share_type(&mut self) -> super::ShareType {
         ShareType::Dynamic
     }
 }
@@ -224,7 +231,6 @@ impl ConcentratedPoolParams {
             Some(false) => (funds[1].amount, funds[0].amount), // we had the wrong order
             None => return Err(AppError::NoPosition {}), // A position has to exist in order to execute this function. This should be unreachable
         };
-        deps.api.debug("After amounts");
 
         let deposit_msg = app.executor(deps).execute_with_reply_and_data(
             MsgAddToPosition {
@@ -239,18 +245,30 @@ impl ConcentratedPoolParams {
             cosmwasm_std::ReplyOn::Success,
             OSMOSIS_ADD_TO_POSITION_REPLY_ID,
         )?;
-        deps.api.debug("After messages");
 
         Ok(vec![deposit_msg])
     }
 
-    fn position(&self, deps: Deps) -> AppResult<FullPositionBreakdown> {
-        let position_id = self.position_id.ok_or(AppError::NoPosition {})?;
-        ConcentratedliquidityQuerier::new(&deps.querier)
-            .position_by_id(position_id)
-            .map_err(|e| AppError::UnableToQueryPosition(position_id, e))?
-            .position
-            .ok_or(AppError::NoPosition {})
+    fn position(&mut self, deps: Deps) -> AppResult<FullPositionBreakdown> {
+        deps.api.debug("Getting osmosis position");
+        if let Some(position) = &self.position_cache {
+            deps.api.debug("Getting osmosis position from cache");
+            Ok(position.clone())
+        } else {
+            let position_id = self.position_id.ok_or(AppError::NoPosition {})?;
+            let position = ConcentratedliquidityQuerier::new(&deps.querier)
+                .position_by_id(position_id)
+                .map_err(|e| AppError::UnableToQueryPosition(position_id, e))?
+                .position
+                .ok_or(AppError::NoPosition {})?;
+
+            self.position_cache = Some(position.clone());
+            Ok(position)
+        }
+    }
+
+    fn set_position(&mut self, position: FullPositionBreakdown) {
+        self.position_cache = Some(position);
     }
 }
 
