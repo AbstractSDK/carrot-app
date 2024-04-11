@@ -182,7 +182,7 @@ pub struct PositionsResponse {
 
 #[cw_serde]
 pub struct PositionResponse {
-    pub ty: YieldTypeUnchecked,
+    pub params: YieldTypeUnchecked,
     pub balance: AssetsBalanceResponse,
     pub liquidity: Uint128,
 }

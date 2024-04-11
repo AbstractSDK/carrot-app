@@ -7,7 +7,7 @@ use cosmwasm_std::Decimal;
 
 use crate::{
     check::{Checked, Unchecked},
-    yield_sources::yield_type::YieldTypeBase,
+    yield_sources::yield_type::YieldParamsBase,
 };
 
 /// A yield sources has the following elements
@@ -16,7 +16,7 @@ use crate::{
 #[cw_serde]
 pub struct YieldSourceBase<T> {
     pub asset_distribution: Vec<AssetShare>,
-    pub ty: YieldTypeBase<T>,
+    pub params: YieldParamsBase<T>,
 }
 
 pub type YieldSourceUnchecked = YieldSourceBase<Unchecked>;

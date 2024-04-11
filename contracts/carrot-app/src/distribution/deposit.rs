@@ -249,7 +249,7 @@ impl Strategy {
         let deposit_strategies = self.fill_all(deps, funds, app)?;
         Ok(deposit_strategies
             .iter()
-            .zip(self.0.iter().map(|s| s.yield_source.ty.clone()))
+            .zip(self.0.iter().map(|s| s.yield_source.params.clone()))
             .enumerate()
             .map(|(index, (strategy, yield_type))| strategy.deposit_msgs(index, yield_type))
             .collect())

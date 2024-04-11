@@ -6,7 +6,8 @@ use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
         mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase,
-        yield_type::YieldTypeBase, AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase,
+        yield_type::YieldParamsBase, AssetShare, StrategyBase, StrategyElementBase,
+        YieldSourceBase,
     },
     AppInterface,
 };
@@ -159,7 +160,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -181,7 +182,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: 2 * INITIAL_LOWER_TICK,
                     upper_tick: 2 * INITIAL_UPPER_TICK,
@@ -231,7 +232,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -253,7 +254,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: 2 * INITIAL_LOWER_TICK,
                     upper_tick: 2 * INITIAL_UPPER_TICK,
@@ -269,7 +270,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                     denom: USDT.to_string(),
                     share: Decimal::percent(100),
                 }],
-                ty: YieldTypeBase::Mars(MarsDepositParams {
+                params: YieldParamsBase::Mars(MarsDepositParams {
                     denom: USDT.to_string(),
                 }),
             },

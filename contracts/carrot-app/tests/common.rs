@@ -7,7 +7,7 @@ use carrot_app::contract::OSMOSIS;
 use carrot_app::msg::AppInstantiateMsg;
 use carrot_app::state::ConfigBase;
 use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParamsBase;
-use carrot_app::yield_sources::yield_type::YieldTypeBase;
+use carrot_app::yield_sources::yield_type::YieldParamsBase;
 use carrot_app::yield_sources::{AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase};
 use cosmwasm_std::{coin, coins, Coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
@@ -144,7 +144,7 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,

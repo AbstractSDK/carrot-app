@@ -4,7 +4,7 @@ use crate::common::{create_pool, setup_test_tube, USDC, USDT};
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
-        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldTypeBase, AssetShare,
+        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldParamsBase, AssetShare,
         StrategyBase, StrategyElementBase, YieldSourceBase,
     },
 };
@@ -34,13 +34,15 @@ fn rebalance_fails() -> anyhow::Result<()> {
                                 share: Decimal::percent(50),
                             },
                         ],
-                        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                            pool_id: 7,
-                            lower_tick: INITIAL_LOWER_TICK,
-                            upper_tick: INITIAL_UPPER_TICK,
-                            position_id: None,
-                            _phantom: std::marker::PhantomData,
-                        }),
+                        params: YieldParamsBase::ConcentratedLiquidityPool(
+                            ConcentratedPoolParamsBase {
+                                pool_id: 7,
+                                lower_tick: INITIAL_LOWER_TICK,
+                                upper_tick: INITIAL_UPPER_TICK,
+                                position_id: None,
+                                _phantom: std::marker::PhantomData,
+                            },
+                        ),
                     },
                     share: Decimal::one(),
                 },
@@ -56,13 +58,15 @@ fn rebalance_fails() -> anyhow::Result<()> {
                                 share: Decimal::percent(50),
                             },
                         ],
-                        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                            pool_id: 7,
-                            lower_tick: INITIAL_LOWER_TICK,
-                            upper_tick: INITIAL_UPPER_TICK,
-                            position_id: None,
-                            _phantom: std::marker::PhantomData,
-                        }),
+                        params: YieldParamsBase::ConcentratedLiquidityPool(
+                            ConcentratedPoolParamsBase {
+                                pool_id: 7,
+                                lower_tick: INITIAL_LOWER_TICK,
+                                upper_tick: INITIAL_UPPER_TICK,
+                                position_id: None,
+                                _phantom: std::marker::PhantomData,
+                            },
+                        ),
                     },
                     share: Decimal::one(),
                 },
@@ -93,7 +97,7 @@ fn rebalance_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -115,7 +119,7 @@ fn rebalance_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -170,7 +174,7 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -192,7 +196,7 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id: new_pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -248,7 +252,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
                 share: Decimal::percent(50),
             },
         ],
-        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+        params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
             pool_id, // Pool Id needs to exist
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
@@ -274,7 +278,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id: new_pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -342,7 +346,7 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
                 share: Decimal::percent(50),
             },
         ],
-        ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+        params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
             pool_id: new_pool_id,
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
@@ -364,7 +368,7 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id, // Pool Id needs to exist
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,

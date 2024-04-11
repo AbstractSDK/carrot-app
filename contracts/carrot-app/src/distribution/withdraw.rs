@@ -30,7 +30,7 @@ impl StrategyElement {
     ) -> AppResult<ExecutorMsg> {
         let this_withdraw_amount = withdraw_share
             .map(|share| {
-                let this_amount = self.yield_source.ty.user_liquidity(deps, app)?;
+                let this_amount = self.yield_source.params.user_liquidity(deps, app)?;
                 let this_withdraw_amount = share * this_amount;
 
                 Ok::<_, AppError>(this_withdraw_amount)
@@ -38,7 +38,7 @@ impl StrategyElement {
             .transpose()?;
         let raw_msg = self
             .yield_source
-            .ty
+            .params
             .withdraw(deps, this_withdraw_amount, app)?;
 
         Ok::<_, AppError>(
@@ -53,7 +53,7 @@ impl StrategyElement {
         withdraw_share: Option<Decimal>,
         app: &App,
     ) -> AppResult<Vec<Coin>> {
-        let current_deposit = self.yield_source.ty.user_deposit(deps, app)?;
+        let current_deposit = self.yield_source.params.user_deposit(deps, app)?;
 
         if let Some(share) = withdraw_share {
             Ok(current_deposit

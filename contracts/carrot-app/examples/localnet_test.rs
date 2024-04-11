@@ -24,7 +24,7 @@ use carrot_app::{
     msg::AppInstantiateMsg,
     state::ConfigBase,
     yield_sources::{
-        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldTypeBase, AssetShare,
+        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldParamsBase, AssetShare,
         StrategyBase, StrategyElementBase, YieldSourceBase,
     },
     AppExecuteMsgFns, AppInterface,

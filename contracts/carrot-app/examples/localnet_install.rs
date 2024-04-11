@@ -24,7 +24,7 @@ use carrot_app::{
     msg::{AppInstantiateMsg, AppMigrateMsg, MigrateMsg},
     state::ConfigBase,
     yield_sources::{
-        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldTypeBase, AssetShare,
+        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldParamsBase, AssetShare,
         StrategyBase, StrategyElementBase, YieldSourceBase,
     },
     AppInterface,
@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id: POOL_ID,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,

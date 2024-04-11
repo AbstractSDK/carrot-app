@@ -17,7 +17,7 @@ impl Strategy {
             .0
             .into_iter()
             .map(|s| {
-                let (rewards, raw_msgs) = s.yield_source.ty.withdraw_rewards(deps, app)?;
+                let (rewards, raw_msgs) = s.yield_source.params.withdraw_rewards(deps, app)?;
 
                 Ok::<_, AppError>((
                     rewards,

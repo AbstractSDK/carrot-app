@@ -126,7 +126,7 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
     strategy.0.iter().try_for_each(|s| {
         let deposit_value = s
             .yield_source
-            .ty
+            .params
             .user_deposit(deps, app)
             .unwrap_or_default();
         for fund in deposit_value {
@@ -148,7 +148,7 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
 
     let mut rewards = Coins::default();
     strategy.0.into_iter().try_for_each(|s| {
-        let this_rewards = s.yield_source.ty.user_rewards(deps, app)?;
+        let this_rewards = s.yield_source.params.user_rewards(deps, app)?;
         for fund in this_rewards {
             rewards.add(fund)?;
         }
@@ -167,8 +167,8 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
             .0
             .into_iter()
             .map(|s| {
-                let balance = s.yield_source.ty.user_deposit(deps, app)?;
-                let liquidity = s.yield_source.ty.user_liquidity(deps, app)?;
+                let balance = s.yield_source.params.user_deposit(deps, app)?;
+                let liquidity = s.yield_source.params.user_liquidity(deps, app)?;
 
                 let total_value = balance
                     .iter()
@@ -179,7 +179,7 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
                     .sum::<AppResult<Uint128>>()?;
 
                 Ok::<_, AppError>(PositionResponse {
-                    ty: s.yield_source.ty.into(),
+                    params: s.yield_source.params.into(),
                     balance: AssetsBalanceResponse {
                         balances: balance,
                         total_value,
