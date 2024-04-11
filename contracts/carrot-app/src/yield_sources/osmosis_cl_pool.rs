@@ -44,9 +44,8 @@ pub type ConcentratedPoolParams = ConcentratedPoolParamsBase<Checked>;
 impl YieldTypeImplementation for ConcentratedPoolParams {
     fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         // We verify there is a position stored
-        if self.position(deps).is_ok() {
-            // We just deposit
-            self.raw_deposit(deps, funds, app)
+        if let Ok(position) = self.position(deps) {
+            self.raw_deposit(deps, funds, app, position)
         } else {
             // We need to create a position
             self.create_position(deps, funds, app)
@@ -183,8 +182,6 @@ impl ConcentratedPoolParams {
         // create_position_msg: CreatePositionMessage,
     ) -> AppResult<Vec<SubMsg>> {
         let proxy_addr = app.account_base(deps)?.proxy;
-        deps.api
-            .debug(&format!("coins to be deposited : {:?}", funds));
         // 2. Create a position
         let tokens = cosmwasm_to_proto_coins(funds);
         let msg = app.executor(deps).execute_with_reply_and_data(
@@ -205,27 +202,33 @@ impl ConcentratedPoolParams {
         Ok(vec![msg])
     }
 
-    fn raw_deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
-        let pool = self.position(deps)?;
-        let position = pool.position.unwrap();
+    fn raw_deposit(
+        &self,
+        deps: Deps,
+        funds: Vec<Coin>,
+        app: &App,
+        position: FullPositionBreakdown,
+    ) -> AppResult<Vec<SubMsg>> {
+        let position_id = position.position.unwrap().position_id;
 
         let proxy_addr = app.account_base(deps)?.proxy;
 
         // We need to make sure the amounts are in the right order
         // We assume the funds vector has 2 coins associated
-        let (amount0, amount1) = match pool
+        let (amount0, amount1) = match position
             .asset0
             .map(|c| c.denom == funds[0].denom)
-            .or(pool.asset1.map(|c| c.denom == funds[1].denom))
+            .or(position.asset1.map(|c| c.denom == funds[1].denom))
         {
             Some(true) => (funds[0].amount, funds[1].amount), // we already had the right order
             Some(false) => (funds[1].amount, funds[0].amount), // we had the wrong order
             None => return Err(AppError::NoPosition {}), // A position has to exist in order to execute this function. This should be unreachable
         };
+        deps.api.debug("After amounts");
 
         let deposit_msg = app.executor(deps).execute_with_reply_and_data(
             MsgAddToPosition {
-                position_id: position.position_id,
+                position_id,
                 sender: proxy_addr.to_string(),
                 amount0: amount0.to_string(),
                 amount1: amount1.to_string(),
@@ -236,6 +239,7 @@ impl ConcentratedPoolParams {
             cosmwasm_std::ReplyOn::Success,
             OSMOSIS_ADD_TO_POSITION_REPLY_ID,
         )?;
+        deps.api.debug("After messages");
 
         Ok(vec![deposit_msg])
     }

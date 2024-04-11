@@ -51,13 +51,7 @@ fn deposit_one_strategy(
     yield_type: YieldType,
     app: App,
 ) -> AppResult {
-    deps.api
-        .debug(&format!("We're depositing {:?}-{:?}", strategy, yield_type));
-    deps.api.debug(&format!(
-        "Proxy balance after withdraw : {:?}",
-        deps.querier
-            .query_all_balances(app.account_base(deps.as_ref())?.proxy)?
-    ));
+    deps.api.debug("Start deposit one strategy");
     let mut temp_deposit_coins = Coins::default();
 
     // We go through all deposit steps.
@@ -125,8 +119,7 @@ pub fn execute_one_deposit_step(
     app: App,
 ) -> AppResult {
     let config = CONFIG.load(deps.storage)?;
-    deps.api
-        .debug(&format!("Deposit step swap : {:?}", asset_in));
+    deps.api.debug("Start onde deposit step");
 
     let exchange_rate_in = query_exchange_rate(deps.as_ref(), asset_in.denom.clone(), &app)?;
     let exchange_rate_out = query_exchange_rate(deps.as_ref(), denom_out.clone(), &app)?;
@@ -160,13 +153,15 @@ pub fn execute_finalize_deposit(
     yield_index: usize,
     app: App,
 ) -> AppResult {
+    deps.api.debug("Start finalize deposit");
     let available_deposit_coins = TEMP_DEPOSIT_COINS.load(deps.storage)?;
 
     TEMP_CURRENT_YIELD.save(deps.storage, &yield_index)?;
 
     let msgs = yield_type.deposit(deps.as_ref(), available_deposit_coins, &app)?;
 
-    Ok(app.response("one-deposit-step").add_submessages(msgs))
+    deps.api.debug("End finalize deposit");
+    Ok(app.response("finalize-deposit").add_submessages(msgs))
 }
 
 pub fn save_strategy(deps: DepsMut, strategy: Strategy) -> AppResult<()> {

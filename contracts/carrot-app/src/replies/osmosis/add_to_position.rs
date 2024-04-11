@@ -36,6 +36,7 @@ pub fn add_to_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
         }
         YieldType::Mars(_) => return Err(AppError::WrongYieldType {}),
     };
+    deps.api.debug("after add");
 
     save_strategy(deps, strategy)?;
 

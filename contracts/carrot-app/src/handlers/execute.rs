@@ -109,7 +109,6 @@ fn update_strategy(
         .filter(|x| !strategy.0.contains(x))
         .collect();
 
-    deps.api.debug("After stale sources");
     let (withdrawn_funds, withdraw_msgs): (Vec<Vec<Coin>>, Vec<Option<ExecutorMsg>>) =
         all_stale_sources
             .into_iter()
@@ -124,8 +123,6 @@ fn update_strategy(
             .into_iter()
             .unzip();
 
-    deps.api
-        .debug(&format!("After withdraw messages : {:?}", withdrawn_funds));
     withdrawn_funds
         .into_iter()
         .try_for_each(|f| f.into_iter().try_for_each(|f| available_funds.add(f)))?;
@@ -136,13 +133,6 @@ fn update_strategy(
     // 3. We deposit the funds into the new strategy
     let deposit_msgs = _inner_deposit(deps.as_ref(), &env, available_funds.into(), None, &app)?;
 
-    deps.api.debug(&format!(
-        "Proxy balance before withdraw : {:?}",
-        deps.querier
-            .query_all_balances(app.account_base(deps.as_ref())?.proxy)?
-    ));
-
-    deps.api.debug("After deposit msgs");
     Ok(app
         .response("rebalance")
         .add_messages(

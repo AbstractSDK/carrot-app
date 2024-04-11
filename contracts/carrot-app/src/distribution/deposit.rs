@@ -258,16 +258,13 @@ impl Strategy {
     /// Corrects the current strategy with some parameters passed by the user
     pub fn correct_with(&mut self, params: Option<Vec<Option<Vec<AssetShare>>>>) {
         // We correct the strategy if specified in parameters
-        let params = params.unwrap_or_else(|| vec![None; self.0.len()]);
-
-        self.0
-            .iter_mut()
-            .zip(params)
-            .for_each(|(strategy, params)| {
-                if let Some(param) = params {
+        if let Some(params) = params {
+            self.0.iter_mut().zip(params).for_each(|(strategy, param)| {
+                if let Some(param) = param {
                     strategy.yield_source.asset_distribution = param;
                 }
             })
+        }
     }
 }
 
