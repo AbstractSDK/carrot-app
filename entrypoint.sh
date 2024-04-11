@@ -11,3 +11,5 @@ if [ -n "$GRPC_URL" ]; then
 
 # Execute the CMD instruction
 exec "$@"
+
+exit 0
