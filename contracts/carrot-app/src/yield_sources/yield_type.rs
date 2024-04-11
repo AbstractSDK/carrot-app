@@ -20,78 +20,64 @@ pub enum YieldTypeBase<T> {
 pub type YieldTypeUnchecked = YieldTypeBase<Unchecked>;
 pub type YieldType = YieldTypeBase<Checked>;
 
-impl YieldType {
-    pub fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+impl YieldTypeImplementation for YieldType {
+    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         if funds.is_empty() {
             return Ok(vec![]);
         }
-        match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.deposit(deps, funds, app),
-            YieldType::Mars(params) => params.deposit(deps, funds, app),
-        }
+        self.inner().deposit(deps, funds, app)
     }
 
-    pub fn withdraw(
-        self,
+    fn withdraw(
+        &self,
         deps: Deps,
         amount: Option<Uint128>,
         app: &App,
     ) -> AppResult<Vec<CosmosMsg>> {
-        match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.withdraw(deps, amount, app),
-            YieldType::Mars(params) => params.withdraw(deps, amount, app),
-        }
+        self.inner().withdraw(deps, amount, app)
     }
 
-    pub fn withdraw_rewards(self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
-        match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.withdraw_rewards(deps, app),
-            YieldType::Mars(params) => params.withdraw_rewards(deps, app),
-        }
+    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+        self.inner().withdraw_rewards(deps, app)
     }
 
-    pub fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
-        let user_deposit_result = match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.user_deposit(deps, app),
-            YieldType::Mars(params) => params.user_deposit(deps, app),
-        };
-        Ok(user_deposit_result.unwrap_or_default())
+    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+        Ok(self.inner().user_deposit(deps, app).unwrap_or_default())
     }
 
-    pub fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
-        let user_deposit_result = match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.user_rewards(deps, app),
-            YieldType::Mars(params) => params.user_rewards(deps, app),
-        };
-        Ok(user_deposit_result.unwrap_or_default())
+    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+        Ok(self.inner().user_rewards(deps, app).unwrap_or_default())
     }
 
-    pub fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
-        let user_deposit_result = match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.user_liquidity(deps, app),
-            YieldType::Mars(params) => params.user_liquidity(deps, app),
-        };
-        Ok(user_deposit_result.unwrap_or_default())
+    fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
+        Ok(self.inner().user_liquidity(deps, app).unwrap_or_default())
     }
 
     /// Indicate the default funds allocation
     /// This is specifically useful for auto-compound as we're not able to input target amounts
     /// CL pools use that to know the best funds deposit ratio
     /// Mars doesn't use that, because the share is fixed to 1
-    pub fn share_type(&self) -> ShareType {
+    fn share_type(&self) -> ShareType {
+        self.inner().share_type()
+    }
+}
+
+impl YieldType {
+    fn inner(&self) -> &dyn YieldTypeImplementation {
         match self {
-            YieldType::ConcentratedLiquidityPool(params) => params.share_type(),
-            YieldType::Mars(params) => params.share_type(),
+            YieldType::ConcentratedLiquidityPool(params) => params,
+            YieldType::Mars(params) => params,
         }
     }
 }
 
 pub trait YieldTypeImplementation {
-    fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>>;
+    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>>;
 
-    fn withdraw(self, deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec<CosmosMsg>>;
+    fn withdraw(&self, deps: Deps, amount: Option<Uint128>, app: &App)
+        -> AppResult<Vec<CosmosMsg>>;
 
-    fn withdraw_rewards(self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)>;
+    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)>;
 
     fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
 

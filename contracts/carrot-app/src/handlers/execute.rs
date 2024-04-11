@@ -16,9 +16,6 @@ use cosmwasm_std::{
     to_json_binary, Coin, Coins, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, Uint128,
     WasmMsg,
 };
-
-use abstract_app::traits::AccountIdentification;
-
 use super::internal::execute_internal_action;
 
 pub fn execute_handler(

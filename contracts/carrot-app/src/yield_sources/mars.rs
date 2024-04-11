@@ -20,9 +20,9 @@ pub struct MarsDepositParams {
 }
 
 impl YieldTypeImplementation for MarsDepositParams {
-    fn deposit(self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         let ans = app.name_service(deps);
-        let ans_fund = ans.query(&AssetInfo::native(self.denom))?;
+        let ans_fund = ans.query(&AssetInfo::native(self.denom.clone()))?;
 
         Ok(vec![SubMsg::new(
             app.ans_money_market(deps, MARS_MONEY_MARKET.to_string())
@@ -30,7 +30,12 @@ impl YieldTypeImplementation for MarsDepositParams {
         )])
     }
 
-    fn withdraw(self, deps: Deps, amount: Option<Uint128>, app: &App) -> AppResult<Vec<CosmosMsg>> {
+    fn withdraw(
+        &self,
+        deps: Deps,
+        amount: Option<Uint128>,
+        app: &App,
+    ) -> AppResult<Vec<CosmosMsg>> {
         let ans = app.name_service(deps);
 
         let amount = if let Some(amount) = amount {
@@ -39,14 +44,14 @@ impl YieldTypeImplementation for MarsDepositParams {
             self.user_deposit(deps, app)?[0].amount
         };
 
-        let ans_fund = ans.query(&AssetInfo::native(self.denom))?;
+        let ans_fund = ans.query(&AssetInfo::native(self.denom.clone()))?;
 
         Ok(vec![app
             .ans_money_market(deps, MARS_MONEY_MARKET.to_string())
             .withdraw(AnsAsset::new(ans_fund, amount))?])
     }
 
-    fn withdraw_rewards(self, _deps: Deps, _app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    fn withdraw_rewards(&self, _deps: Deps, _app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
         // Mars doesn't have rewards, it's automatically auto-compounded
         Ok((vec![], vec![]))
     }

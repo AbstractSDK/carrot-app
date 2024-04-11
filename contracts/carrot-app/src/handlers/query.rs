@@ -11,6 +11,7 @@ use crate::autocompound::get_autocompound_status;
 use crate::exchange_rate::query_exchange_rate;
 use crate::msg::{PositionResponse, PositionsResponse};
 use crate::state::STRATEGY_CONFIG;
+use crate::yield_sources::yield_type::YieldTypeImplementation;
 use crate::{
     contract::{App, AppResult},
     error::AppError,

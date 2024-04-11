@@ -8,7 +8,10 @@ use crate::{
         CONFIG, STRATEGY_CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS,
         TEMP_EXPECTED_SWAP_COIN,
     },
-    yield_sources::{yield_type::YieldType, Strategy},
+    yield_sources::{
+        yield_type::{YieldType, YieldTypeImplementation},
+        Strategy,
+    },
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
@@ -17,7 +20,6 @@ use cosmwasm_std::{wasm_execute, Coin, Coins, DepsMut, Env, SubMsg, Uint128};
 use cw_asset::AssetInfo;
 
 use crate::exchange_rate::query_exchange_rate;
-use abstract_app::traits::AccountIdentification;
 
 pub fn execute_internal_action(
     deps: DepsMut,
