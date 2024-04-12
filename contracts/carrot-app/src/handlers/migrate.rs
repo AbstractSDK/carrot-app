@@ -56,7 +56,12 @@ pub fn migrate_handler(deps: DepsMut, mut env: Env, app: App, _msg: AppMigrateMs
     if let Some(old_position) = OLD_POSITION.may_load(deps.storage)? {
         // save_position uses ENV for determining time, so need to trick it here a little
         env.block.time = old_position.last_compound;
-        CarrotPosition::save_position(deps, env, old_position.position_id)?;
+        CarrotPosition::save_position(
+            deps.storage,
+            &old_position.last_compound,
+            old_position.position_id,
+        )?;
+        OLD_POSITION.remove(deps.storage);
     }
 
     Ok(app.response("migrate"))

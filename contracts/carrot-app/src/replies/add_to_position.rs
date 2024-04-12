@@ -22,7 +22,7 @@ pub fn add_to_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
     let response: MsgAddToPositionResponse = parsed.data.unwrap_or_default().try_into()?;
 
     // We update the position
-    CarrotPosition::save_position(deps, env, response.position_id)?;
+    CarrotPosition::save_position(deps.storage, &env.block.time, response.position_id)?;
 
     Ok(app
         .response("create_position_reply")

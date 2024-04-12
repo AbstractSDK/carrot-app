@@ -2,8 +2,7 @@ use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
 use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    ensure, Addr, Deps, DepsMut, Env, MessageInfo, QuerierWrapper, StdResult, Storage, Timestamp,
-    Uint128, Uint64,
+    ensure, Deps, Env, MessageInfo, QuerierWrapper, StdResult, Storage, Timestamp, Uint128, Uint64,
 };
 use cw_storage_plus::Item;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
@@ -12,17 +11,16 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
 
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
-const POSITION: Item<Position> = Item::new("position");
+const POSITION: Item<Position> = Item::new("position2");
 const LAST_COMPOUND: Item<Timestamp> = Item::new("last_compound");
 pub const CONFIG: Item<Config> = Item::new("config2");
-pub const CURRENT_EXECUTOR: Item<Addr> = Item::new("executor");
 
 #[cw_serde]
 struct Position {
     pub position_id: u64,
 }
 
-/// Type for handling position created by the carrot app
+/// Type for handling position created by the carrot app and compound status
 #[derive(Clone)]
 pub struct CarrotPosition {
     pub id: u64,
@@ -54,9 +52,13 @@ impl CarrotPosition {
     }
 
     /// Save position
-    pub fn save_position(deps: DepsMut, env: Env, position_id: u64) -> StdResult<()> {
-        POSITION.save(deps.storage, &Position { position_id })?;
-        LAST_COMPOUND.save(deps.storage, &env.block.time)?;
+    pub fn save_position(
+        storage: &mut dyn Storage,
+        compound_timestamp: &Timestamp,
+        position_id: u64,
+    ) -> StdResult<()> {
+        POSITION.save(storage, &Position { position_id })?;
+        LAST_COMPOUND.save(storage, compound_timestamp)?;
         Ok(())
     }
 
