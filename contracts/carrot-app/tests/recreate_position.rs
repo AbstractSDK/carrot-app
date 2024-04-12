@@ -67,7 +67,7 @@ fn create_multiple_positions_after_withdraw() -> anyhow::Result<()> {
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
     let half_of_liquidity = liquidity_amount / Uint256::from_u128(2);
-    carrot_app.withdraw(half_of_liquidity)?;
+    carrot_app.withdraw(Some(half_of_liquidity), None)?;
 
     // Create position second time, it should fail
     let position_err = create_position(
@@ -85,7 +85,7 @@ fn create_multiple_positions_after_withdraw() -> anyhow::Result<()> {
     // Withdraw whole liquidity
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
-    carrot_app.withdraw(liquidity_amount)?;
+    carrot_app.withdraw(Some(liquidity_amount), None)?;
 
     // Create position second time, it should fail
     create_position(
@@ -111,7 +111,7 @@ fn create_multiple_positions_after_withdraw_all() -> anyhow::Result<()> {
     )?;
 
     // Withdraw whole liquidity
-    carrot_app.withdraw_all()?;
+    carrot_app.withdraw(None, None)?;
 
     // Create position second time, it should succeed
     create_position(

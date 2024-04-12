@@ -59,19 +59,12 @@ pub enum AppExecuteMsg {
         belief_price0: Option<Decimal>,
         belief_price1: Option<Decimal>,
     },
-    /// Partial withdraw of the liquidity amount available on the position
+    /// Withdraw liquidity available on the position
     Withdraw {
-        /// Liquidity amount
-        amount: Uint256,
-    },
-    /// Withdraw everything that is on the app
-    WithdrawAll {},
-    /// Withdraw liquidity amount and swap to provided asset
-    WithdrawToAsset {
-        /// Liquidity amount
-        amount: Uint256,
-        /// Swap withdrawn liquidity to single asset
-        swap_to: SwapToAsset,
+        /// Liquidity amount, withdraws everything when omitted
+        amount: Option<Uint256>,
+        /// When provided, will swap withdrawn liquidity to single asset
+        swap_to: Option<SwapToAsset>,
     },
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},

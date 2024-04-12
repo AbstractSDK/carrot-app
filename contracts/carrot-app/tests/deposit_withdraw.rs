@@ -104,7 +104,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Withdraw half of liquidity
     let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
     let half_of_liquidity = liquidity_amount / Uint256::from_u128(2);
-    carrot_app.withdraw(half_of_liquidity)?;
+    carrot_app.withdraw(Some(half_of_liquidity), None)?;
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
@@ -121,7 +121,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     assert!(balance_usdt_after_half_withdraw.amount > balance_usdt_before_withdraw.amount);
 
     // Withdraw rest of liquidity
-    carrot_app.withdraw_all()?;
+    carrot_app.withdraw(None, None)?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
         .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
@@ -197,7 +197,7 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
     )?;
 
     // Ensure it errors
-    carrot_app.withdraw_all().unwrap_err();
+    carrot_app.withdraw(None, None).unwrap_err();
 
     // Ensure we get correct compound response
     let status_response = carrot_app.compound_status()?;
@@ -315,7 +315,7 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
     let half_of_liquidity = liquidity_amount / Uint256::from_u128(2);
-    carrot_app.withdraw(half_of_liquidity)?;
+    carrot_app.withdraw(Some(half_of_liquidity), None)?;
 
     // Check rewards claimed
     let status = carrot_app.compound_status()?;
@@ -460,12 +460,12 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
             .bank_querier()
             .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
 
-        carrot_app.withdraw_to_asset(
-            withdraw_liquidity_amount,
-            carrot_app::msg::SwapToAsset {
+        carrot_app.withdraw(
+            Some(withdraw_liquidity_amount),
+            Some(carrot_app::msg::SwapToAsset {
                 to_asset: AssetEntry::new(USDC),
                 max_spread: None,
-            },
+            }),
         )?;
 
         let asset0_balance_after = chain
@@ -491,12 +491,12 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
             .bank_querier()
             .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
 
-        carrot_app.withdraw_to_asset(
-            withdraw_liquidity_amount,
-            SwapToAsset {
+        carrot_app.withdraw(
+            Some(withdraw_liquidity_amount),
+            Some(SwapToAsset {
                 to_asset: AssetEntry::new(USDT),
                 max_spread: None,
-            },
+            }),
         )?;
 
         let asset0_balance_after = chain

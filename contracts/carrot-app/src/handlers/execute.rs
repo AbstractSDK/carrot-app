@@ -63,10 +63,8 @@ pub fn execute_handler(
             belief_price1,
             app,
         ),
-        AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), None, app),
-        AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, None, app),
-        AppExecuteMsg::WithdrawToAsset { amount, swap_to } => {
-            withdraw(deps, env, info, Some(amount), Some(swap_to), app)
+        AppExecuteMsg::Withdraw { amount, swap_to } => {
+            withdraw(deps, env, info, amount, swap_to, app)
         }
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
     }
