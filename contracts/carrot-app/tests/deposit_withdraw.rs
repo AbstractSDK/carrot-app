@@ -1,11 +1,13 @@
 mod common;
 
+use std::str::FromStr;
+
 use crate::common::{create_position, setup_test_tube, USDC, USDC_DENOM, USDT, USDT_DENOM};
 use abstract_app::objects::AssetEntry;
 use abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, CreatePositionMessage,
-    PositionResponse,
+    PositionResponse, SwapToAsset,
 };
 use common::DEX_NAME;
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint256};
@@ -395,9 +397,9 @@ fn shifted_position_create_deposit() -> anyhow::Result<()> {
     carrot_app.create_position(CreatePositionMessage {
         lower_tick: -37000,
         upper_tick: 1000,
-        funds: coins(deposit_amount, USDT),
-        asset0: coin(205_000, USDT),
-        asset1: coin(753_000, USDC),
+        funds: coins(deposit_amount, USDT_DENOM),
+        asset0: coin(205_000, USDT_DENOM),
+        asset1: coin(753_000, USDC_DENOM),
         max_spread: None,
         belief_price0: None,
         belief_price1: None,
@@ -411,7 +413,7 @@ fn shifted_position_create_deposit() -> anyhow::Result<()> {
     assert!(sum.u128() > (deposit_amount - max_difference.u128()));
 
     // Deposit asset0
-    carrot_app.deposit(coins(deposit_amount, USDT), None, None, None)?;
+    carrot_app.deposit(coins(deposit_amount, USDT_DENOM), None, None, None)?;
     let balance = carrot_app.balance()?;
     let sum = balance
         .balances
@@ -420,7 +422,7 @@ fn shifted_position_create_deposit() -> anyhow::Result<()> {
     assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 2);
 
     // Deposit asset1
-    carrot_app.deposit(coins(deposit_amount, USDT), None, None, None)?;
+    carrot_app.deposit(coins(deposit_amount, USDT_DENOM), None, None, None)?;
     let balance = carrot_app.balance()?;
     let sum = balance
         .balances
@@ -435,16 +437,19 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     let chain = carrot_app.get_chain().clone();
-
+    let initial_amount = 100_000;
     // Create position
     create_position(
         &carrot_app,
-        coins(100_000, USDT_DENOM.to_owned()),
+        coins(initial_amount, USDT_DENOM.to_owned()),
         coin(1_000_000, USDT_DENOM.to_owned()),
         coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
-    let withdraw_amount = 10_000u128;
-    let max_fee = Uint128::new(withdraw_amount).mul_floor(Decimal::percent(3));
+    let liquidity = carrot_app.balance()?.liquidity;
+    let liquidity = Uint256::from_str(&liquidity)?;
+    let withdraw_liquidity_amount = liquidity / Uint256::from_u128(3);
+    let withdraw_amount = Uint128::new(initial_amount / 3);
+    let max_fee = withdraw_amount.mul_floor(Decimal::percent(3));
 
     // Withdraw to asset1
     {
@@ -455,7 +460,13 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
             .bank_querier()
             .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
 
-        carrot_app.withdraw_to_asset(Uint128::new(withdraw_amount), AssetEntry::new(USDC), None)?;
+        carrot_app.withdraw_to_asset(
+            withdraw_liquidity_amount,
+            carrot_app::msg::SwapToAsset {
+                to_asset: AssetEntry::new(USDC),
+                max_spread: None,
+            },
+        )?;
 
         let asset0_balance_after = chain
             .bank_querier()
@@ -467,7 +478,7 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
         assert_eq!(asset0_balance_before, asset0_balance_after);
         assert!(
             asset1_balance_after[0].amount - asset1_balance_before[0].amount
-                >= Uint128::new(10_000) - max_fee
+                >= withdraw_amount - max_fee
         );
     }
 
@@ -480,7 +491,13 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
             .bank_querier()
             .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?;
 
-        carrot_app.withdraw_to_asset(Uint128::new(withdraw_amount), AssetEntry::new(USDT), None)?;
+        carrot_app.withdraw_to_asset(
+            withdraw_liquidity_amount,
+            SwapToAsset {
+                to_asset: AssetEntry::new(USDT),
+                max_spread: None,
+            },
+        )?;
 
         let asset0_balance_after = chain
             .bank_querier()
@@ -492,7 +509,7 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
         assert_eq!(asset1_balance_before, asset1_balance_after);
         assert!(
             asset0_balance_after[0].amount - asset0_balance_before[0].amount
-                >= Uint128::new(10_000) - max_fee
+                >= withdraw_amount - max_fee
         );
     }
     Ok(())

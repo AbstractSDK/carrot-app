@@ -26,7 +26,7 @@ pub fn withdraw_to_asset_reply(deps: DepsMut, env: Env, app: App, reply: Reply) 
     let payload = TEMP_WITHDRAW_TO_ASSET.load(deps.storage)?;
 
     let mut swap_msgs = vec![];
-    if config.pool_config.asset0 != payload.expected_return.name {
+    if config.pool_config.asset0 != payload.to_asset {
         swap_msgs.extend(swap_msg(
             deps.as_ref(),
             &env,
@@ -34,12 +34,12 @@ pub fn withdraw_to_asset_reply(deps: DepsMut, env: Env, app: App, reply: Reply) 
                 name: config.pool_config.asset0,
                 amount: response.amount0.parse()?,
             },
-            payload.expected_return.name.clone(),
+            payload.to_asset.clone(),
             payload.max_spread,
             &app,
         )?);
     }
-    if config.pool_config.asset1 != payload.expected_return.name {
+    if config.pool_config.asset1 != payload.to_asset {
         swap_msgs.extend(swap_msg(
             deps.as_ref(),
             &env,
@@ -47,7 +47,7 @@ pub fn withdraw_to_asset_reply(deps: DepsMut, env: Env, app: App, reply: Reply) 
                 name: config.pool_config.asset1,
                 amount: response.amount1.parse()?,
             },
-            payload.expected_return.name,
+            payload.to_asset,
             payload.max_spread,
             &app,
         )?);

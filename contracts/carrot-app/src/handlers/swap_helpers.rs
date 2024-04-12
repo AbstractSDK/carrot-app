@@ -164,7 +164,7 @@ pub fn swap_to_enter_position(
 
     Ok((
         swap_msg(deps, env, offer_asset, ask_asset, max_spread, app)?,
-        resulting_assets,
+        assets_for_position,
     ))
 }
 

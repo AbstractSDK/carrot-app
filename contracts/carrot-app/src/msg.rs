@@ -1,6 +1,6 @@
 use abstract_app::objects::AssetEntry;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Decimal, Uint128, Uint256, Uint64};
+use cosmwasm_std::{Coin, Decimal, Uint256, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
@@ -59,15 +59,19 @@ pub enum AppExecuteMsg {
         belief_price0: Option<Decimal>,
         belief_price1: Option<Decimal>,
     },
-    /// Partial withdraw of the liquidity amounts available on the position
-    Withdraw { amount: Uint256 },
+    /// Partial withdraw of the liquidity amount available on the position
+    Withdraw {
+        /// Liquidity amount
+        amount: Uint256,
+    },
     /// Withdraw everything that is on the app
     WithdrawAll {},
-    /// With
+    /// Withdraw liquidity amount and swap to provided asset
     WithdrawToAsset {
-        amount: Uint128,
-        to_asset: AssetEntry,
-        max_spread: Option<Decimal>,
+        /// Liquidity amount
+        amount: Uint256,
+        /// Swap withdrawn liquidity to single asset
+        swap_to: SwapToAsset,
     },
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},
@@ -137,4 +141,10 @@ impl CompoundStatus {
     pub fn is_ready(&self) -> bool {
         matches!(self, Self::Ready {})
     }
+}
+
+#[cw_serde]
+pub struct SwapToAsset {
+    pub to_asset: AssetEntry,
+    pub max_spread: Option<Decimal>,
 }
