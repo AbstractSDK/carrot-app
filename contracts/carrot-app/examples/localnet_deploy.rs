@@ -1,24 +1,17 @@
 use abstract_app::objects::{
     namespace::ABSTRACT_NAMESPACE, pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType,
 };
-use abstract_client::{AbstractClient, Application, Namespace};
-use abstract_interface::Abstract;
-use abstract_sdk::core::ans_host::QueryMsgFns;
+use abstract_client::{AbstractClient, Namespace};
 use cosmwasm_std::Decimal;
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::{
     anyhow,
-    contract::Deploy,
-    daemon::{
-        networks::{LOCAL_OSMO, OSMOSIS_1, OSMO_5},
-        Daemon, DaemonBuilder,
-    },
+    daemon::{networks::LOCAL_OSMO, DaemonBuilder},
     prelude::*,
     tokio::runtime::Runtime,
 };
 use dotenv::dotenv;
 
-use carrot_app::{contract::APP_ID, AppInterface};
 use cw_orch::osmosis_test_tube::osmosis_test_tube::cosmrs::proto::traits::Message;
 use osmosis_std::types::{
     cosmos::base::v1beta1,
@@ -40,7 +33,7 @@ pub const SPREAD_FACTOR: u64 = 0;
 pub const INITIAL_LOWER_TICK: i64 = -100000;
 pub const INITIAL_UPPER_TICK: i64 = 10000;
 
-fn main() -> anyhow::Result<()> {
+pub fn main() -> anyhow::Result<()> {
     dotenv().ok();
     env_logger::init();
     let mut chain = LOCAL_OSMO;
@@ -115,7 +108,7 @@ pub fn register_ans<Chain: CwEnv>(chain: Chain, pool_id: u64) -> anyhow::Result<
     let asset0 = ION.to_owned();
     let asset1 = OSMO.to_owned();
     // We register the pool inside the Abstract ANS
-    let client = AbstractClient::builder(chain.clone())
+    let _client = AbstractClient::builder(chain.clone())
         .dex("osmosis")
         .assets(vec![
             (ION.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
