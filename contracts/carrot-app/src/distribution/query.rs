@@ -85,7 +85,7 @@ impl Strategy {
 }
 
 impl StrategyElement {
-    /// Queries the current value distribution of a registered strategy
+    /// Queries the current value distribution of a registered strategy.
     /// If there is no deposit or the query for the user deposit value fails
     ///     the function returns 0 value with the registered asset distribution
     pub fn query_current_value(

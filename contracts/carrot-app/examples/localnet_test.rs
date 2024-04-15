@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
 
     carrot.deposit(coins(10_000, "uosmo"), None)?;
 
-    // carrot.update_strategy(vec![], five_strategy())?;
+    // carrot.update_strategy(coins(10_000, "uosmo"), five_strategy())?;
     // carrot.withdraw(None)?;
     // carrot.deposit(coins(10_000, "uosmo"), None)?;
 

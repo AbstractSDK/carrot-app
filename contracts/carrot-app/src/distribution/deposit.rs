@@ -14,6 +14,12 @@ use cosmwasm_schema::cw_serde;
 
 use crate::{error::AppError, msg::InternalExecuteMsg};
 
+/// This functions creates the current deposit strategy
+// /// 1. We query the target strategy in storage (target strategy)
+// /// 2. We query the current status of the strategy (current strategy) from all deposits (external queries)
+// /// 3. We create a temporary strategy object that allocates the funds from this deposit into the various strategies
+// /// 4. We correct the expected token shares of each strategy, in case there are corrections passed to the function
+// /// 5. We deposit funds according to that strategy
 pub fn generate_deposit_strategy(
     deps: Deps,
     funds: Vec<Coin>,
@@ -33,9 +39,6 @@ pub fn generate_deposit_strategy(
         current_strategy_status,
         app,
     )?;
-
-    // We query the yield source shares
-    this_deposit_strategy.apply_current_strategy_shares(deps, app)?;
 
     // We correct it if the user asked to correct the share parameters of each strategy
     this_deposit_strategy.correct_with(yield_source_params);

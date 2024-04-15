@@ -1,5 +1,5 @@
 use abstract_sdk::{AccountAction, Execution, ExecutorMsg};
-use cosmwasm_std::{Coin, Decimal, Deps};
+use cosmwasm_std::{Coin, Coins, Decimal, Deps};
 
 use crate::{
     contract::{App, AppResult},
@@ -18,6 +18,20 @@ impl Strategy {
             .into_iter()
             .map(|s| s.withdraw(deps, withdraw_share, app))
             .collect()
+    }
+    pub fn withdraw_preview(
+        self,
+        deps: Deps,
+        withdraw_share: Option<Decimal>,
+        app: &App,
+    ) -> AppResult<Vec<Coin>> {
+        let mut withdraw_result = Coins::default();
+        self.0.into_iter().try_for_each(|s| {
+            let funds = s.withdraw_preview(deps, withdraw_share, app)?;
+            funds.into_iter().try_for_each(|f| withdraw_result.add(f))?;
+            Ok::<_, AppError>(())
+        })?;
+        Ok(withdraw_result.into())
     }
 }
 

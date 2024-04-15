@@ -1,11 +1,14 @@
-use cosmwasm_std::{Coin, Deps, Uint128};
+use cosmwasm_std::{Coin, Decimal, Deps, Uint128};
 
 use crate::{
     contract::{App, AppResult},
     distribution::deposit::generate_deposit_strategy,
     msg::{DepositPreviewResponse, UpdateStrategyPreviewResponse, WithdrawPreviewResponse},
+    state::STRATEGY_CONFIG,
     yield_sources::{AssetShare, StrategyUnchecked},
 };
+
+use super::query::withdraw_share;
 
 pub fn deposit_preview(
     deps: Deps,
@@ -30,8 +33,22 @@ pub fn withdraw_preview(
     amount: Option<Uint128>,
     app: &App,
 ) -> AppResult<WithdrawPreviewResponse> {
-    Ok(WithdrawPreviewResponse {})
+    let withdraw_share = withdraw_share(deps, amount, app)?;
+    let funds = STRATEGY_CONFIG
+        .load(deps.storage)?
+        .withdraw_preview(deps, withdraw_share, app)?;
+
+    let msgs = STRATEGY_CONFIG
+        .load(deps.storage)?
+        .withdraw(deps, withdraw_share, app)?;
+
+    Ok(WithdrawPreviewResponse {
+        share: withdraw_share.unwrap_or(Decimal::one()),
+        funds,
+        msgs: msgs.into_iter().map(Into::into).collect(),
+    })
 }
+
 pub fn update_strategy_preview(
     deps: Deps,
     funds: Vec<Coin>,
