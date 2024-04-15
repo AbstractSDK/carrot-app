@@ -343,14 +343,11 @@ fn withdraw_to() -> anyhow::Result<()> {
     let mut balances_after: Coins = chain
         .query_all_balances(carrot_app.account().proxy()?.as_str())?
         .try_into()?;
-    println!("{:?}", Vec::<Coin>::from(balances_after.clone()));
-    println!("{:?}", balances_before);
 
     for f in balances_before {
         balances_after.sub(f)?;
     }
     // In balances before remains only the withdrawn funds
-    println!("{:?}", balances_after);
     assert_eq!(balances_after.len(), 1);
 
     Ok(())
