@@ -281,5 +281,7 @@ fn _inner_withdraw(
         })?;
     }
 
+    deps.api.debug(&format!("{:?}", withdraw_msgs));
+
     Ok(withdraw_msgs)
 }
