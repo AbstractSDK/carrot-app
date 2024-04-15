@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
     carrot.deposit(coins(10_000, "uosmo"), None)?;
 
     carrot.update_strategy(coins(10_000, "uosmo"), five_strategy())?;
-    carrot.withdraw(None)?;
+    carrot.withdraw(None, None)?;
     carrot.deposit(coins(10_000, "uosmo"), None)?;
 
     Ok(())

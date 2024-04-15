@@ -96,7 +96,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Withdraw some of the value
     let liquidity_amount: Uint128 = balance.balances[0].amount;
     let half_of_liquidity = liquidity_amount / Uint128::new(2);
-    carrot_app.withdraw(Some(half_of_liquidity))?;
+    carrot_app.withdraw(None, Some(half_of_liquidity))?;
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
@@ -113,7 +113,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     assert!(balance_usdt_after_half_withdraw.amount > balance_usdt_before_withdraw.amount);
 
     // Withdraw rest of liquidity
-    carrot_app.withdraw(None)?;
+    carrot_app.withdraw(None, None)?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
         .balance(chain.sender(), Some(USDT.to_owned()))?

@@ -1,22 +1,26 @@
-use super::internal::execute_internal_action;
+use super::{internal::execute_internal_action, swap_helpers::MAX_SPREAD};
 use crate::{
     autocompound::AutocompoundState,
     check::Checkable,
     contract::{App, AppResult},
     distribution::deposit::generate_deposit_strategy,
     error::AppError,
+    exchange_rate::query_exchange_rate,
     handlers::query::query_balance,
     helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg},
     state::{AUTOCOMPOUND_STATE, CONFIG, STRATEGY_CONFIG},
     yield_sources::{AssetShare, Strategy, StrategyUnchecked},
 };
-use abstract_app::abstract_sdk::features::AbstractResponse;
+use abstract_app::traits::AbstractNameService;
+use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AssetEntry};
+use abstract_dex_adapter::DexInterface;
 use abstract_sdk::ExecutorMsg;
 use cosmwasm_std::{
     to_json_binary, Coin, Coins, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, Uint128,
     WasmMsg,
 };
+use cw_asset::Asset;
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -30,7 +34,9 @@ pub fn execute_handler(
             funds,
             yield_sources_params,
         } => deposit(deps, env, info, funds, yield_sources_params, app),
-        AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, amount, app),
+        AppExecuteMsg::Withdraw { value, swap_to } => {
+            withdraw(deps, env, info, value, swap_to, app)
+        }
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
         AppExecuteMsg::UpdateStrategy { strategy, funds } => {
             update_strategy(deps, env, info, strategy, funds, app)
@@ -81,12 +87,13 @@ fn withdraw(
     env: Env,
     info: MessageInfo,
     amount: Option<Uint128>,
+    swap_to: Option<AssetEntry>,
     app: App,
 ) -> AppResult {
     // Only the authorized addresses (admin ?) can withdraw
     app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 
-    let msgs = _inner_withdraw(deps, &env, amount, &app)?;
+    let msgs = _inner_withdraw(deps, &env, amount, swap_to, &app)?;
 
     Ok(app.response("withdraw").add_messages(msgs))
 }
@@ -225,8 +232,9 @@ fn _inner_withdraw(
     deps: DepsMut,
     _env: &Env,
     value: Option<Uint128>,
+    swap_to: Option<AssetEntry>,
     app: &App,
-) -> AppResult<Vec<ExecutorMsg>> {
+) -> AppResult<Vec<CosmosMsg>> {
     // We need to select the share of each investment that needs to be withdrawn
     let withdraw_share = value
         .map(|value| {
@@ -240,10 +248,38 @@ fn _inner_withdraw(
         .transpose()?;
 
     // We withdraw the necessary share from all registered investments
-    let withdraw_msgs =
-        STRATEGY_CONFIG
-            .load(deps.storage)?
-            .withdraw(deps.as_ref(), withdraw_share, app)?;
+    let mut withdraw_msgs: Vec<CosmosMsg> = STRATEGY_CONFIG
+        .load(deps.storage)?
+        .withdraw(deps.as_ref(), withdraw_share, app)?
+        .into_iter()
+        .map(Into::into)
+        .collect();
 
-    Ok(withdraw_msgs.into_iter().collect())
+    if let Some(swap_to) = swap_to {
+        let withdraw_preview = STRATEGY_CONFIG.load(deps.storage)?.withdraw_preview(
+            deps.as_ref(),
+            withdraw_share,
+            app,
+        )?;
+
+        // We swap all withdraw_preview coins to the swap asset
+        let config = CONFIG.load(deps.storage)?;
+        let ans = app.name_service(deps.as_ref());
+        let dex = app.ans_dex(deps.as_ref(), config.dex);
+        withdraw_preview.into_iter().try_for_each(|fund| {
+            let asset = ans.query(&Asset::from(fund.clone()))?;
+            if asset.name != swap_to {
+                let swap_msg = dex.swap(
+                    asset,
+                    swap_to.clone(),
+                    Some(MAX_SPREAD),
+                    Some(query_exchange_rate(deps.as_ref(), fund.denom, app)?),
+                )?;
+                withdraw_msgs.push(swap_msg);
+            }
+            Ok::<_, AppError>(())
+        })?;
+    }
+
+    Ok(withdraw_msgs)
 }
