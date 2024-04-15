@@ -25,7 +25,8 @@ use carrot_app::{
     state::ConfigBase,
     yield_sources::{
         osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldParamsBase, AssetShare,
-        StrategyBase, StrategyElementBase, YieldSourceBase,
+        StrategyBase, StrategyElementBase, StrategyElementUnchecked, StrategyUnchecked,
+        YieldSourceBase,
     },
     AppInterface,
 };
@@ -80,28 +81,7 @@ fn main() -> anyhow::Result<()> {
             },
             dex: "osmosis".to_string(),
         },
-        strategy: StrategyBase(vec![StrategyElementBase {
-            yield_source: YieldSourceBase {
-                asset_distribution: vec![
-                    AssetShare {
-                        denom: ION.to_string(),
-                        share: Decimal::percent(50),
-                    },
-                    AssetShare {
-                        denom: OSMO.to_string(),
-                        share: Decimal::percent(50),
-                    },
-                ],
-                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                    pool_id: POOL_ID,
-                    lower_tick: INITIAL_LOWER_TICK,
-                    upper_tick: INITIAL_UPPER_TICK,
-                    position_id: None,
-                    _phantom: std::marker::PhantomData,
-                }),
-            },
-            share: Decimal::one(),
-        }]),
+        strategy: two_strategy(),
         deposit: None,
     };
 
@@ -128,4 +108,71 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     Ok(())
+}
+
+fn one_element(upper_tick: i64, lower_tick: i64, share: Decimal) -> StrategyElementUnchecked {
+    StrategyElementBase {
+        yield_source: YieldSourceBase {
+            asset_distribution: vec![
+                AssetShare {
+                    denom: ION.to_string(),
+                    share: Decimal::percent(50),
+                },
+                AssetShare {
+                    denom: OSMO.to_string(),
+                    share: Decimal::percent(50),
+                },
+            ],
+            params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                pool_id: POOL_ID,
+                lower_tick,
+                upper_tick,
+                position_id: None,
+                _phantom: std::marker::PhantomData,
+            }),
+        },
+        share,
+    }
+}
+
+pub fn single_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![one_element(
+        INITIAL_UPPER_TICK,
+        INITIAL_LOWER_TICK,
+        Decimal::one(),
+    )])
+}
+
+pub fn two_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(50)),
+        one_element(5000, -5000, Decimal::percent(50)),
+    ])
+}
+
+pub fn three_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(33)),
+        one_element(5000, -5000, Decimal::percent(33)),
+        one_element(1000, -1000, Decimal::percent(34)),
+    ])
+}
+
+pub fn four_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(25)),
+        one_element(5000, -5000, Decimal::percent(25)),
+        one_element(1000, -1000, Decimal::percent(25)),
+        one_element(100, -100, Decimal::percent(25)),
+    ])
+}
+
+pub fn five_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(20)),
+        one_element(5000, -5000, Decimal::percent(20)),
+        one_element(1000, -1000, Decimal::percent(20)),
+        one_element(100, -100, Decimal::percent(20)),
+        one_element(600, -600, Decimal::percent(20)),
+    ])
 }

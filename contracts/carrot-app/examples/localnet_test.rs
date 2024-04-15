@@ -29,6 +29,9 @@ use carrot_app::{
     },
     AppExecuteMsgFns, AppInterface,
 };
+use localnet_install::{five_strategy, four_strategy, three_strategy};
+
+mod localnet_install;
 
 pub const ION: &str = "uion";
 pub const OSMO: &str = "uosmo";
@@ -75,10 +78,11 @@ fn main() -> anyhow::Result<()> {
             .bank_send(account.proxy()?.as_str(), coins(10_000, "uosmo")),
     )?;
 
-    // carrot.deposit(coins(10_000, "uosmo"), None)?;
     carrot.deposit(coins(10_000, "uosmo"), None)?;
 
+    // carrot.update_strategy(vec![], five_strategy())?;
     // carrot.withdraw(None)?;
+    // carrot.deposit(coins(10_000, "uosmo"), None)?;
 
     Ok(())
 }
