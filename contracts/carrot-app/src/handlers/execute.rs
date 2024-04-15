@@ -9,7 +9,7 @@ use crate::{
     helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg},
     state::{AUTOCOMPOUND_STATE, CONFIG, STRATEGY_CONFIG},
-    yield_sources::{AssetShare, StrategyUnchecked},
+    yield_sources::{AssetShare, Strategy, StrategyUnchecked},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
 use abstract_sdk::ExecutorMsg;
@@ -56,7 +56,15 @@ fn deposit(
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
 
-    let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, yield_source_params, &app)?;
+    let target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let deposit_msgs = _inner_deposit(
+        deps.as_ref(),
+        &env,
+        funds,
+        target_strategy,
+        yield_source_params,
+        &app,
+    )?;
 
     AUTOCOMPOUND_STATE.save(
         deps.storage,
@@ -128,7 +136,14 @@ fn update_strategy(
     STRATEGY_CONFIG.save(deps.storage, &strategy)?;
 
     // 3. We deposit the funds into the new strategy
-    let deposit_msgs = _inner_deposit(deps.as_ref(), &env, available_funds.into(), None, &app)?;
+    let deposit_msgs = _inner_deposit(
+        deps.as_ref(),
+        &env,
+        available_funds.into(),
+        strategy,
+        None,
+        &app,
+    )?;
 
     Ok(app
         .response("rebalance")
@@ -188,11 +203,12 @@ pub fn _inner_deposit(
     deps: Deps,
     env: &Env,
     funds: Vec<Coin>,
+    target_strategy: Strategy,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     let (withdraw_strategy, deposit_msgs) =
-        generate_deposit_strategy(deps, funds, yield_source_params, app)?;
+        generate_deposit_strategy(deps, funds, target_strategy, yield_source_params, app)?;
     let deposit_withdraw_msgs = withdraw_strategy
         .into_iter()
         .map(|(el, share)| el.withdraw(deps, Some(share), app).map(Into::into))

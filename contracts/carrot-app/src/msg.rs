@@ -227,4 +227,7 @@ pub struct WithdrawPreviewResponse {
 }
 
 #[cw_serde]
-pub struct UpdateStrategyPreviewResponse {}
+pub struct UpdateStrategyPreviewResponse {
+    pub withdraw: Vec<(StrategyElementUnchecked, Decimal)>,
+    pub deposit: Vec<InternalExecuteMsg>,
+}

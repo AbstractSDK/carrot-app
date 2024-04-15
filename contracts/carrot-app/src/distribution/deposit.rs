@@ -6,7 +6,6 @@ use crate::{
     contract::{App, AppResult},
     exchange_rate::query_all_exchange_rates,
     helpers::{compute_total_value, compute_value},
-    state::STRATEGY_CONFIG,
     yield_sources::{yield_type::YieldType, AssetShare, Strategy, StrategyElement},
 };
 
@@ -23,12 +22,10 @@ use crate::{error::AppError, msg::InternalExecuteMsg};
 pub fn generate_deposit_strategy(
     deps: Deps,
     funds: Vec<Coin>,
+    target_strategy: Strategy,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Vec<InternalExecuteMsg>)> {
-    // This is the storage strategy for all assets
-    let target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
-
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
 
