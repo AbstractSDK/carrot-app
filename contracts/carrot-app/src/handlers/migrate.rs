@@ -9,18 +9,18 @@ use crate::{
     state::{AutocompoundRewardsConfig, CarrotPosition, Config, PoolConfig, CONFIG},
 };
 
-const OLD_CONFIG: Item<OldConfig> = Item::new("config");
-const OLD_POSITION: Item<OldPosition> = Item::new("position");
+const V0_1CONFIG: Item<V0_1Config> = Item::new("config");
+const V0_1POSITION: Item<V0_1Position> = Item::new("position");
 
 #[cw_serde]
-pub struct OldConfig {
-    pub pool_config: OldPoolConfig,
+pub struct V0_1Config {
+    pub pool_config: V0_1PoolConfig,
     pub autocompound_cooldown_seconds: Uint64,
     pub autocompound_rewards_config: AutocompoundRewardsConfig,
 }
 
 #[cw_serde]
-pub struct OldPoolConfig {
+pub struct V0_1PoolConfig {
     pub pool_id: u64,
     pub token0: String,
     pub token1: String,
@@ -29,7 +29,7 @@ pub struct OldPoolConfig {
 }
 
 #[cw_serde]
-pub struct OldPosition {
+pub struct V0_1Position {
     pub owner: cosmwasm_std::Addr,
     pub position_id: u64,
     pub last_compound: cosmwasm_std::Timestamp,
@@ -39,7 +39,7 @@ pub struct OldPosition {
 /// The top-level Abstract app does version checking and dispatches to this handler
 pub fn migrate_handler(deps: DepsMut, mut env: Env, app: App, _msg: AppMigrateMsg) -> AppResult {
     // Migrate old config
-    let maybe_old_config = OLD_CONFIG.may_load(deps.storage)?;
+    let maybe_old_config = V0_1CONFIG.may_load(deps.storage)?;
     if let Some(old_config) = maybe_old_config {
         let new_config = Config {
             pool_config: PoolConfig {
@@ -51,9 +51,9 @@ pub fn migrate_handler(deps: DepsMut, mut env: Env, app: App, _msg: AppMigrateMs
             autocompound_rewards_config: old_config.autocompound_rewards_config,
         };
         CONFIG.save(deps.storage, &new_config)?;
-        OLD_CONFIG.remove(deps.storage);
+        V0_1CONFIG.remove(deps.storage);
     }
-    if let Some(old_position) = OLD_POSITION.may_load(deps.storage)? {
+    if let Some(old_position) = V0_1POSITION.may_load(deps.storage)? {
         // save_position uses ENV for determining time, so need to trick it here a little
         env.block.time = old_position.last_compound;
         CarrotPosition::save_position(
@@ -61,7 +61,7 @@ pub fn migrate_handler(deps: DepsMut, mut env: Env, app: App, _msg: AppMigrateMs
             &old_position.last_compound,
             old_position.position_id,
         )?;
-        OLD_POSITION.remove(deps.storage);
+        V0_1POSITION.remove(deps.storage);
     }
 
     Ok(app.response("migrate"))
