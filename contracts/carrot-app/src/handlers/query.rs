@@ -105,7 +105,7 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
         carrot_position.position.asset0.unwrap(),
         carrot_position.position.asset1.unwrap(),
     ])?;
-    // TODO: Use Decimal256 instead?
+    // Decimal to atomics
     let liquidity = carrot_position
         .position
         .position
