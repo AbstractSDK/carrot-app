@@ -1,7 +1,9 @@
+use abstract_app::objects::AnsAsset;
 use abstract_sdk::{AccountAction, Execution, ExecutorMsg};
-use cosmwasm_std::{Coin, Coins, Decimal, Deps};
+use cosmwasm_std::{Decimal, Deps};
 
 use crate::{
+    ans_assets::AnsAssets,
     contract::{App, AppResult},
     error::AppError,
     yield_sources::{yield_type::YieldTypeImplementation, Strategy, StrategyElement},
@@ -24,11 +26,11 @@ impl Strategy {
         deps: Deps,
         withdraw_share: Option<Decimal>,
         app: &App,
-    ) -> AppResult<Vec<Coin>> {
-        let mut withdraw_result = Coins::default();
+    ) -> AppResult<Vec<AnsAsset>> {
+        let mut withdraw_result = AnsAssets::default();
         self.0.into_iter().try_for_each(|s| {
-            let funds = s.withdraw_preview(deps, withdraw_share, app)?;
-            funds.into_iter().try_for_each(|f| withdraw_result.add(f))?;
+            let assets = s.withdraw_preview(deps, withdraw_share, app)?;
+            assets.into_iter().try_for_each(|f| withdraw_result.add(f))?;
             Ok::<_, AppError>(())
         })?;
         Ok(withdraw_result.into())
@@ -66,17 +68,15 @@ impl StrategyElement {
         deps: Deps,
         withdraw_share: Option<Decimal>,
         app: &App,
-    ) -> AppResult<Vec<Coin>> {
+    ) -> AppResult<AnsAssets> {
         let current_deposit = self.yield_source.params.user_deposit(deps, app)?;
 
         if let Some(share) = withdraw_share {
             Ok(current_deposit
                 .into_iter()
-                .map(|funds| Coin {
-                    denom: funds.denom,
-                    amount: funds.amount * share,
-                })
-                .collect())
+                .map(|funds| AnsAsset::new(funds.name, funds.amount * share))
+                .collect::<Vec<_>>()
+                .try_into()?)
         } else {
             Ok(current_deposit)
         }

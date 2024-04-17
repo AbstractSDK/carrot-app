@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use cosmwasm_std::{coin, Coin, Coins, Decimal, Deps, Uint128};
+use cosmwasm_std::{Decimal, Deps, Uint128};
 
 use crate::{
+    ans_assets::AnsAssets,
     contract::{App, AppResult},
     exchange_rate::query_all_exchange_rates,
     helpers::{compute_total_value, compute_value},
@@ -12,6 +13,7 @@ use crate::{
 use cosmwasm_schema::cw_serde;
 
 use crate::{error::AppError, msg::InternalExecuteMsg};
+use abstract_app::objects::{AnsAsset, AssetEntry};
 
 /// This functions creates the current deposit strategy
 // /// 1. We query the target strategy in storage (target strategy)
@@ -21,7 +23,7 @@ use crate::{error::AppError, msg::InternalExecuteMsg};
 // /// 5. We deposit funds according to that strategy
 pub fn generate_deposit_strategy(
     deps: Deps,
-    funds: Vec<Coin>,
+    mut usable_funds: AnsAssets,
     target_strategy: Strategy,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
@@ -29,7 +31,6 @@ pub fn generate_deposit_strategy(
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
 
-    let mut usable_funds: Coins = funds.try_into()?;
     let (withdraw_strategy, mut this_deposit_strategy) = target_strategy.current_deposit_strategy(
         deps,
         &mut usable_funds,
@@ -41,8 +42,7 @@ pub fn generate_deposit_strategy(
     this_deposit_strategy.correct_with(yield_source_params);
 
     // We fill the strategies with the current deposited funds and get messages to execute those deposits
-    let deposit_msgs =
-        this_deposit_strategy.fill_all_and_get_messages(deps, usable_funds.into(), app)?;
+    let deposit_msgs = this_deposit_strategy.fill_all_and_get_messages(deps, usable_funds, app)?;
 
     Ok((withdraw_strategy, deposit_msgs))
 }
@@ -54,7 +54,7 @@ impl Strategy {
     pub fn current_deposit_strategy(
         &self,
         deps: Deps,
-        funds: &mut Coins,
+        funds: &mut AnsAssets,
         current_strategy_status: Self,
         app: &App,
     ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Self)> {
@@ -148,11 +148,13 @@ impl Strategy {
     // This is the algorithm that is implemented here
     fn fill_sources(
         &self,
-        funds: Vec<Coin>,
+        _deps: Deps,
+        assets: AnsAssets,
         exchange_rates: &HashMap<String, Decimal>,
-    ) -> AppResult<(StrategyStatus, Coins)> {
-        let total_value = compute_total_value(&funds, exchange_rates)?;
-        let mut remaining_funds = Coins::default();
+        _app: &App,
+    ) -> AppResult<(StrategyStatus, AnsAssets)> {
+        let total_value = compute_total_value(&assets.to_vec(), exchange_rates)?;
+        let mut remaining_funds = AnsAssets::default();
 
         // We create the vector that holds the funds information
         let mut yield_source_status = self
@@ -163,16 +165,16 @@ impl Strategy {
                     .yield_source
                     .asset_distribution
                     .iter()
-                    .map(|AssetShare { denom, share }| {
+                    .map(|AssetShare { asset, share }| {
                         // Amount to fill this denom completely is value / exchange_rate
                         // Value we want to put here is share * source.share * total_value
                         Ok::<_, AppError>(StrategyStatusElement {
-                            denom: denom.clone(),
+                            asset: asset.clone(),
                             raw_funds: Uint128::zero(),
                             remaining_amount: (share * source.share
                                 / exchange_rates
-                                    .get(denom)
-                                    .ok_or(AppError::NoExchangeRate(denom.clone()))?)
+                                    .get(&asset.to_string())
+                                    .ok_or(AppError::NoExchangeRate(asset.clone()))?)
                                 * total_value,
                         })
                     })
@@ -180,8 +182,8 @@ impl Strategy {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        for this_coin in funds {
-            let mut remaining_amount = this_coin.amount;
+        for this_asset in assets {
+            let mut remaining_amount = this_asset.amount;
             // We distribute those funds in to the accepting strategies
             for (strategy, status) in self.0.iter().zip(yield_source_status.iter_mut()) {
                 // Find the share for the specific denom inside the strategy
@@ -190,7 +192,7 @@ impl Strategy {
                     .asset_distribution
                     .iter()
                     .zip(status.iter_mut())
-                    .find(|(AssetShare { denom, share: _ }, _status)| this_coin.denom.eq(denom))
+                    .find(|(AssetShare { asset, share: _ }, _status)| this_asset.name.eq(asset))
                     .map(|(_, status)| status);
 
                 if let Some(status) = this_denom_status {
@@ -204,7 +206,7 @@ impl Strategy {
                     status.remaining_amount -= funds_to_use_here;
                 }
             }
-            remaining_funds.add(coin(remaining_amount.into(), this_coin.denom))?;
+            remaining_funds.add(AnsAsset::new(this_asset.name, remaining_amount))?;
         }
 
         Ok((yield_source_status.into(), remaining_funds))
@@ -213,19 +215,19 @@ impl Strategy {
     fn fill_all(
         &self,
         deps: Deps,
-        funds: Vec<Coin>,
+        assets: AnsAssets,
         app: &App,
     ) -> AppResult<Vec<OneDepositStrategy>> {
         // We determine the value of all tokens that will be used inside this function
         let exchange_rates = query_all_exchange_rates(
             deps,
-            funds
+            assets
                 .iter()
-                .map(|f| f.denom.clone())
-                .chain(self.all_denoms()),
+                .map(|f| f.name.clone())
+                .chain(self.all_names()?),
             app,
         )?;
-        let (status, remaining_funds) = self.fill_sources(funds, &exchange_rates)?;
+        let (status, remaining_funds) = self.fill_sources(deps, assets, &exchange_rates, app)?;
         status.fill_with_remaining_funds(remaining_funds, &exchange_rates)
     }
 
@@ -233,10 +235,10 @@ impl Strategy {
     pub fn fill_all_and_get_messages(
         &self,
         deps: Deps,
-        funds: Vec<Coin>,
+        assets: AnsAssets,
         app: &App,
     ) -> AppResult<Vec<InternalExecuteMsg>> {
-        let deposit_strategies = self.fill_all(deps, funds, app)?;
+        let deposit_strategies = self.fill_all(deps, assets, app)?;
         Ok(deposit_strategies
             .iter()
             .zip(self.0.iter().map(|s| s.yield_source.params.clone()))
@@ -260,7 +262,7 @@ impl Strategy {
 
 #[cw_serde]
 struct StrategyStatusElement {
-    pub denom: String,
+    pub asset: AssetEntry,
     pub raw_funds: Uint128,
     pub remaining_amount: Uint128,
 }
@@ -280,7 +282,7 @@ impl From<Vec<Vec<StrategyStatusElement>>> for StrategyStatus {
 impl StrategyStatus {
     pub fn fill_with_remaining_funds(
         &self,
-        mut funds: Coins,
+        mut funds: AnsAssets,
         exchange_rates: &HashMap<String, Decimal>,
     ) -> AppResult<Vec<OneDepositStrategy>> {
         self.0
@@ -292,11 +294,11 @@ impl StrategyStatus {
                         let mut swaps = vec![];
                         for fund in funds.to_vec() {
                             let direct_e_r = exchange_rates
-                                .get(&fund.denom)
-                                .ok_or(AppError::NoExchangeRate(fund.denom.clone()))?
+                                .get(&fund.name.to_string())
+                                .ok_or(AppError::NoExchangeRate(fund.name.clone()))?
                                 / exchange_rates
-                                    .get(&status.denom)
-                                    .ok_or(AppError::NoExchangeRate(status.denom.clone()))?;
+                                    .get(&status.asset.to_string())
+                                    .ok_or(AppError::NoExchangeRate(status.asset.clone()))?;
                             let available_coin_in_destination_amount = fund.amount * direct_e_r;
 
                             let fill_amount =
@@ -306,18 +308,18 @@ impl StrategyStatus {
 
                             if swap_in_amount != Uint128::zero() {
                                 status.remaining_amount -= fill_amount;
-                                let swap_funds = coin(swap_in_amount.into(), fund.denom);
+                                let swap_funds = AnsAsset::new(fund.name, swap_in_amount);
                                 funds.sub(swap_funds.clone())?;
                                 swaps.push(DepositStep::Swap {
                                     asset_in: swap_funds,
-                                    denom_out: status.denom.clone(),
+                                    denom_out: status.asset.clone(),
                                     expected_amount: fill_amount,
                                 });
                             }
                         }
                         if !status.raw_funds.is_zero() {
                             swaps.push(DepositStep::UseFunds {
-                                asset: coin(status.raw_funds.into(), status.denom.clone()),
+                                asset: AnsAsset::new(status.asset.clone(), status.raw_funds),
                             })
                         }
 
@@ -333,12 +335,12 @@ impl StrategyStatus {
 #[cw_serde]
 pub enum DepositStep {
     Swap {
-        asset_in: Coin,
-        denom_out: String,
+        asset_in: AnsAsset,
+        denom_out: AssetEntry,
         expected_amount: Uint128,
     },
     UseFunds {
-        asset: Coin,
+        asset: AnsAsset,
     },
 }
 

@@ -1,7 +1,8 @@
-use abstract_sdk::ExecutorMsg;
-use cosmwasm_std::{Coin, Coins, Decimal, Deps, Uint128};
+use abstract_app::objects::AnsAsset;
+use cosmwasm_std::{Decimal, Deps, Uint128};
 
 use crate::{
+    ans_assets::AnsAssets,
     check::Checkable,
     contract::{App, AppResult},
     distribution::deposit::generate_deposit_strategy,
@@ -15,13 +16,18 @@ use super::query::withdraw_share;
 
 pub fn deposit_preview(
     deps: Deps,
-    funds: Vec<Coin>,
+    assets: Vec<AnsAsset>,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<DepositPreviewResponse> {
     let target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
-    let (withdraw_strategy, deposit_strategy) =
-        generate_deposit_strategy(deps, funds, target_strategy, yield_source_params, app)?;
+    let (withdraw_strategy, deposit_strategy) = generate_deposit_strategy(
+        deps,
+        assets.try_into()?,
+        target_strategy,
+        yield_source_params,
+        app,
+    )?;
 
     Ok(DepositPreviewResponse {
         withdraw: withdraw_strategy
@@ -55,7 +61,7 @@ pub fn withdraw_preview(
 
 pub fn update_strategy_preview(
     deps: Deps,
-    funds: Vec<Coin>,
+    assets: Vec<AnsAsset>,
     strategy: StrategyUnchecked,
     app: &App,
 ) -> AppResult<UpdateStrategyPreviewResponse> {
@@ -67,7 +73,7 @@ pub fn update_strategy_preview(
     let strategy = strategy.check(deps, app)?;
 
     // We execute operations to rebalance the funds between the strategies
-    let mut available_funds: Coins = funds.try_into()?;
+    let mut available_assets: AnsAssets = assets.try_into()?;
     // 1. We withdraw all yield_sources that are not included in the new strategies
     let all_stale_sources: Vec<_> = old_strategy
         .0
@@ -75,27 +81,15 @@ pub fn update_strategy_preview(
         .filter(|x| !strategy.0.contains(x))
         .collect();
 
-    let (withdrawn_funds, _withdraw_msgs): (Vec<Vec<Coin>>, Vec<Option<ExecutorMsg>>) =
-        all_stale_sources
-            .clone()
-            .into_iter()
-            .map(|s| {
-                Ok::<_, AppError>((
-                    s.withdraw_preview(deps, None, app).unwrap_or_default(),
-                    s.withdraw(deps, None, app).ok(),
-                ))
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .unzip();
-
-    withdrawn_funds
-        .into_iter()
-        .try_for_each(|f| f.into_iter().try_for_each(|f| available_funds.add(f)))?;
+    all_stale_sources.clone().into_iter().try_for_each(|s| {
+        let assets = s.withdraw_preview(deps, None, app).unwrap_or_default();
+        available_assets.extend(assets)?;
+        Ok::<_, AppError>(())
+    })?;
 
     // 3. We deposit the funds into the new strategy
     let (withdraw_strategy, deposit_strategy) =
-        generate_deposit_strategy(deps, available_funds.into(), strategy, None, app)?;
+        generate_deposit_strategy(deps, available_assets, strategy, None, app)?;
 
     let withdraw_strategy = [
         all_stale_sources

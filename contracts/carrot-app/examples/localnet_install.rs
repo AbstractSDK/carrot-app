@@ -102,11 +102,11 @@ fn one_element(upper_tick: i64, lower_tick: i64, share: Decimal) -> StrategyElem
         yield_source: YieldSourceBase {
             asset_distribution: vec![
                 AssetShare {
-                    denom: ION.to_string(),
+                    asset: AssetEntry::from(ION),
                     share: Decimal::percent(50),
                 },
                 AssetShare {
-                    denom: OSMO.to_string(),
+                    asset: AssetEntry::from(OSMO),
                     share: Decimal::percent(50),
                 },
             ],

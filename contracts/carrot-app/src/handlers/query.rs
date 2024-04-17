@@ -4,9 +4,10 @@ use abstract_app::{
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
+use cosmwasm_std::{to_json_binary, Binary, Deps, Env, Uint128, Decimal};
 use cw_asset::Asset;
 
+use crate::ans_assets::AnsAssets;
 use crate::autocompound::get_autocompound_status;
 use crate::exchange_rate::query_exchange_rate;
 use crate::msg::{PositionResponse, PositionsResponse};
@@ -35,14 +36,14 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
         AppQueryMsg::StrategyStatus {} => to_json_binary(&query_strategy_status(deps, app)?),
         AppQueryMsg::Positions {} => to_json_binary(&query_positions(deps, app)?),
         AppQueryMsg::DepositPreview {
-            funds,
+            assets,
             yield_sources_params,
-        } => to_json_binary(&deposit_preview(deps, funds, yield_sources_params, app)?),
+        } => to_json_binary(&deposit_preview(deps, assets, yield_sources_params, app)?),
         AppQueryMsg::WithdrawPreview { amount } => {
             to_json_binary(&withdraw_preview(deps, amount, app)?)
         }
-        AppQueryMsg::UpdateStrategyPreview { strategy, funds } => {
-            to_json_binary(&update_strategy_preview(deps, funds, strategy, app)?)
+        AppQueryMsg::UpdateStrategyPreview { strategy, assets } => {
+            to_json_binary(&update_strategy_preview(deps, assets, strategy, app)?)
         }
     }
     .map_err(Into::into)
@@ -119,7 +120,7 @@ fn query_config(deps: Deps) -> AppResult<Config> {
 }
 
 pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
-    let mut funds = Coins::default();
+    let mut assets = AnsAssets::default();
     let mut total_value = Uint128::zero();
 
     let strategy = STRATEGY_CONFIG.load(deps.storage)?;
@@ -129,16 +130,16 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
             .params
             .user_deposit(deps, app)
             .unwrap_or_default();
-        for fund in deposit_value {
-            let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
-            funds.add(fund.clone())?;
-            total_value += fund.amount * exchange_rate;
+        for asset in deposit_value {
+            let exchange_rate = query_exchange_rate(deps, &asset.name, app)?;
+            assets.add(asset.clone())?;
+            total_value += asset.amount * exchange_rate;
         }
         Ok::<_, AppError>(())
     })?;
 
     Ok(AssetsBalanceResponse {
-        balances: funds.into(),
+        balances: assets.into(),
         total_value,
     })
 }
@@ -146,17 +147,17 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
 fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
     let strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
-    let mut rewards = Coins::default();
+    let mut available_rewards = AnsAssets::default();
     strategy.0.into_iter().try_for_each(|s| {
         let this_rewards = s.yield_source.params.user_rewards(deps, app)?;
-        for fund in this_rewards {
-            rewards.add(fund)?;
+        for asset in this_rewards {
+            available_rewards.add(asset)?;
         }
         Ok::<_, AppError>(())
     })?;
 
     Ok(AvailableRewardsResponse {
-        available_rewards: rewards.into(),
+        available_rewards: available_rewards.into(),
     })
 }
 
@@ -173,7 +174,7 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
                 let total_value = balance
                     .iter()
                     .map(|fund| {
-                        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+                        let exchange_rate = query_exchange_rate(deps, &fund.name, app)?;
                         Ok(fund.amount * exchange_rate)
                     })
                     .sum::<AppResult<Uint128>>()?;
@@ -181,7 +182,7 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
                 Ok::<_, AppError>(PositionResponse {
                     params: s.yield_source.params.into(),
                     balance: AssetsBalanceResponse {
-                        balances: balance,
+                        balances: balance.into(),
                         total_value,
                     },
                     liquidity,

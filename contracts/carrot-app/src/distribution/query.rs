@@ -1,6 +1,7 @@
-use cosmwasm_std::{Coins, Decimal, Deps, Uint128};
+use cosmwasm_std::{Decimal, Deps, Uint128};
 
 use crate::{
+    ans_assets::AnsAssets,
     contract::{App, AppResult},
     error::AppError,
     exchange_rate::query_exchange_rate,
@@ -9,11 +10,10 @@ use crate::{
         yield_type::YieldTypeImplementation, AssetShare, Strategy, StrategyElement, YieldSource,
     },
 };
-
 impl Strategy {
     // Returns the total balance
     pub fn current_balance(&self, deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
-        let mut funds = Coins::default();
+        let mut funds = AnsAssets::default();
         let mut total_value = Uint128::zero();
         self.0.iter().try_for_each(|s| {
             let deposit_value = s
@@ -22,7 +22,7 @@ impl Strategy {
                 .user_deposit(deps, app)
                 .unwrap_or_default();
             for fund in deposit_value {
-                let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+                let exchange_rate = query_exchange_rate(deps, &fund.name, app)?;
                 funds.add(fund.clone())?;
                 total_value += fund.amount * exchange_rate;
             }
@@ -108,9 +108,9 @@ impl StrategyElement {
         let each_value = user_deposit
             .iter()
             .map(|fund| {
-                let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+                let exchange_rate = query_exchange_rate(deps, &fund.name, app)?;
 
-                Ok::<_, AppError>((fund.denom.clone(), exchange_rate * fund.amount))
+                Ok::<_, AppError>((fund.name.clone(), exchange_rate * fund.amount))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -126,11 +126,13 @@ impl StrategyElement {
 
         let each_shares = each_value
             .into_iter()
-            .map(|(denom, amount)| AssetShare {
-                denom,
-                share: Decimal::from_ratio(amount, total_value),
+            .map(|(asset, amount)| {
+                Ok::<_, AppError>(AssetShare {
+                    asset,
+                    share: Decimal::from_ratio(amount, total_value),
+                })
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
         Ok((total_value, each_shares))
     }
 }

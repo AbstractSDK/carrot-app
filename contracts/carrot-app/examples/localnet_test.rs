@@ -1,5 +1,11 @@
-use abstract_client::Application;
-use cosmwasm_std::coins;
+use abstract_app::objects::{
+    module::ModuleInfo, namespace::ABSTRACT_NAMESPACE, AccountId, AnsAsset, AssetEntry,
+};
+use abstract_client::{Application, Namespace};
+use abstract_dex_adapter::{interface::DexAdapter, DEX_ADAPTER_ID};
+use abstract_interface::{Abstract, VCQueryFns};
+use abstract_sdk::core::ans_host::QueryMsgFns;
+use cosmwasm_std::{coins, Decimal, Uint128, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::LOCAL_OSMO, Daemon, DaemonBuilder},
@@ -43,11 +49,12 @@ fn main() -> anyhow::Result<()> {
             .bank_send(account.proxy()?.as_str(), coins(10_000, "uosmo")),
     )?;
 
-    carrot.deposit(coins(10_000, "uosmo"), None)?;
+    // carrot.deposit(coins(10_000, "uosmo"), None)?;
+    carrot.deposit(vec![AnsAsset::new("uosmo", 10_000u128)], None)?;
 
-    carrot.update_strategy(coins(10_000, "uosmo"), five_strategy())?;
+    carrot.update_strategy(vec![AnsAsset::new("uosmo", 10_000u128)], five_strategy())?;
     carrot.withdraw(None)?;
-    carrot.deposit(coins(10_000, "uosmo"), None)?;
+    carrot.deposit(vec![AnsAsset::new("uosmo", 10_000u128)], None)?;
 
     Ok(())
 }

@@ -1,15 +1,15 @@
 pub mod mars;
 pub mod osmosis_cl_pool;
 pub mod yield_type;
-
+use abstract_app::objects::AssetEntry;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Decimal;
 
 use crate::{
     check::{Checked, Unchecked},
+    contract::AppResult,
     yield_sources::yield_type::YieldParamsBase,
 };
-
 /// A yield sources has the following elements
 /// A vector of tokens that NEED to be deposited inside the yield source with a repartition of tokens
 /// A type that allows routing to the right smart-contract integration internally
@@ -23,10 +23,10 @@ pub type YieldSourceUnchecked = YieldSourceBase<Unchecked>;
 pub type YieldSource = YieldSourceBase<Checked>;
 
 impl<T: Clone> YieldSourceBase<T> {
-    pub fn all_denoms(&self) -> Vec<String> {
+    pub fn all_names(&self) -> AppResult<Vec<AssetEntry>> {
         self.asset_distribution
             .iter()
-            .map(|e| e.denom.clone())
+            .map(|e| Ok(e.asset.clone()))
             .collect()
     }
 }
@@ -34,7 +34,7 @@ impl<T: Clone> YieldSourceBase<T> {
 /// This is used to express a share of tokens inside a strategy
 #[cw_serde]
 pub struct AssetShare {
-    pub denom: String,
+    pub asset: AssetEntry,
     pub share: Decimal,
 }
 
@@ -55,12 +55,15 @@ pub type StrategyUnchecked = StrategyBase<Unchecked>;
 pub type Strategy = StrategyBase<Checked>;
 
 impl Strategy {
-    pub fn all_denoms(&self) -> Vec<String> {
-        self.0
+    pub fn all_names(&self) -> AppResult<Vec<AssetEntry>> {
+        let results = self
+            .0
             .clone()
             .iter()
-            .flat_map(|s| s.yield_source.all_denoms())
-            .collect()
+            .map(|s| s.yield_source.all_names())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(results.into_iter().flatten().collect())
     }
 }
 
