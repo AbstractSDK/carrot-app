@@ -6,6 +6,7 @@ use osmosis_std::types::osmosis::{
     concentratedliquidity::v1beta1::Pool, poolmanager::v1beta1::PoolmanagerQuerier,
 };
 
+use crate::helpers::nonpayable;
 use crate::{
     contract::{App, AppResult},
     error::AppError,
@@ -18,10 +19,12 @@ use super::execute::_create_position;
 pub fn instantiate_handler(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     app: App,
     msg: AppInstantiateMsg,
 ) -> AppResult {
+    nonpayable(&info)?;
+
     let pool: Pool = PoolmanagerQuerier::new(&deps.querier)
         .pool(msg.pool_id)?
         .pool
