@@ -1,5 +1,5 @@
 #![allow(unused)]
-use abstract_app::objects::{AccountId, AssetEntry};
+use abstract_app::objects::{AccountId, AnsAsset, AssetEntry};
 use abstract_client::AbstractClient;
 use cosmwasm_std::{coins, Coin, Uint128, Uint256, Uint64};
 use cw_orch::{
@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
             dex: OSMOSIS.to_string(),
         },
         strategy: StrategyBase(vec![]),
-        deposit: Some(coins(100, "usdc")),
+        deposit: Some(vec![AnsAsset::new("usdc", 100u128)]),
     };
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;
 

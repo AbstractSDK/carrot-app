@@ -1,18 +1,23 @@
 use std::{marker::PhantomData, str::FromStr};
 
+use super::{yield_type::YieldTypeImplementation, ShareType};
 use crate::{
+    ans_assets::AnsAssets,
     check::{Checked, Unchecked},
     contract::{App, AppResult},
     error::AppError,
     handlers::swap_helpers::DEFAULT_SLIPPAGE,
+    helpers::unwrap_native,
     replies::{OSMOSIS_ADD_TO_POSITION_REPLY_ID, OSMOSIS_CREATE_POSITION_REPLY_ID},
     state::CONFIG,
 };
+use abstract_app::traits::AbstractNameService;
 use abstract_app::{objects::AnsAsset, traits::AccountIdentification};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::Execution;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{ensure, Coin, Coins, CosmosMsg, Decimal, Deps, ReplyOn, SubMsg, Uint128};
+use cw_asset::{Asset, AssetInfo};
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
@@ -20,8 +25,6 @@ use osmosis_std::{
         MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition, MsgWithdrawPosition,
     },
 };
-
-use super::{yield_type::YieldTypeImplementation, ShareType};
 
 #[cw_serde]
 pub struct ConcentratedPoolParamsBase<T> {
@@ -42,13 +45,13 @@ pub type ConcentratedPoolParamsUnchecked = ConcentratedPoolParamsBase<Unchecked>
 pub type ConcentratedPoolParams = ConcentratedPoolParamsBase<Checked>;
 
 impl YieldTypeImplementation for ConcentratedPoolParams {
-    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+    fn deposit(&self, deps: Deps, assets: AnsAssets, app: &App) -> AppResult<Vec<SubMsg>> {
         // We verify there is a position stored
         if let Ok(position) = self.position(deps) {
-            self.raw_deposit(deps, funds, app, position)
+            self.raw_deposit(deps, assets, app, position)
         } else {
             // We need to create a position
-            self.create_position(deps, funds, app)
+            self.create_position(deps, assets, app)
         }
     }
 
@@ -80,17 +83,18 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         .into()])
     }
 
-    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(AnsAssets, Vec<CosmosMsg>)> {
         let position = self.position(deps)?;
         let position_details = position.position.unwrap();
+        let ans = app.name_service(deps);
 
         let user = app.account_base(deps)?.proxy;
-        let mut rewards = Coins::default();
+        let mut rewards = AnsAssets::default();
         let mut msgs: Vec<CosmosMsg> = vec![];
         // If there are external incentives, claim them.
         if !position.claimable_incentives.is_empty() {
             for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
-                rewards.add(coin)?;
+                rewards.add(ans.query(&Asset::from(coin))?)?;
             }
             msgs.push(
                 MsgCollectIncentives {
@@ -104,7 +108,7 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         // If there is income from swap fees, claim them.
         if !position.claimable_spread_rewards.is_empty() {
             for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
-                rewards.add(coin)?;
+                rewards.add(ans.query(&Asset::from(coin))?)?;
             }
             msgs.push(
                 MsgCollectSpreadRewards {
@@ -115,12 +119,13 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
             )
         }
 
-        Ok((rewards.to_vec(), msgs))
+        Ok((rewards, msgs))
     }
 
     /// This may return 0, 1 or 2 elements depending on the position's status
-    fn user_deposit(&self, deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<AnsAssets> {
         let position = self.position(deps)?;
+        let ans = app.name_service(deps);
 
         Ok([
             try_proto_to_cosmwasm_coins(position.asset0)?,
@@ -131,24 +136,27 @@ impl YieldTypeImplementation for ConcentratedPoolParams {
         .map(|mut fund| {
             // This is used because osmosis seems to charge 1 amount for withdrawals on all positions
             fund.amount -= Uint128::one();
-            fund
+            ans.query(&Asset::from(fund))
         })
-        .collect())
+        .collect::<Result<Vec<_>, _>>()?
+        .try_into()?)
     }
 
-    fn user_rewards(&self, deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<AnsAssets> {
+        let ans = app.name_service(deps);
+
         let position = self.position(deps)?;
 
-        let mut rewards = cosmwasm_std::Coins::default();
+        let mut rewards = AnsAssets::default();
         for coin in try_proto_to_cosmwasm_coins(position.claimable_incentives)? {
-            rewards.add(coin)?;
+            rewards.add(ans.query(&Asset::from(coin))?)?;
         }
 
         for coin in try_proto_to_cosmwasm_coins(position.claimable_spread_rewards)? {
-            rewards.add(coin)?;
+            rewards.add(ans.query(&Asset::from(coin))?)?;
         }
 
-        Ok(rewards.into())
+        Ok(rewards)
     }
 
     fn user_liquidity(&self, deps: Deps, _app: &App) -> AppResult<Uint128> {
@@ -182,20 +190,33 @@ impl ConcentratedPoolParams {
     fn create_position(
         &self,
         deps: Deps,
-        funds: Vec<Coin>,
+        funds: AnsAssets,
         app: &App,
         // create_position_msg: CreatePositionMessage,
     ) -> AppResult<Vec<SubMsg>> {
+        let ans = app.name_service(deps);
         let proxy_addr = app.account_base(deps)?.proxy;
         // 2. Create a position
-        let tokens = cosmwasm_to_proto_coins(funds);
+        let tokens_provided = funds
+            .into_iter()
+            .map(|f| {
+                let asset = ans.query(&f)?;
+                unwrap_native(&asset.info).map(|denom| Coin {
+                    denom,
+                    amount: asset.amount,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let ordered_tokens_provided: Coins = tokens_provided.try_into()?;
+
+        let tokens_provided = cosmwasm_to_proto_coins(ordered_tokens_provided);
         let msg = app.executor(deps).execute_with_reply_and_data(
             MsgCreatePosition {
                 pool_id: self.pool_id,
                 sender: proxy_addr.to_string(),
                 lower_tick: self.lower_tick,
                 upper_tick: self.upper_tick,
-                tokens_provided: tokens,
+                tokens_provided,
                 token_min_amount0: "0".to_string(),
                 token_min_amount1: "0".to_string(),
             }
@@ -210,25 +231,44 @@ impl ConcentratedPoolParams {
     fn raw_deposit(
         &self,
         deps: Deps,
-        funds: Vec<Coin>,
+        deposit_assets: AnsAssets,
         app: &App,
         position: FullPositionBreakdown,
     ) -> AppResult<Vec<SubMsg>> {
+        let ans = app.name_service(deps);
         let position_id = position.position.unwrap().position_id;
 
         let proxy_addr = app.account_base(deps)?.proxy;
 
         // We need to make sure the amounts are in the right order
-        // We assume the funds vector has 2 coins associated
-        let (amount0, amount1) = match position
+        let resolved_asset0 = position
             .asset0
-            .map(|c| c.denom == funds[0].denom)
-            .or(position.asset1.map(|c| c.denom == funds[1].denom))
+            .map(|a| ans.query(&AssetInfo::native(a.denom)))
+            .transpose()?;
+        let resolved_asset1 = position
+            .asset1
+            .map(|a| ans.query(&AssetInfo::native(a.denom)))
+            .transpose()?;
+
+        let mut assets = deposit_assets.into_iter();
+        let deposit0 = assets.next();
+        let deposit1 = assets.next();
+
+        let (amount0, amount1) = match resolved_asset0
+            .map(|c| c == deposit0.clone().map(|d| d.name).unwrap_or_default())
+            .or(resolved_asset1.map(|c| c == deposit1.clone().map(|d| d.name).unwrap_or_default()))
         {
-            Some(true) => (funds[0].amount, funds[1].amount), // we already had the right order
-            Some(false) => (funds[1].amount, funds[0].amount), // we had the wrong order
+            Some(true) => (
+                deposit0.map(|d| d.amount).unwrap_or_default(),
+                deposit1.map(|d| d.amount).unwrap_or_default(),
+            ), // we already had the right order
+            Some(false) => (
+                deposit1.map(|d| d.amount).unwrap_or_default(),
+                deposit0.map(|d| d.amount).unwrap_or_default(),
+            ), // we had the wrong order
             None => return Err(AppError::NoPosition {}), // A position has to exist in order to execute this function. This should be unreachable
         };
+
         deps.api.debug("After amounts");
 
         let deposit_msg = app.executor(deps).execute_with_reply_and_data(

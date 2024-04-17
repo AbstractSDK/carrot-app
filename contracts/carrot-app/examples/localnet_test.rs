@@ -1,5 +1,5 @@
 use abstract_app::objects::{
-    module::ModuleInfo, namespace::ABSTRACT_NAMESPACE, AccountId, AssetEntry,
+    module::ModuleInfo, namespace::ABSTRACT_NAMESPACE, AccountId, AnsAsset, AssetEntry,
 };
 use abstract_client::{Application, Namespace};
 use abstract_dex_adapter::{interface::DexAdapter, DEX_ADAPTER_ID};
@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     // carrot.deposit(coins(10_000, "uosmo"), None)?;
-    carrot.deposit(coins(10_000, "uosmo"), None)?;
+    carrot.deposit(vec![AnsAsset::new("uosmo", 10_000u128)], None)?;
 
     // carrot.withdraw(None)?;
 

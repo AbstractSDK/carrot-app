@@ -1,29 +1,26 @@
 mod common;
 
-use crate::common::{setup_test_tube, DEX_NAME, USDC, USDT};
-use abstract_app::abstract_interface::{Abstract, AbstractAccount};
+use crate::common::{deposit_with_funds, setup_test_tube, DEX_NAME, USDC, USDT};
+use abstract_app::{
+    abstract_interface::{Abstract, AbstractAccount},
+    objects::AnsAsset,
+};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, AvailableRewardsResponse,
 };
-use cosmwasm_std::{coin, coins};
+use cosmwasm_std::coin;
 use cw_orch::{anyhow, prelude::*};
 
 #[test]
 fn check_autocompound() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let mut chain = carrot_app.get_chain().clone();
+    let chain = carrot_app.get_chain().clone();
 
     // Create position
-    let deposit_amount = 5_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
-    chain.add_balance(
-        carrot_app.account().proxy()?.to_string(),
-        deposit_coins.clone(),
-    )?;
-
+    let deposit_amount = 5_000u128;
     // Do the deposit
-    carrot_app.deposit(deposit_coins.clone(), None)?;
+    deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
 
     // Do some swaps
     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;

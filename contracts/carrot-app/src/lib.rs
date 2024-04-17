@@ -1,3 +1,4 @@
+pub mod ans_assets;
 pub mod autocompound;
 pub mod check;
 pub mod contract;

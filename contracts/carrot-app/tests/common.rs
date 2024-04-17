@@ -1,17 +1,22 @@
 use abstract_app::abstract_core::objects::{
     pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType,
 };
+use abstract_app::objects::AnsAsset;
 use abstract_client::{AbstractClient, Application, Namespace};
 use carrot_app::autocompound::{AutocompoundConfigBase, AutocompoundRewardsConfigBase};
 use carrot_app::contract::OSMOSIS;
+use carrot_app::error::AppError;
+use carrot_app::helpers::unwrap_native;
 use carrot_app::msg::AppInstantiateMsg;
 use carrot_app::state::ConfigBase;
 use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParamsBase;
 use carrot_app::yield_sources::yield_type::YieldParamsBase;
 use carrot_app::yield_sources::{AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase};
-use cosmwasm_std::{coin, coins, Coins, Decimal, Uint128, Uint64};
+use carrot_app::{AppExecuteMsgFns, AppInterface};
+use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::environment::MutCwEnv;
+use cw_orch::mock::cw_multi_test::AppResponse;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
 use cw_orch::{
     anyhow,
@@ -51,16 +56,14 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
     mut chain: Chain,
     pool_id: u64,
     gas_pool_id: u64,
-    initial_deposit: Option<Vec<Coin>>,
+    initial_deposit: Option<Vec<AnsAsset>>,
 ) -> anyhow::Result<Application<Chain, carrot_app::AppInterface<Chain>>> {
-    let asset0 = USDT.to_owned();
-    let asset1 = USDC.to_owned();
     // We register the pool inside the Abstract ANS
     let client = AbstractClient::builder(chain.clone())
         .dex(DEX_NAME)
         .assets(vec![
-            (USDC.to_string(), AssetInfoUnchecked::Native(asset0.clone())),
-            (USDT.to_string(), AssetInfoUnchecked::Native(asset1.clone())),
+            (USDT.to_string(), AssetInfoUnchecked::native(USDT)),
+            (USDC.to_string(), AssetInfoUnchecked::native(USDC)),
             (
                 REWARD_ASSET.to_string(),
                 AssetInfoUnchecked::Native(REWARD_DENOM.to_owned()),
@@ -113,7 +116,20 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
     publisher.publish_app::<carrot_app::contract::interface::AppInterface<Chain>>()?;
 
     if let Some(deposit) = &initial_deposit {
-        chain.add_balance(publisher.account().proxy()?.to_string(), deposit.clone())?;
+        let deposit_coins = client.name_service().resolve(deposit)?;
+
+        chain.add_balance(
+            publisher.account().proxy()?.to_string(),
+            deposit_coins
+                .into_iter()
+                .map(|f| {
+                    Ok::<_, AppError>(Coin {
+                        denom: unwrap_native(&f.info)?,
+                        amount: f.amount,
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+        )?;
     }
 
     let init_msg = AppInstantiateMsg {
@@ -295,16 +311,40 @@ pub fn setup_test_tube(
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let initial_deposit: Option<Vec<Coin>> = create_position
+    let initial_deposit: Option<Vec<AnsAsset>> = create_position
         .then(|| {
             // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
-            let mut initial_coins = Coins::default();
-            initial_coins.add(coin(10_000, USDT))?;
-            initial_coins.add(coin(10_000, USDC))?;
-            Ok::<_, anyhow::Error>(initial_coins.into())
+            let initial_assets = vec![
+                AnsAsset::new(USDC, 10_000u128),
+                AnsAsset::new(USDT, 10_000u128),
+            ];
+            Ok::<_, anyhow::Error>(initial_assets)
         })
         .transpose()?;
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, initial_deposit)?;
 
     Ok((pool_id, carrot_app))
+}
+
+pub fn deposit_with_funds<Chain: CwEnv>(
+    carrot_app: &Application<Chain, AppInterface<OsmosisTestTube>>,
+    deposit: Vec<AnsAsset>,
+) -> anyhow::Result<AppResponse> {
+    let mut chain = carrot_app.get_chain().clone();
+    let client = AbstractClient::new(chain.clone())?;
+    let deposit_coins = client
+        .name_service()
+        .resolve(&deposit)?
+        .into_iter()
+        .map(|f| {
+            Ok::<_, AppError>(Coin {
+                denom: unwrap_native(&f.info)?,
+                amount: f.amount,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
+    chain.add_balance(carrot_app.account().proxy()?.to_string(), deposit_coins)?;
+
+    Ok(carrot_app.deposit(deposit, None)?)
 }

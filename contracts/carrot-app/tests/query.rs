@@ -1,29 +1,20 @@
 mod common;
 
-use crate::common::{setup_test_tube, USDT};
-use carrot_app::{
-    helpers::close_to,
-    msg::{AppExecuteMsgFns, AppQueryMsgFns},
-};
-use cosmwasm_std::{coins, Decimal};
-use cw_orch::{anyhow, prelude::*};
+use crate::common::{deposit_with_funds, setup_test_tube, USDT};
+use abstract_app::objects::AnsAsset;
+use carrot_app::{helpers::close_to, msg::AppQueryMsgFns};
+use cosmwasm_std::Decimal;
+use cw_orch::anyhow;
 
 #[test]
 fn query_strategy_status() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     // We should add funds to the account proxy
-    let deposit_amount = 5_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
-    let mut chain = carrot_app.get_chain().clone();
-
-    chain.add_balance(
-        carrot_app.account().proxy()?.to_string(),
-        deposit_coins.clone(),
-    )?;
+    let deposit_amount = 5_000u128;
 
     // Do the deposit
-    carrot_app.deposit(deposit_coins.clone(), None)?;
+    deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
 
     let strategy = carrot_app.strategy_status()?.strategy;
 

@@ -1,4 +1,5 @@
-use cosmwasm_std::{Coin, Deps, Uint128};
+use abstract_app::objects::AnsAsset;
+use cosmwasm_std::{Deps, Uint128};
 
 use crate::{
     contract::{App, AppResult},
@@ -9,12 +10,12 @@ use crate::{
 
 pub fn deposit_preview(
     deps: Deps,
-    funds: Vec<Coin>,
+    assets: Vec<AnsAsset>,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<DepositPreviewResponse> {
     let (withdraw_strategy, deposit_strategy) =
-        generate_deposit_strategy(deps, funds, yield_source_params, app)?;
+        generate_deposit_strategy(deps, assets.try_into()?, yield_source_params, app)?;
 
     Ok(DepositPreviewResponse {
         withdraw: withdraw_strategy
@@ -34,7 +35,7 @@ pub fn withdraw_preview(
 }
 pub fn update_strategy_preview(
     deps: Deps,
-    funds: Vec<Coin>,
+    assets: Vec<AnsAsset>,
     strategy: StrategyUnchecked,
     app: &App,
 ) -> AppResult<UpdateStrategyPreviewResponse> {

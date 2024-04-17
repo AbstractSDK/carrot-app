@@ -1,7 +1,7 @@
 mod common;
 
-use crate::common::{setup_test_tube, USDC, USDT};
-use abstract_app::objects::AssetEntry;
+use crate::common::{deposit_with_funds, setup_test_tube, USDC, USDT};
+use abstract_app::objects::{AnsAsset, AssetEntry};
 use abstract_client::Application;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
@@ -36,29 +36,17 @@ fn deposit_lands() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
     // We should add funds to the account proxy
-    let deposit_amount = 5_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
-    let mut chain = carrot_app.get_chain().clone();
-
+    let deposit_amount = 5_000u128;
     let balances_before = query_balances(&carrot_app)?;
-    chain.add_balance(
-        carrot_app.account().proxy()?.to_string(),
-        deposit_coins.clone(),
-    )?;
-
     // Do the deposit
-    carrot_app.deposit(deposit_coins.clone(), None)?;
+    deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
+
     // Check almost everything landed
     let balances_after = query_balances(&carrot_app)?;
     assert!(balances_before < balances_after);
 
-    // Add some more funds
-    chain.add_balance(
-        carrot_app.account().proxy()?.to_string(),
-        deposit_coins.clone(),
-    )?;
     // Do the second deposit
-    let response = carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())], None)?;
+    let response = deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
     // Check almost everything landed
     let balances_after_second = query_balances(&carrot_app)?;
     assert!(balances_after < balances_after_second);
@@ -73,14 +61,13 @@ fn deposit_lands() -> anyhow::Result<()> {
 fn withdraw_position() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(false)?;
 
-    let mut chain = carrot_app.get_chain().clone();
+    let chain = carrot_app.get_chain().clone();
 
     // Add some more funds
-    let deposit_amount = 10_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
+    let deposit_amount = 10_000u128;
+    // Do the deposit
+    deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
     let proxy_addr = carrot_app.account().proxy()?;
-    chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
-    carrot_app.deposit(deposit_coins, None)?;
 
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_withdraw = chain
@@ -138,8 +125,9 @@ fn deposit_multiple_assets() -> anyhow::Result<()> {
     let mut chain = carrot_app.get_chain().clone();
     let proxy_addr = carrot_app.account().proxy()?;
     let deposit_coins = vec![coin(234, USDC.to_owned()), coin(258, USDT.to_owned())];
+    let deposit_assets = vec![AnsAsset::new(USDC, 234u128), AnsAsset::new(USDT, 258u128)];
     chain.add_balance(proxy_addr.to_string(), deposit_coins.clone())?;
-    carrot_app.deposit(deposit_coins, None)?;
+    carrot_app.deposit(deposit_assets, None)?;
 
     Ok(())
 }
@@ -194,18 +182,15 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
             share: Decimal::percent(50),
         },
     ]);
-    carrot_app.update_strategy(vec![], new_strat.clone())?;
-
-    let deposit_amount = 5_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
-    let mut chain = carrot_app.get_chain().clone();
-
     let balances_before = query_balances(&carrot_app)?;
+    let deposit_amount = 5_000u128;
+    let mut chain = carrot_app.get_chain().clone();
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
-        deposit_coins.clone(),
+        coins(deposit_amount, USDT),
     )?;
-    carrot_app.deposit(deposit_coins, None)?;
+    carrot_app.update_strategy(vec![AnsAsset::new(USDT, deposit_amount)], new_strat.clone())?;
+
     let balances_after = query_balances(&carrot_app)?;
 
     let slippage = Decimal::percent(4);
@@ -272,24 +257,23 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                     share: Decimal::percent(100),
                 }],
                 params: YieldParamsBase::Mars(MarsDepositParams {
-                    denom: USDT.to_string(),
+                    asset: AssetEntry::new(USDT),
                 }),
             },
             share: Decimal::percent(0),
         },
     ]);
-    carrot_app.update_strategy(vec![], new_strat.clone())?;
-
-    let deposit_amount = 5_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
-    let mut chain = carrot_app.get_chain().clone();
-
     let balances_before = query_balances(&carrot_app)?;
+    let deposit_amount = 5_000u128;
+
+    let mut chain = carrot_app.get_chain().clone();
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
-        deposit_coins.clone(),
+        coins(deposit_amount, USDT),
     )?;
-    carrot_app.deposit(deposit_coins, None)?;
+    carrot_app.update_strategy(vec![AnsAsset::new(USDT, deposit_amount)], new_strat.clone())?;
+
+    // Do the deposit
     let balances_after = query_balances(&carrot_app)?;
 
     println!("{balances_before} --> {balances_after}");

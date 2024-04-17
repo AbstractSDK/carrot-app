@@ -1,5 +1,6 @@
+use abstract_app::objects::{AnsAsset, AssetEntry};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{wasm_execute, Coin, CosmosMsg, Decimal, Env, Uint128, Uint64};
+use cosmwasm_std::{wasm_execute, CosmosMsg, Decimal, Env, Uint128, Uint64};
 use cw_asset::AssetBase;
 
 use crate::{
@@ -24,7 +25,7 @@ pub struct AppInstantiateMsg {
     pub strategy: StrategyUnchecked,
     /// Create position with instantiation.
     /// Will not create position if omitted
-    pub deposit: Option<Vec<Coin>>,
+    pub deposit: Option<Vec<AnsAsset>>,
 }
 
 /// App execute messages
@@ -32,13 +33,13 @@ pub struct AppInstantiateMsg {
 #[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
 #[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
-    /// Deposit funds onto the app
-    /// Those funds will be distributed between yield sources according to the current strategy
+    /// Deposit assets onto the app
+    /// Those assets will be distributed between yield sources according to the current strategy
     /// TODO : for now only send stable coins that have the same value as USD
     /// More tokens can be included when the oracle adapter is live
     Deposit {
-        funds: Vec<Coin>,
-        /// This is additional paramters used to change the funds repartition when doing an additional deposit
+        assets: Vec<AnsAsset>,
+        /// This is additional paramters used to change the asset repartition when doing an additional deposit
         /// This is not used for a first deposit into a strategy that hasn't changed for instance
         /// This is an options because this is not mandatory
         /// The vector then has option inside of it because we might not want to change parameters for all strategies
@@ -52,7 +53,7 @@ pub enum AppExecuteMsg {
     Autocompound {},
     /// Rebalances all investments according to a new balance strategy
     UpdateStrategy {
-        funds: Vec<Coin>,
+        assets: Vec<AnsAsset>,
         strategy: StrategyUnchecked,
     },
 
@@ -71,8 +72,8 @@ pub enum InternalExecuteMsg {
     },
     /// Execute one Deposit Swap Step
     ExecuteOneDepositSwapStep {
-        asset_in: Coin,
-        denom_out: String,
+        asset_in: AnsAsset,
+        denom_out: AssetEntry,
         expected_amount: Uint128,
     },
     /// Finalize the deposit after all swaps are executed
@@ -137,7 +138,7 @@ pub enum AppQueryMsg {
     // Their arguments match the arguments of the corresponding Execute Endpoint
     #[returns(DepositPreviewResponse)]
     DepositPreview {
-        funds: Vec<Coin>,
+        assets: Vec<AnsAsset>,
         yield_sources_params: Option<Vec<Option<Vec<AssetShare>>>>,
     },
     #[returns(WithdrawPreviewResponse)]
@@ -147,7 +148,7 @@ pub enum AppQueryMsg {
     /// Returns [`RebalancePreviewResponse`]
     #[returns(UpdateStrategyPreviewResponse)]
     UpdateStrategyPreview {
-        funds: Vec<Coin>,
+        assets: Vec<AnsAsset>,
         strategy: StrategyUnchecked,
     },
 }
@@ -157,16 +158,16 @@ pub struct AppMigrateMsg {}
 
 #[cosmwasm_schema::cw_serde]
 pub struct BalanceResponse {
-    pub balance: Vec<Coin>,
+    pub balance: Vec<AnsAsset>,
 }
 #[cosmwasm_schema::cw_serde]
 pub struct AvailableRewardsResponse {
-    pub available_rewards: Vec<Coin>,
+    pub available_rewards: Vec<AnsAsset>,
 }
 
 #[cw_serde]
 pub struct AssetsBalanceResponse {
-    pub balances: Vec<Coin>,
+    pub balances: Vec<AnsAsset>,
     pub total_value: Uint128,
 }
 

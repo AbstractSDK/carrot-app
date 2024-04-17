@@ -26,8 +26,8 @@ pub fn instantiate_handler(
     let mut response = app.response("instantiate_savings_app");
 
     // If provided - do an initial deposit
-    if let Some(funds) = msg.deposit {
-        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, None, &app)?;
+    if let Some(assets) = msg.deposit {
+        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, assets.try_into()?, None, &app)?;
 
         response = response.add_messages(deposit_msgs);
     }

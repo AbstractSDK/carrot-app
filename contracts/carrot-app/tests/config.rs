@@ -1,7 +1,7 @@
 mod common;
 
 use crate::common::{create_pool, setup_test_tube, USDC, USDT};
-use abstract_app::objects::AssetEntry;
+use abstract_app::objects::{AnsAsset, AssetEntry};
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns},
     yield_sources::{
@@ -134,12 +134,13 @@ fn rebalance_success() -> anyhow::Result<()> {
     let strategy = carrot_app.strategy()?;
     assert_ne!(strategy.strategy, new_strat);
     let deposit_coins = coins(10, USDC);
+    let deposit_assets = vec![AnsAsset::new(USDC, 10u128)];
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
     )?;
 
-    carrot_app.update_strategy(deposit_coins, new_strat.clone())?;
+    carrot_app.update_strategy(deposit_assets, new_strat.clone())?;
 
     // We query the new strategy
     let strategy = carrot_app.strategy()?;
@@ -156,6 +157,7 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
 
     let deposit_amount = 10_000;
     let deposit_coins = coins(deposit_amount, USDT);
+    let deposit_assets = vec![AnsAsset::new(USDT, deposit_amount)];
 
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
@@ -208,7 +210,7 @@ fn rebalance_with_new_pool_success() -> anyhow::Result<()> {
             share: Decimal::percent(50),
         },
     ]);
-    carrot_app.update_strategy(deposit_coins.clone(), new_strat.clone())?;
+    carrot_app.update_strategy(deposit_assets.clone(), new_strat.clone())?;
 
     carrot_app.strategy()?;
 
@@ -237,6 +239,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
 
     let deposit_amount = 10_000;
     let deposit_coins = coins(deposit_amount, USDT);
+    let deposit_assets = vec![AnsAsset::new(USDT, deposit_amount)];
 
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
@@ -291,7 +294,7 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
         },
     ]);
 
-    carrot_app.update_strategy(deposit_coins.clone(), strat.clone())?;
+    carrot_app.update_strategy(deposit_assets.clone(), strat.clone())?;
 
     let new_strat = StrategyBase(vec![StrategyElementBase {
         yield_source: common_yield_source.clone(),
@@ -329,8 +332,9 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
     let mut chain = carrot_app.get_chain().clone();
     let (new_pool_id, _) = create_pool(chain.clone())?;
 
-    let deposit_amount = 10_000;
+    let deposit_amount = 10_000u128;
     let deposit_coins = coins(deposit_amount, USDT);
+    let deposit_assets = vec![AnsAsset::new(USDT, deposit_amount)];
 
     chain.add_balance(
         carrot_app.account().proxy()?.to_string(),
@@ -385,7 +389,7 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
         },
     ]);
 
-    carrot_app.update_strategy(deposit_coins.clone(), strat.clone())?;
+    carrot_app.update_strategy(deposit_assets.clone(), strat.clone())?;
 
     let mut strategies = carrot_app.strategy()?.strategy;
 

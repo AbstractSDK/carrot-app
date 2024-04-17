@@ -1,7 +1,8 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, CosmosMsg, Deps, SubMsg, Uint128};
+use cosmwasm_std::{CosmosMsg, Deps, SubMsg, Uint128};
 
 use crate::{
+    ans_assets::AnsAssets,
     check::{Checked, Unchecked},
     contract::{App, AppResult},
 };
@@ -21,11 +22,11 @@ pub type YieldTypeUnchecked = YieldParamsBase<Unchecked>;
 pub type YieldType = YieldParamsBase<Checked>;
 
 impl YieldTypeImplementation for YieldType {
-    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
-        if funds.is_empty() {
+    fn deposit(&self, deps: Deps, assets: AnsAssets, app: &App) -> AppResult<Vec<SubMsg>> {
+        if assets.is_empty() {
             return Ok(vec![]);
         }
-        self.inner().deposit(deps, funds, app)
+        self.inner().deposit(deps, assets, app)
     }
 
     fn withdraw(
@@ -37,15 +38,15 @@ impl YieldTypeImplementation for YieldType {
         self.inner().withdraw(deps, amount, app)
     }
 
-    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(AnsAssets, Vec<CosmosMsg>)> {
         self.inner().withdraw_rewards(deps, app)
     }
 
-    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<AnsAssets> {
         Ok(self.inner().user_deposit(deps, app).unwrap_or_default())
     }
 
-    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<AnsAssets> {
         Ok(self.inner().user_rewards(deps, app).unwrap_or_default())
     }
 
@@ -72,16 +73,16 @@ impl YieldType {
 }
 
 pub trait YieldTypeImplementation {
-    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>>;
+    fn deposit(&self, deps: Deps, funds: AnsAssets, app: &App) -> AppResult<Vec<SubMsg>>;
 
     fn withdraw(&self, deps: Deps, amount: Option<Uint128>, app: &App)
         -> AppResult<Vec<CosmosMsg>>;
 
-    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)>;
+    fn withdraw_rewards(&self, deps: Deps, app: &App) -> AppResult<(AnsAssets, Vec<CosmosMsg>)>;
 
-    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
+    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<AnsAssets>;
 
-    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>>;
+    fn user_rewards(&self, deps: Deps, app: &App) -> AppResult<AnsAssets>;
 
     fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128>;
 

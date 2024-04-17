@@ -1,11 +1,14 @@
 use abstract_app::abstract_sdk::AbstractSdkError;
+use abstract_app::objects::AssetEntry;
 use abstract_app::AppError as AbstractAppError;
 use abstract_app::{abstract_core::AbstractError, objects::ans_host::AnsHostError};
-use cosmwasm_std::{Coin, Decimal, StdError};
+use cosmwasm_std::{Coin, CoinsError, Decimal, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
 use cw_utils::ParseReplyError;
 use thiserror::Error;
+
+use crate::ans_assets::AnsAssetsError;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum AppError {
@@ -37,7 +40,10 @@ pub enum AppError {
     ProstDecodeError(#[from] prost::DecodeError),
 
     #[error(transparent)]
-    CoinsError(#[from] cosmwasm_std::CoinsError),
+    AnsAssets(#[from] AnsAssetsError),
+
+    #[error(transparent)]
+    Coins(#[from] CoinsError),
 
     #[error("Unauthorized")]
     Unauthorized {},
@@ -58,7 +64,7 @@ pub enum AppError {
     PoolNotFound {},
 
     #[error("Deposit assets were not found in Abstract ANS : {0:?}")]
-    AssetsNotRegistered(Vec<String>),
+    AssetsNotRegistered(Vec<AssetEntry>),
 
     #[error("No swap fund to swap assets into each other")]
     NoSwapPossibility {},
@@ -93,7 +99,7 @@ pub enum AppError {
     InvalidEmptyStrategy {},
 
     #[error("Exchange Rate not given for {0}")]
-    NoExchangeRate(String),
+    NoExchangeRate(AssetEntry),
 
     #[error("Deposited total value is zero")]
     NoDeposit {},

@@ -1,8 +1,7 @@
 mod common;
 
-use crate::common::{setup_test_tube, USDC, USDT};
-use carrot_app::msg::AppExecuteMsgFns;
-use cosmwasm_std::{coin, coins};
+use crate::common::{deposit_with_funds, setup_test_tube, USDC, USDT};
+use abstract_app::objects::AnsAsset;
 use cw_orch::{anyhow, prelude::*};
 use osmosis_std::types::osmosis::{
     gamm::v1beta1::{MsgSwapExactAmountIn, MsgSwapExactAmountInResponse},
@@ -15,14 +14,11 @@ fn deposit_after_inbalance_works() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
     // We should add funds to the account proxy
-    let deposit_amount = 5_000;
-    let deposit_coins = coins(deposit_amount, USDT.to_owned());
-    let mut chain = carrot_app.get_chain().clone();
-    let proxy = carrot_app.account().proxy()?;
-    chain.add_balance(proxy.to_string(), deposit_coins.clone())?;
-
+    let deposit_amount = 5_000u128;
     // Do the deposit
-    carrot_app.deposit(deposit_coins.clone(), None)?;
+    deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
+    let chain = carrot_app.get_chain().clone();
+    let proxy = carrot_app.account().proxy()?;
 
     // Create a pool inbalance by swapping a lot deposit amount from one to the other.
     // All the positions in the pool are centered, so the price doesn't change, just the funds ratio inside the position
@@ -52,11 +48,8 @@ fn deposit_after_inbalance_works() -> anyhow::Result<()> {
         .bank_querier()
         .balance(&proxy, Some(USDT.to_string()))?[0]
         .amount;
-    // Add some more funds
-    chain.add_balance(proxy.to_string(), deposit_coins.clone())?;
-
-    // // Do the second deposit
-    carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())], None)?;
+    // Do the deposit
+    deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
     // Check almost everything landed
     let proxy_balance_after_second = chain
         .bank_querier()
