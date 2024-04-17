@@ -66,8 +66,8 @@ jobs:
 
       - name: Generate ArgoCD application manifest
         run: |
-          yq -r '.spec.source.helm.parameters[?(@.name=="bot.version")].value = "{{ .GIT_SHA }}"' <argo-template.yml > argocd.yaml
-          echo "GIT_SHA=$GIT_SHA" >> argocd.yaml  # Optional, include SHA for reference
+          yq eval '.spec.source.helm.parameters[0].value = env(GIT_SHA)' argo-template.yml> argocd.yaml
+          cat argocd.yaml
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -82,6 +82,7 @@ jobs:
                aws eks update-kubeconfig --region us-east-1 --name prod-eks-2 --dry-run | base64
                echo EOF
              } >> "$GITHUB_ENV"
+
       - uses: tale/kubectl-action@v1
         with:
           base64-kube-config: ${{ env.KUBE_CONFIG }}
