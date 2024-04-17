@@ -269,8 +269,6 @@ impl ConcentratedPoolParams {
             None => return Err(AppError::NoPosition {}), // A position has to exist in order to execute this function. This should be unreachable
         };
 
-        deps.api.debug("After amounts");
-
         let deposit_msg = app.executor(deps).execute_with_reply_and_data(
             MsgAddToPosition {
                 position_id,
@@ -284,7 +282,6 @@ impl ConcentratedPoolParams {
             cosmwasm_std::ReplyOn::Success,
             OSMOSIS_ADD_TO_POSITION_REPLY_ID,
         )?;
-        deps.api.debug("After messages");
 
         Ok(vec![deposit_msg])
     }

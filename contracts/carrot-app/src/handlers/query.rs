@@ -4,7 +4,7 @@ use abstract_app::{
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Deps, Env, Uint128};
+use cosmwasm_std::{to_json_binary, Binary, Deps, Env, Uint128, Decimal};
 use cw_asset::Asset;
 
 use crate::ans_assets::AnsAssets;
@@ -190,4 +190,20 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+pub fn withdraw_share(
+    deps: Deps,
+    amount: Option<Uint128>,
+    app: &App,
+) -> AppResult<Option<Decimal>> {
+    amount
+        .map(|value| {
+            let total_deposit = query_balance(deps, app)?;
+
+            if total_deposit.total_value.is_zero() {
+                return Err(AppError::NoDeposit {});
+            }
+            Ok(Decimal::from_ratio(value, total_deposit.total_value))
+        })
+        .transpose()
 }

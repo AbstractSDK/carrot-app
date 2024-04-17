@@ -8,39 +8,15 @@ use abstract_sdk::core::ans_host::QueryMsgFns;
 use cosmwasm_std::{coins, Decimal, Uint128, Uint64};
 use cw_orch::{
     anyhow,
-    contract::Deploy,
-    daemon::{
-        networks::{LOCAL_OSMO, OSMOSIS_1, OSMO_5},
-        Daemon, DaemonBuilder,
-    },
-    prelude::*,
+    daemon::{networks::LOCAL_OSMO, Daemon, DaemonBuilder},
     tokio::runtime::Runtime,
 };
 use dotenv::dotenv;
 
-use carrot_app::{
-    autocompound::{AutocompoundConfigBase, AutocompoundRewardsConfigBase},
-    contract::APP_ID,
-    msg::AppInstantiateMsg,
-    state::ConfigBase,
-    yield_sources::{
-        osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldParamsBase, AssetShare,
-        StrategyBase, StrategyElementBase, YieldSourceBase,
-    },
-    AppExecuteMsgFns, AppInterface,
-};
+use carrot_app::AppExecuteMsgFns;
+use localnet_install::{five_strategy, four_strategy, three_strategy, USER_NAMESPACE};
 
-pub const ION: &str = "uion";
-pub const OSMO: &str = "uosmo";
-
-pub const TICK_SPACING: u64 = 100;
-pub const SPREAD_FACTOR: u64 = 0;
-
-pub const INITIAL_LOWER_TICK: i64 = -100000;
-pub const INITIAL_UPPER_TICK: i64 = 10000;
-
-pub const POOL_ID: u64 = 2;
-pub const USER_NAMESPACE: &str = "usernamespace";
+mod localnet_install;
 
 fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -56,8 +32,6 @@ fn main() -> anyhow::Result<()> {
         .build()?;
 
     let client = abstract_client::AbstractClient::new(daemon.clone())?;
-
-    let block_info = daemon.block_info()?;
 
     // Verify modules exist
     let account = client
@@ -78,7 +52,9 @@ fn main() -> anyhow::Result<()> {
     // carrot.deposit(coins(10_000, "uosmo"), None)?;
     carrot.deposit(vec![AnsAsset::new("uosmo", 10_000u128)], None)?;
 
-    // carrot.withdraw(None)?;
+    carrot.update_strategy(vec![AnsAsset::new("uosmo", 10_000u128)], five_strategy())?;
+    carrot.withdraw(None)?;
+    carrot.deposit(vec![AnsAsset::new("uosmo", 10_000u128)], None)?;
 
     Ok(())
 }

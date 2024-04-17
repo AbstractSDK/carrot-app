@@ -43,13 +43,28 @@ fn deposit_lands() -> anyhow::Result<()> {
 
     // Check almost everything landed
     let balances_after = query_balances(&carrot_app)?;
-    assert!(balances_before < balances_after);
+    println!(
+        "Expected deposit amount {}, actual deposit {}, remaining",
+        deposit_amount,
+        balances_after - balances_before,
+    );
+    assert!(
+        balances_after > balances_before + Uint128::from(deposit_amount) * Decimal::percent(98)
+    );
 
     // Do the second deposit
     let response = deposit_with_funds(&carrot_app, vec![AnsAsset::new(USDT, deposit_amount)])?;
     // Check almost everything landed
     let balances_after_second = query_balances(&carrot_app)?;
-    assert!(balances_after < balances_after_second);
+    println!(
+        "Expected deposit amount {}, actual deposit {}, remaining",
+        deposit_amount,
+        balances_after_second - balances_after,
+    );
+    assert!(
+        balances_after_second
+            > balances_after + Uint128::from(deposit_amount) * Decimal::percent(98)
+    );
 
     // We assert the deposit response is an add to position and not a create position
     response.event_attr_value("add_to_position", "new_position_id")?;

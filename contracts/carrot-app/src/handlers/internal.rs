@@ -55,7 +55,6 @@ fn deposit_one_strategy(
     yield_type: YieldType,
     app: App,
 ) -> AppResult {
-    deps.api.debug("Start deposit one strategy");
     let mut temp_deposit_assets = AnsAssets::default();
 
     // We go through all deposit steps.
@@ -123,7 +122,6 @@ pub fn execute_one_deposit_step(
     app: App,
 ) -> AppResult {
     let config = CONFIG.load(deps.storage)?;
-    deps.api.debug("Start onde deposit step");
 
     let exchange_rate_in = query_exchange_rate(deps.as_ref(), &asset_in.name, &app)?;
     let exchange_rate_out = query_exchange_rate(deps.as_ref(), &asset_out, &app)?;
@@ -151,14 +149,12 @@ pub fn execute_finalize_deposit(
     yield_index: usize,
     app: App,
 ) -> AppResult {
-    deps.api.debug("Start finalize deposit");
     let available_deposit_assets = TEMP_DEPOSIT_ASSETS.load(deps.storage)?;
 
     TEMP_CURRENT_YIELD.save(deps.storage, &yield_index)?;
 
     let msgs = yield_type.deposit(deps.as_ref(), available_deposit_assets.try_into()?, &app)?;
 
-    deps.api.debug("End finalize deposit");
     Ok(app.response("finalize-deposit").add_submessages(msgs))
 }
 

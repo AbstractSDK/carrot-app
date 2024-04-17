@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use abstract_app::abstract_core::objects::{
     pool_id::PoolAddressBase, AssetEntry, PoolMetadata, PoolType,
 };
@@ -34,6 +36,7 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
 };
 use prost::Message;
 pub const LOTS: u128 = 100_000_000_000_000;
+pub const LOTS_PROVIDE: u128 = 5_000_000;
 
 // Asset 0
 pub const USDT: &str = "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
@@ -47,10 +50,11 @@ pub const GAS_DENOM: &str = "uosmo";
 pub const DEX_NAME: &str = "osmosis";
 
 pub const TICK_SPACING: u64 = 100;
-pub const SPREAD_FACTOR: u64 = 1;
+pub const SPREAD_FACTOR: &str = "0.01";
 
 pub const INITIAL_LOWER_TICK: i64 = -100000;
 pub const INITIAL_UPPER_TICK: i64 = 10000;
+
 // Deploys abstract and other contracts
 pub fn deploy<Chain: MutCwEnv + Stargate>(
     mut chain: Chain,
@@ -212,8 +216,8 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
 }
 
 pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
-    chain.add_balance(chain.sender(), coins(LOTS, USDC))?;
-    chain.add_balance(chain.sender(), coins(LOTS, USDT))?;
+    chain.add_balance(chain.sender(), coins(LOTS_PROVIDE, USDC))?;
+    chain.add_balance(chain.sender(), coins(LOTS_PROVIDE, USDT))?;
 
     let asset0 = USDT.to_owned();
     let asset1 = USDC.to_owned();
@@ -243,7 +247,7 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                     denom0: USDT.to_owned(),
                     denom1: USDC.to_owned(),
                     tick_spacing: TICK_SPACING,
-                    spread_factor: Decimal::percent(SPREAD_FACTOR).atomics().to_string(),
+                    spread_factor: Decimal::from_str(SPREAD_FACTOR)?.atomics().to_string(),
                 }],
             },
             chain.sender().to_string(),
@@ -267,11 +271,11 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 tokens_provided: vec![
                     v1beta1::Coin {
                         denom: asset1,
-                        amount: "1_000_000".to_owned(),
+                        amount: (LOTS_PROVIDE / 2).to_string(),
                     },
                     v1beta1::Coin {
                         denom: asset0.clone(),
-                        amount: "1_000_000".to_owned(),
+                        amount: (LOTS_PROVIDE / 2).to_string(),
                     },
                 ],
                 token_min_amount0: "0".to_string(),

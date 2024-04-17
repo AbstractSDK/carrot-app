@@ -21,6 +21,20 @@ impl Strategy {
             .map(|s| s.withdraw(deps, withdraw_share, app))
             .collect()
     }
+    pub fn withdraw_preview(
+        self,
+        deps: Deps,
+        withdraw_share: Option<Decimal>,
+        app: &App,
+    ) -> AppResult<Vec<AnsAsset>> {
+        let mut withdraw_result = AnsAssets::default();
+        self.0.into_iter().try_for_each(|s| {
+            let assets = s.withdraw_preview(deps, withdraw_share, app)?;
+            assets.into_iter().try_for_each(|f| withdraw_result.add(f))?;
+            Ok::<_, AppError>(())
+        })?;
+        Ok(withdraw_result.into())
+    }
 }
 
 impl StrategyElement {

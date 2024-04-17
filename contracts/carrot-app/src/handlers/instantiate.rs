@@ -27,8 +27,7 @@ pub fn instantiate_handler(
 
     // If provided - do an initial deposit
     if let Some(assets) = msg.deposit {
-        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, assets.try_into()?, None, &app)?;
-
+        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, assets.try_into()?, strategy,None, &app)?;
         response = response.add_messages(deposit_msgs);
     }
     Ok(response)

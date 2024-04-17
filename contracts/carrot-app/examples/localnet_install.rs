@@ -1,18 +1,10 @@
-use abstract_app::objects::{
-    module::ModuleInfo, namespace::ABSTRACT_NAMESPACE, AccountId, AssetEntry,
-};
-use abstract_client::{Application, Namespace};
-use abstract_dex_adapter::{interface::DexAdapter, DEX_ADAPTER_ID};
-use abstract_interface::{Abstract, VCQueryFns};
-use abstract_sdk::core::{ans_host::QueryMsgFns, app::BaseMigrateMsg};
+use abstract_app::objects::AssetEntry;
+use abstract_client::Application;
+use abstract_dex_adapter::interface::DexAdapter;
 use cosmwasm_std::{Decimal, Uint128, Uint64};
 use cw_orch::{
     anyhow,
-    contract::Deploy,
-    daemon::{
-        networks::{LOCAL_OSMO, OSMOSIS_1, OSMO_5},
-        Daemon, DaemonBuilder,
-    },
+    daemon::{networks::LOCAL_OSMO, Daemon, DaemonBuilder},
     prelude::*,
     tokio::runtime::Runtime,
 };
@@ -20,21 +12,17 @@ use dotenv::dotenv;
 
 use carrot_app::{
     autocompound::{AutocompoundConfigBase, AutocompoundRewardsConfigBase},
-    contract::APP_ID,
-    msg::{AppInstantiateMsg, AppMigrateMsg, MigrateMsg},
+    msg::AppInstantiateMsg,
     state::ConfigBase,
     yield_sources::{
         osmosis_cl_pool::ConcentratedPoolParamsBase, yield_type::YieldParamsBase, AssetShare,
-        StrategyBase, StrategyElementBase, YieldSourceBase,
+        StrategyBase, StrategyElementBase, StrategyElementUnchecked, StrategyUnchecked,
+        YieldSourceBase,
     },
-    AppInterface,
 };
 
 pub const ION: &str = "uion";
 pub const OSMO: &str = "uosmo";
-
-pub const TICK_SPACING: u64 = 100;
-pub const SPREAD_FACTOR: u64 = 0;
 
 pub const INITIAL_LOWER_TICK: i64 = -100000;
 pub const INITIAL_UPPER_TICK: i64 = 10000;
@@ -80,28 +68,7 @@ fn main() -> anyhow::Result<()> {
             },
             dex: "osmosis".to_string(),
         },
-        strategy: StrategyBase(vec![StrategyElementBase {
-            yield_source: YieldSourceBase {
-                asset_distribution: vec![
-                    AssetShare {
-                        asset: AssetEntry::new(ION),
-                        share: Decimal::percent(50),
-                    },
-                    AssetShare {
-                        asset: AssetEntry::new(OSMO),
-                        share: Decimal::percent(50),
-                    },
-                ],
-                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
-                    pool_id: POOL_ID,
-                    lower_tick: INITIAL_LOWER_TICK,
-                    upper_tick: INITIAL_UPPER_TICK,
-                    position_id: None,
-                    _phantom: std::marker::PhantomData,
-                }),
-            },
-            share: Decimal::one(),
-        }]),
+        strategy: two_strategy(),
         deposit: None,
     };
 
@@ -128,4 +95,71 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     Ok(())
+}
+
+fn one_element(upper_tick: i64, lower_tick: i64, share: Decimal) -> StrategyElementUnchecked {
+    StrategyElementBase {
+        yield_source: YieldSourceBase {
+            asset_distribution: vec![
+                AssetShare {
+                    asset: AssetEntry::from(ION),
+                    share: Decimal::percent(50),
+                },
+                AssetShare {
+                    asset: AssetEntry::from(OSMO),
+                    share: Decimal::percent(50),
+                },
+            ],
+            params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                pool_id: POOL_ID,
+                lower_tick,
+                upper_tick,
+                position_id: None,
+                _phantom: std::marker::PhantomData,
+            }),
+        },
+        share,
+    }
+}
+
+pub fn single_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![one_element(
+        INITIAL_UPPER_TICK,
+        INITIAL_LOWER_TICK,
+        Decimal::one(),
+    )])
+}
+
+pub fn two_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(50)),
+        one_element(5000, -5000, Decimal::percent(50)),
+    ])
+}
+
+pub fn three_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(33)),
+        one_element(5000, -5000, Decimal::percent(33)),
+        one_element(1000, -1000, Decimal::percent(34)),
+    ])
+}
+
+pub fn four_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(25)),
+        one_element(5000, -5000, Decimal::percent(25)),
+        one_element(1000, -1000, Decimal::percent(25)),
+        one_element(100, -100, Decimal::percent(25)),
+    ])
+}
+
+pub fn five_strategy() -> StrategyUnchecked {
+    StrategyBase(vec![
+        one_element(INITIAL_UPPER_TICK, INITIAL_LOWER_TICK, Decimal::percent(20)),
+        one_element(5000, -5000, Decimal::percent(20)),
+        one_element(1000, -1000, Decimal::percent(20)),
+        one_element(100, -100, Decimal::percent(20)),
+        one_element(600, -600, Decimal::percent(20)),
+    ])
 }

@@ -36,7 +36,6 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
         YieldType::Mars(_) => return Err(AppError::WrongYieldType {}),
     };
 
-    deps.api.debug("after create");
     save_strategy(deps, strategy)?;
 
     Ok(app

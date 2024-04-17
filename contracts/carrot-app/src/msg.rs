@@ -220,7 +220,15 @@ pub struct DepositPreviewResponse {
 }
 
 #[cw_serde]
-pub struct WithdrawPreviewResponse {}
+pub struct WithdrawPreviewResponse {
+    /// Share of the total deposit that will be withdrawn from the app
+    pub share: Decimal,
+    pub funds: Vec<AnsAsset>,
+    pub msgs: Vec<CosmosMsg>,
+}
 
 #[cw_serde]
-pub struct UpdateStrategyPreviewResponse {}
+pub struct UpdateStrategyPreviewResponse {
+    pub withdraw: Vec<(StrategyElementUnchecked, Decimal)>,
+    pub deposit: Vec<InternalExecuteMsg>,
+}
