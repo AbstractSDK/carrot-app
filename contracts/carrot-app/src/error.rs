@@ -68,4 +68,7 @@ pub enum AppError {
 
     #[error("Operation exceeds max spread limit, price: {price}")]
     MaxSpreadAssertion { price: Decimal },
+
+    #[error("Carrot app does not accept funds")]
+    RedundantFunds {},
 }
