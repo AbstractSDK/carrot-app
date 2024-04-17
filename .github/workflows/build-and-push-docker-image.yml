@@ -66,7 +66,7 @@ jobs:
 
       - name: Generate ArgoCD application manifest
         run: |
-          yq eval '.spec.source.helm.parameters[0].value = env(GIT_SHA)' argo-template.yml> argocd.yaml
+          yq eval '.spec.source.helm.parameters[0].value = env(GITHUB_SHA)' argo-template.yml> argocd.yaml
           cat argocd.yaml
 
       - name: Configure AWS Credentials
