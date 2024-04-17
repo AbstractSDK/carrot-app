@@ -1,14 +1,14 @@
-use super::internal::{execute_internal_action, save_strategy};
+use super::internal::execute_internal_action;
 use crate::{
     autocompound::AutocompoundState,
     check::Checkable,
     contract::{App, AppResult},
-    distribution::deposit::generate_deposit_strategy,
+    distribution::deposit::{generate_deposit_strategy, DepositStrategy},
     error::AppError,
     handlers::query::query_balance,
     helpers::assert_contract,
     msg::{AppExecuteMsg, ExecuteMsg},
-    state::{AUTOCOMPOUND_STATE, CONFIG, STRATEGY_CONFIG},
+    state::{load_strategy, save_strategy, AUTOCOMPOUND_STATE, CONFIG},
     yield_sources::{AssetShare, Strategy, StrategyUnchecked},
 };
 use abstract_app::abstract_sdk::features::AbstractResponse;
@@ -56,7 +56,7 @@ fn deposit(
         .assert_admin(deps.as_ref(), &info.sender)
         .or(assert_contract(&info, &env))?;
 
-    let target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let target_strategy = load_strategy(deps.as_ref())?;
     let deposit_msgs = _inner_deposit(
         deps.as_ref(),
         &env,
@@ -100,10 +100,10 @@ fn update_strategy(
     app: App,
 ) -> AppResult {
     // We load it raw because we're changing the strategy
-    let old_strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let old_strategy = load_strategy(deps.as_ref())?;
 
     // We check the new strategy
-    let strategy = strategy.check(deps.as_ref(), &app)?;
+    let mut strategy = strategy.check(deps.as_ref(), &app)?;
 
     // We execute operations to rebalance the funds between the strategies
     let mut available_funds: Coins = funds.try_into()?;
@@ -133,7 +133,7 @@ fn update_strategy(
         .try_for_each(|f| f.into_iter().try_for_each(|f| available_funds.add(f)))?;
 
     // 2. We replace the strategy with the new strategy
-    save_strategy(deps.branch(), strategy.clone())?;
+    save_strategy(deps.branch(), &mut strategy)?;
 
     // 3. We deposit the funds into the new strategy
     let deposit_msgs = _inner_deposit(
@@ -160,7 +160,7 @@ fn update_strategy(
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
-    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let strategy = load_strategy(deps.as_ref())?;
 
     // We withdraw all rewards from protocols
     let (all_rewards, collect_rewards_msgs) = strategy.withdraw_rewards(deps.as_ref(), &app)?;
@@ -207,8 +207,10 @@ pub fn _inner_deposit(
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
-    let (withdraw_strategy, deposit_msgs) =
-        generate_deposit_strategy(deps, funds, target_strategy, yield_source_params, app)?;
+    let DepositStrategy {
+        withdraw_strategy,
+        deposit_msgs,
+    } = generate_deposit_strategy(deps, funds, target_strategy, yield_source_params, app)?;
 
     let deposit_withdraw_msgs = withdraw_strategy
         .into_iter()
@@ -242,9 +244,7 @@ fn _inner_withdraw(
 
     // We withdraw the necessary share from all registered investments
     let withdraw_msgs =
-        STRATEGY_CONFIG
-            .load(deps.storage)?
-            .withdraw(deps.as_ref(), withdraw_share, app)?;
+        load_strategy(deps.as_ref())?.withdraw(deps.as_ref(), withdraw_share, app)?;
 
     Ok(withdraw_msgs.into_iter().collect())
 }

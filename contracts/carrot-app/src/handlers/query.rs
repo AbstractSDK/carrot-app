@@ -10,7 +10,7 @@ use cw_asset::Asset;
 use crate::autocompound::get_autocompound_status;
 use crate::exchange_rate::query_exchange_rate;
 use crate::msg::{PositionResponse, PositionsResponse};
-use crate::state::STRATEGY_CONFIG;
+use crate::state::load_strategy;
 use crate::yield_sources::yield_type::YieldTypeImplementation;
 use crate::{
     contract::{App, AppResult},
@@ -99,7 +99,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
 }
 
 pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
-    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let strategy = load_strategy(deps)?;
 
     Ok(StrategyResponse {
         strategy: strategy.into(),
@@ -107,7 +107,7 @@ pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
 }
 
 pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
-    let mut strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let mut strategy = load_strategy(deps)?;
 
     Ok(StrategyResponse {
         strategy: strategy.query_current_status(deps, app)?.into(),
@@ -122,7 +122,7 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
     let mut funds = Coins::default();
     let mut total_value = Uint128::zero();
 
-    let mut strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let mut strategy = load_strategy(deps)?;
     strategy.0.iter_mut().try_for_each(|s| {
         let deposit_value = s
             .yield_source
@@ -144,7 +144,7 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
 }
 
 fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
-    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let strategy = load_strategy(deps)?;
 
     let mut rewards = Coins::default();
     strategy.0.into_iter().try_for_each(|mut s| {
@@ -162,8 +162,7 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
 
 pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
     Ok(PositionsResponse {
-        positions: STRATEGY_CONFIG
-            .load(deps.storage)?
+        positions: load_strategy(deps)?
             .0
             .into_iter()
             .map(|mut s| {

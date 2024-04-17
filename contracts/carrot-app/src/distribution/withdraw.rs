@@ -20,13 +20,13 @@ impl Strategy {
             .collect()
     }
     pub fn withdraw_preview(
-        self,
+        &mut self,
         deps: Deps,
         withdraw_share: Option<Decimal>,
         app: &App,
     ) -> AppResult<Vec<Coin>> {
         let mut withdraw_result = Coins::default();
-        self.0.into_iter().try_for_each(|mut s| {
+        self.0.iter_mut().try_for_each(|s| {
             let funds = s.withdraw_preview(deps, withdraw_share, app)?;
             funds.into_iter().try_for_each(|f| withdraw_result.add(f))?;
             Ok::<_, AppError>(())

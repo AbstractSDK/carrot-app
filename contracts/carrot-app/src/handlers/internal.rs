@@ -5,13 +5,9 @@ use crate::{
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     replies::REPLY_AFTER_SWAPS_STEP,
     state::{
-        CONFIG, STRATEGY_CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS,
-        TEMP_EXPECTED_SWAP_COIN,
+        CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN,
     },
-    yield_sources::{
-        yield_type::{YieldType, YieldTypeImplementation},
-        Strategy,
-    },
+    yield_sources::yield_type::{YieldType, YieldTypeImplementation},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
@@ -160,15 +156,4 @@ pub fn execute_finalize_deposit(
     let msgs = yield_type.deposit(deps.as_ref(), available_deposit_coins, &app)?;
 
     Ok(app.response("finalize-deposit").add_submessages(msgs))
-}
-
-pub fn save_strategy(deps: DepsMut, mut strategy: Strategy) -> AppResult<()> {
-    // We need to correct positions for which the cache is not empty
-    // This is a security measure
-    strategy
-        .0
-        .iter_mut()
-        .for_each(|s| s.yield_source.params.clear_cache());
-    STRATEGY_CONFIG.save(deps.storage, &strategy)?;
-    Ok(())
 }

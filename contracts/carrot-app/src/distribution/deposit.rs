@@ -13,6 +13,11 @@ use cosmwasm_schema::cw_serde;
 
 use crate::{error::AppError, msg::InternalExecuteMsg};
 
+pub struct DepositStrategy {
+    pub withdraw_strategy: Vec<(StrategyElement, Decimal)>,
+    pub deposit_msgs: Vec<InternalExecuteMsg>,
+}
+
 /// This functions creates the current deposit strategy
 // /// 1. We query the target strategy in storage (target strategy)
 // /// 2. We query the current status of the strategy (current strategy) from all deposits (external queries)
@@ -25,7 +30,7 @@ pub fn generate_deposit_strategy(
     mut target_strategy: Strategy,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
-) -> AppResult<(Vec<(StrategyElement, Decimal)>, Vec<InternalExecuteMsg>)> {
+) -> AppResult<DepositStrategy> {
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
 
@@ -44,7 +49,10 @@ pub fn generate_deposit_strategy(
     let deposit_msgs =
         this_deposit_strategy.fill_all_and_get_messages(deps, usable_funds.into(), app)?;
 
-    Ok((withdraw_strategy, deposit_msgs))
+    Ok(DepositStrategy {
+        withdraw_strategy,
+        deposit_msgs,
+    })
 }
 
 impl Strategy {
