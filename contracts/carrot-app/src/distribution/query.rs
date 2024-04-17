@@ -18,7 +18,7 @@ impl Strategy {
         self.0.iter_mut().try_for_each(|s| {
             let deposit_value = s
                 .yield_source
-                .ty
+                .params
                 .user_deposit(deps, app)
                 .unwrap_or_default();
             for fund in deposit_value {
@@ -59,7 +59,7 @@ impl Strategy {
             .map(|(original_strategy, (value, shares))| StrategyElement {
                 yield_source: YieldSource {
                     asset_distribution: shares,
-                    ty: original_strategy.yield_source.ty.clone(),
+                    params: original_strategy.yield_source.params.clone(),
                 },
                 share: Decimal::from_ratio(value, all_strategies_value),
             })
@@ -70,7 +70,7 @@ impl Strategy {
     /// This function applies the underlying shares inside yield sources to each yield source depending on the current strategy state
     pub fn apply_current_strategy_shares(&mut self, deps: Deps, app: &App) -> AppResult<()> {
         self.0.iter_mut().try_for_each(|yield_source| {
-            match yield_source.yield_source.ty.share_type() {
+            match yield_source.yield_source.params.share_type() {
                 crate::yield_sources::ShareType::Dynamic => {
                     let (_total_value, shares) = yield_source.query_current_value(deps, app)?;
                     yield_source.yield_source.asset_distribution = shares;
@@ -85,7 +85,7 @@ impl Strategy {
 }
 
 impl StrategyElement {
-    /// Queries the current value distribution of a registered strategy
+    /// Queries the current value distribution of a registered strategy.
     /// If there is no deposit or the query for the user deposit value fails
     ///     the function returns 0 value with the registered asset distribution
     pub fn query_current_value(
@@ -94,7 +94,7 @@ impl StrategyElement {
         app: &App,
     ) -> AppResult<(Uint128, Vec<AssetShare>)> {
         // If there is no deposit
-        let user_deposit = match self.yield_source.ty.user_deposit(deps, app) {
+        let user_deposit = match self.yield_source.params.user_deposit(deps, app) {
             Ok(deposit) => deposit,
             Err(_) => {
                 return Ok((

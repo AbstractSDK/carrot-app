@@ -53,7 +53,6 @@ fn deposit_one_strategy(
     yield_type: YieldType,
     app: App,
 ) -> AppResult {
-    deps.api.debug("Start deposit one strategy");
     let mut temp_deposit_coins = Coins::default();
 
     // We go through all deposit steps.
@@ -121,7 +120,6 @@ pub fn execute_one_deposit_step(
     app: App,
 ) -> AppResult {
     let config = CONFIG.load(deps.storage)?;
-    deps.api.debug("Start onde deposit step");
 
     let exchange_rate_in = query_exchange_rate(deps.as_ref(), asset_in.denom.clone(), &app)?;
     let exchange_rate_out = query_exchange_rate(deps.as_ref(), denom_out.clone(), &app)?;
@@ -155,7 +153,6 @@ pub fn execute_finalize_deposit(
     yield_index: usize,
     app: App,
 ) -> AppResult {
-    deps.api.debug("Start finalize deposit");
     let available_deposit_coins = TEMP_DEPOSIT_COINS.load(deps.storage)?;
 
     TEMP_CURRENT_YIELD.save(deps.storage, &yield_index)?;
@@ -171,7 +168,7 @@ pub fn save_strategy(deps: DepsMut, mut strategy: Strategy) -> AppResult<()> {
     strategy
         .0
         .iter_mut()
-        .for_each(|s| s.yield_source.ty.clear_cache());
+        .for_each(|s| s.yield_source.params.clear_cache());
     STRATEGY_CONFIG.save(deps.storage, &strategy)?;
     Ok(())
 }

@@ -224,7 +224,7 @@ impl ConcentratedPoolParams {
         app: &App,
         position: FullPositionBreakdown,
     ) -> AppResult<Vec<SubMsg>> {
-        let position_id = position.position.unwrap().position_id;
+        let position_id = position.position.clone().unwrap().position_id;
 
         let proxy_addr = app.account_base(deps)?.proxy;
 
@@ -232,12 +232,15 @@ impl ConcentratedPoolParams {
         // We assume the funds vector has 2 coins associated
         let (amount0, amount1) = match position
             .asset0
+            .clone()
             .map(|c| c.denom == funds[0].denom)
-            .or(position.asset1.map(|c| c.denom == funds[1].denom))
+            .or(position.asset1.clone().map(|c| c.denom == funds[1].denom))
         {
             Some(true) => (funds[0].amount, funds[1].amount), // we already had the right order
             Some(false) => (funds[1].amount, funds[0].amount), // we had the wrong order
-            None => return Err(AppError::NoPosition {}), // A position has to exist in order to execute this function. This should be unreachable
+            None => {
+                return Err(AppError::NoPosition {});
+            } // A position has to exist in order to execute this function. This should be unreachable
         };
 
         let deposit_msg = app.executor(deps).execute_with_reply_and_data(

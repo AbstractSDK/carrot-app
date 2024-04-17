@@ -29,14 +29,13 @@ pub fn add_to_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
 
     let current_yield = strategy.0.get_mut(current_position_index).unwrap();
 
-    current_yield.yield_source.ty = match current_yield.yield_source.ty.clone() {
+    current_yield.yield_source.params = match current_yield.yield_source.params.clone() {
         YieldType::ConcentratedLiquidityPool(mut position) => {
             position.position_id = Some(response.position_id);
             YieldType::ConcentratedLiquidityPool(position)
         }
         YieldType::Mars(_) => return Err(AppError::WrongYieldType {}),
     };
-    deps.api.debug("after add");
 
     save_strategy(deps, strategy)?;
 

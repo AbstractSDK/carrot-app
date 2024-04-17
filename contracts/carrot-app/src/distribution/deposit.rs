@@ -6,7 +6,6 @@ use crate::{
     contract::{App, AppResult},
     exchange_rate::query_all_exchange_rates,
     helpers::{compute_total_value, compute_value},
-    state::STRATEGY_CONFIG,
     yield_sources::{yield_type::YieldType, AssetShare, Strategy, StrategyElement},
 };
 
@@ -14,15 +13,19 @@ use cosmwasm_schema::cw_serde;
 
 use crate::{error::AppError, msg::InternalExecuteMsg};
 
+/// This functions creates the current deposit strategy
+// /// 1. We query the target strategy in storage (target strategy)
+// /// 2. We query the current status of the strategy (current strategy) from all deposits (external queries)
+// /// 3. We create a temporary strategy object that allocates the funds from this deposit into the various strategies
+// /// 4. We correct the expected token shares of each strategy, in case there are corrections passed to the function
+// /// 5. We deposit funds according to that strategy
 pub fn generate_deposit_strategy(
     deps: Deps,
     funds: Vec<Coin>,
+    mut target_strategy: Strategy,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
 ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Vec<InternalExecuteMsg>)> {
-    // This is the storage strategy for all assets
-    let mut target_strategy = STRATEGY_CONFIG.load(deps.storage)?;
-
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
 
@@ -33,9 +36,6 @@ pub fn generate_deposit_strategy(
         current_strategy_status,
         app,
     )?;
-
-    // We query the yield source shares
-    this_deposit_strategy.apply_current_strategy_shares(deps, app)?;
 
     // We correct it if the user asked to correct the share parameters of each strategy
     this_deposit_strategy.correct_with(yield_source_params);
@@ -55,7 +55,7 @@ impl Strategy {
         &mut self,
         deps: Deps,
         funds: &mut Coins,
-        current_strategy_status: Self,
+        mut current_strategy_status: Self,
         app: &App,
     ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Self)> {
         let total_value = self.current_balance(deps, app)?.total_value;
@@ -78,9 +78,9 @@ impl Strategy {
         // First we generate the messages for withdrawing strategies that have too much funds
         let withdraw_strategy: Vec<(StrategyElement, Decimal)> = current_strategy_status
             .0
-            .iter()
+            .iter_mut()
             .zip(self.0.clone())
-            .map(|(target, mut current)| {
+            .map(|(current, target)| {
                 // We need to take into account the total value added by the current shares
                 let value_now = current.share * total_value;
                 let target_value = target.share * (total_value + deposit_value);
@@ -98,7 +98,7 @@ impl Strategy {
                     }
 
                     // In case there is a withdraw from the strategy, we don't need to deposit into this strategy after !
-                    Ok::<_, AppError>(Some((current, this_withdraw_share)))
+                    Ok::<_, AppError>(Some((current.clone(), this_withdraw_share)))
                 } else {
                     Ok(None)
                 }
@@ -114,39 +114,29 @@ impl Strategy {
             .0
             .into_iter()
             .zip(self.0.clone())
-            .flat_map(|(target, current)| {
+            .map(|(current, target)| {
                 // We need to take into account the total value added by the current shares
                 let value_now = current.share * total_value;
                 let target_value = target.share * (total_value + deposit_value);
 
                 // If value now is smaller than the target value, we need to deposit some funds into the protocol
-                if target_value < value_now {
-                    None
+                let share = if target_value < value_now {
+                    Decimal::zero()
                 } else {
                     // In case we don't withdraw anything, it means we might deposit.
-                    let share = if available_value.is_zero() {
+                    if available_value.is_zero() {
                         Decimal::zero()
                     } else {
                         Decimal::from_ratio(target_value - value_now, available_value)
-                    };
-
-                    Some(StrategyElement {
-                        yield_source: target.yield_source.clone(),
-                        share,
-                    })
+                    }
+                };
+                StrategyElement {
+                    yield_source: current.yield_source.clone(),
+                    share,
                 }
             })
             .collect::<Vec<_>>()
             .into();
-
-        //     // Then we create the deposit elements to generate the deposits
-        //
-        // })
-        // .collect::<Result<Vec<_>, _>>()?
-        // .into_iter()
-        // .flatten()
-        // .collect::<Vec<_>>()
-        // .into();
 
         Ok((withdraw_strategy, this_deposit_strategy))
     }
@@ -249,7 +239,7 @@ impl Strategy {
         let deposit_strategies = self.fill_all(deps, funds, app)?;
         Ok(deposit_strategies
             .iter()
-            .zip(self.0.iter().map(|s| s.yield_source.ty.clone()))
+            .zip(self.0.iter().map(|s| s.yield_source.params.clone()))
             .enumerate()
             .map(|(index, (strategy, yield_type))| strategy.deposit_msgs(index, yield_type))
             .collect())

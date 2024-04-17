@@ -4,7 +4,7 @@ use abstract_app::{
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{to_json_binary, Binary, Coins, Deps, Env, Uint128};
+use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
 use cw_asset::Asset;
 
 use crate::autocompound::get_autocompound_status;
@@ -126,7 +126,7 @@ pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> 
     strategy.0.iter_mut().try_for_each(|s| {
         let deposit_value = s
             .yield_source
-            .ty
+            .params
             .user_deposit(deps, app)
             .unwrap_or_default();
         for fund in deposit_value {
@@ -148,7 +148,7 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
 
     let mut rewards = Coins::default();
     strategy.0.into_iter().try_for_each(|mut s| {
-        let this_rewards = s.yield_source.ty.user_rewards(deps, app)?;
+        let this_rewards = s.yield_source.params.user_rewards(deps, app)?;
         for fund in this_rewards {
             rewards.add(fund)?;
         }
@@ -167,8 +167,8 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
             .0
             .into_iter()
             .map(|mut s| {
-                let balance = s.yield_source.ty.user_deposit(deps, app)?;
-                let liquidity = s.yield_source.ty.user_liquidity(deps, app)?;
+                let balance = s.yield_source.params.user_deposit(deps, app)?;
+                let liquidity = s.yield_source.params.user_liquidity(deps, app)?;
 
                 let total_value = balance
                     .iter()
@@ -179,7 +179,7 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
                     .sum::<AppResult<Uint128>>()?;
 
                 Ok::<_, AppError>(PositionResponse {
-                    ty: s.yield_source.ty.into(),
+                    params: s.yield_source.params.into(),
                     balance: AssetsBalanceResponse {
                         balances: balance,
                         total_value,
@@ -189,4 +189,20 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+pub fn withdraw_share(
+    deps: Deps,
+    amount: Option<Uint128>,
+    app: &App,
+) -> AppResult<Option<Decimal>> {
+    amount
+        .map(|value| {
+            let total_deposit = query_balance(deps, app)?;
+
+            if total_deposit.total_value.is_zero() {
+                return Err(AppError::NoDeposit {});
+            }
+            Ok(Decimal::from_ratio(value, total_deposit.total_value))
+        })
+        .transpose()
 }

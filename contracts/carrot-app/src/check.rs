@@ -127,7 +127,7 @@ mod yield_sources {
             osmosis_cl_pool::{
                 ConcentratedPoolParams, ConcentratedPoolParamsBase, ConcentratedPoolParamsUnchecked,
             },
-            yield_type::{YieldType, YieldTypeBase, YieldTypeUnchecked},
+            yield_type::{YieldParamsBase, YieldType, YieldTypeUnchecked},
             Strategy, StrategyElement, StrategyElementUnchecked, StrategyUnchecked, YieldSource,
             YieldSourceUnchecked,
         },
@@ -173,8 +173,8 @@ mod yield_sources {
         impl From<YieldType> for YieldTypeUnchecked {
             fn from(value: YieldType) -> Self {
                 match value {
-                    YieldTypeBase::ConcentratedLiquidityPool(params) => {
-                        YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                    YieldParamsBase::ConcentratedLiquidityPool(params) => {
+                        YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                             pool_id: params.pool_id,
                             lower_tick: params.lower_tick,
                             upper_tick: params.upper_tick,
@@ -183,7 +183,7 @@ mod yield_sources {
                             position_cache: params.position_cache,
                         })
                     }
-                    YieldTypeBase::Mars(params) => YieldTypeBase::Mars(params),
+                    YieldParamsBase::Mars(params) => YieldParamsBase::Mars(params),
                 }
             }
         }
@@ -196,7 +196,7 @@ mod yield_sources {
             fn from(value: YieldSource) -> Self {
                 Self {
                     asset_distribution: value.asset_distribution,
-                    ty: value.ty.into(),
+                    params: value.params.into(),
                 }
             }
         }
@@ -228,17 +228,17 @@ mod yield_sources {
                     )
                     .map_err(|_| AppError::AssetsNotRegistered(all_denoms))?;
 
-                let ty = match self.ty {
-                    YieldTypeBase::ConcentratedLiquidityPool(params) => {
+                let params = match self.params {
+                    YieldParamsBase::ConcentratedLiquidityPool(params) => {
                         // A valid CL pool strategy is for 2 assets
                         ensure_eq!(
                             self.asset_distribution.len(),
                             2,
                             AppError::InvalidStrategy {}
                         );
-                        YieldTypeBase::ConcentratedLiquidityPool(params.check(deps, app)?)
+                        YieldParamsBase::ConcentratedLiquidityPool(params.check(deps, app)?)
                     }
-                    YieldTypeBase::Mars(params) => {
+                    YieldParamsBase::Mars(params) => {
                         // We verify there is only one element in the shares vector
                         ensure_eq!(
                             self.asset_distribution.len(),
@@ -251,13 +251,13 @@ mod yield_sources {
                             params.denom,
                             AppError::InvalidStrategy {}
                         );
-                        YieldTypeBase::Mars(params.check(deps, app)?)
+                        YieldParamsBase::Mars(params.check(deps, app)?)
                     }
                 };
 
                 Ok(YieldSource {
                     asset_distribution: self.asset_distribution,
-                    ty,
+                    params,
                 })
             }
         }

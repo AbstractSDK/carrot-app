@@ -6,7 +6,8 @@ use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
     yield_sources::{
         mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase,
-        yield_type::YieldTypeBase, AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase,
+        yield_type::YieldParamsBase, AssetShare, StrategyBase, StrategyElementBase,
+        YieldSourceBase,
     },
     AppInterface,
 };
@@ -48,7 +49,14 @@ fn deposit_lands() -> anyhow::Result<()> {
     carrot_app.deposit(deposit_coins.clone(), None)?;
     // Check almost everything landed
     let balances_after = query_balances(&carrot_app)?;
-    assert!(balances_before < balances_after);
+    println!(
+        "Expected deposit amount {}, actual deposit {}, remaining",
+        deposit_amount,
+        balances_after - balances_before,
+    );
+    assert!(
+        balances_after > balances_before + Uint128::from(deposit_amount) * Decimal::percent(98)
+    );
 
     // Add some more funds
     chain.add_balance(
@@ -59,7 +67,15 @@ fn deposit_lands() -> anyhow::Result<()> {
     let response = carrot_app.deposit(vec![coin(deposit_amount, USDT.to_owned())], None)?;
     // Check almost everything landed
     let balances_after_second = query_balances(&carrot_app)?;
-    assert!(balances_after < balances_after_second);
+    println!(
+        "Expected deposit amount {}, actual deposit {}, remaining",
+        deposit_amount,
+        balances_after_second - balances_after,
+    );
+    assert!(
+        balances_after_second
+            > balances_after + Uint128::from(deposit_amount) * Decimal::percent(98)
+    );
 
     // We assert the deposit response is an add to position and not a create position
     response.event_attr_value("add_to_position", "new_position_id")?;
@@ -159,7 +175,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -182,7 +198,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: 2 * INITIAL_LOWER_TICK,
                     upper_tick: 2 * INITIAL_UPPER_TICK,
@@ -194,7 +210,6 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
             share: Decimal::percent(50),
         },
     ]);
-    carrot_app.update_strategy(vec![], new_strat.clone())?;
 
     let deposit_amount = 5_000;
     let deposit_coins = coins(deposit_amount, USDT.to_owned());
@@ -205,7 +220,7 @@ fn deposit_multiple_positions() -> anyhow::Result<()> {
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
     )?;
-    carrot_app.deposit(deposit_coins, None)?;
+    carrot_app.update_strategy(deposit_coins, new_strat.clone())?;
     let balances_after = query_balances(&carrot_app)?;
 
     let slippage = Decimal::percent(4);
@@ -233,7 +248,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: INITIAL_LOWER_TICK,
                     upper_tick: INITIAL_UPPER_TICK,
@@ -256,7 +271,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                         share: Decimal::percent(50),
                     },
                 ],
-                ty: YieldTypeBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
+                params: YieldParamsBase::ConcentratedLiquidityPool(ConcentratedPoolParamsBase {
                     pool_id,
                     lower_tick: 2 * INITIAL_LOWER_TICK,
                     upper_tick: 2 * INITIAL_UPPER_TICK,
@@ -273,14 +288,13 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
                     denom: USDT.to_string(),
                     share: Decimal::percent(100),
                 }],
-                ty: YieldTypeBase::Mars(MarsDepositParams {
+                params: YieldParamsBase::Mars(MarsDepositParams {
                     denom: USDT.to_string(),
                 }),
             },
             share: Decimal::percent(0),
         },
     ]);
-    carrot_app.update_strategy(vec![], new_strat.clone())?;
 
     let deposit_amount = 5_000;
     let deposit_coins = coins(deposit_amount, USDT.to_owned());
@@ -291,7 +305,7 @@ fn deposit_multiple_positions_with_empty() -> anyhow::Result<()> {
         carrot_app.account().proxy()?.to_string(),
         deposit_coins.clone(),
     )?;
-    carrot_app.deposit(deposit_coins, None)?;
+    carrot_app.update_strategy(deposit_coins, new_strat.clone())?;
     let balances_after = query_balances(&carrot_app)?;
 
     println!("{balances_before} --> {balances_after}");

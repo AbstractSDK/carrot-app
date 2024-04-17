@@ -21,13 +21,13 @@ pub fn instantiate_handler(
 
     CONFIG.save(deps.storage, &config)?;
     let strategy = msg.strategy.check(deps.as_ref(), &app)?;
-    save_strategy(deps.branch(), strategy)?;
+    save_strategy(deps.branch(), strategy.clone())?;
 
     let mut response = app.response("instantiate_savings_app");
 
     // If provided - do an initial deposit
     if let Some(funds) = msg.deposit {
-        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, None, &app)?;
+        let deposit_msgs = _inner_deposit(deps.as_ref(), &env, funds, strategy, None, &app)?;
 
         response = response.add_messages(deposit_msgs);
     }

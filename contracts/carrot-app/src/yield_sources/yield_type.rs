@@ -10,15 +10,15 @@ use super::{mars::MarsDepositParams, osmosis_cl_pool::ConcentratedPoolParamsBase
 
 // This however is not checkable by itself, because the check also depends on the asset share distribution
 #[cw_serde]
-pub enum YieldTypeBase<T> {
+pub enum YieldParamsBase<T> {
     ConcentratedLiquidityPool(ConcentratedPoolParamsBase<T>),
     /// For Mars, you just need to deposit in the RedBank
     /// You need to indicate the denom of the funds you want to deposit
     Mars(MarsDepositParams),
 }
 
-pub type YieldTypeUnchecked = YieldTypeBase<Unchecked>;
-pub type YieldType = YieldTypeBase<Checked>;
+pub type YieldTypeUnchecked = YieldParamsBase<Unchecked>;
+pub type YieldType = YieldParamsBase<Checked>;
 
 impl YieldTypeImplementation for YieldType {
     fn deposit(&mut self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
