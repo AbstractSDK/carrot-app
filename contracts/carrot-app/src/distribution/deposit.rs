@@ -80,7 +80,7 @@ impl Strategy {
             .0
             .iter()
             .zip(self.0.clone())
-            .map(|(target, current)| {
+            .map(|(current, target)| {
                 // We need to take into account the total value added by the current shares
                 let value_now = current.share * total_value;
                 let target_value = target.share * (total_value + deposit_value);
@@ -98,7 +98,7 @@ impl Strategy {
                     }
 
                     // In case there is a withdraw from the strategy, we don't need to deposit into this strategy after !
-                    Ok::<_, AppError>(Some((current, this_withdraw_share)))
+                    Ok::<_, AppError>(Some((current.clone(), this_withdraw_share)))
                 } else {
                     Ok(None)
                 }
@@ -114,39 +114,29 @@ impl Strategy {
             .0
             .into_iter()
             .zip(self.0.clone())
-            .flat_map(|(target, current)| {
+            .map(|(current, target)| {
                 // We need to take into account the total value added by the current shares
                 let value_now = current.share * total_value;
                 let target_value = target.share * (total_value + deposit_value);
 
                 // If value now is smaller than the target value, we need to deposit some funds into the protocol
-                if target_value < value_now {
-                    None
+                let share = if target_value < value_now {
+                    Decimal::zero()
                 } else {
                     // In case we don't withdraw anything, it means we might deposit.
-                    let share = if available_value.is_zero() {
+                    if available_value.is_zero() {
                         Decimal::zero()
                     } else {
                         Decimal::from_ratio(target_value - value_now, available_value)
-                    };
-
-                    Some(StrategyElement {
-                        yield_source: target.yield_source.clone(),
-                        share,
-                    })
+                    }
+                };
+                StrategyElement {
+                    yield_source: current.yield_source.clone(),
+                    share,
                 }
             })
             .collect::<Vec<_>>()
             .into();
-
-        //     // Then we create the deposit elements to generate the deposits
-        //
-        // })
-        // .collect::<Result<Vec<_>, _>>()?
-        // .into_iter()
-        // .flatten()
-        // .collect::<Vec<_>>()
-        // .into();
 
         Ok((withdraw_strategy, this_deposit_strategy))
     }

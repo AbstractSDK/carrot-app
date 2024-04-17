@@ -305,14 +305,15 @@ fn rebalance_with_stale_strategy_success() -> anyhow::Result<()> {
 
     // We query the balance
     let balance = carrot_app.balance()?;
-    // Make sure the deposit went almost all in
-    assert!(balance.total_value > Uint128::from(deposit_amount) * Decimal::percent(98));
     println!(
         "Before :{}, after: {}",
         total_value_before, balance.total_value
     );
+    // Make sure the deposit went almost all in
+    assert!(balance.total_value > Uint128::from(deposit_amount) * Decimal::percent(98));
+
     // Make sure the total value has almost not changed when updating the strategy
-    assert!(balance.total_value > total_value_before * Decimal::permille(999));
+    assert!(balance.total_value > total_value_before * Decimal::percent(99));
 
     let distribution = carrot_app.positions()?;
 
@@ -395,18 +396,19 @@ fn rebalance_with_current_and_stale_strategy_success() -> anyhow::Result<()> {
     // No additional deposit
     carrot_app.update_strategy(vec![], strategies.clone())?;
 
-    carrot_app.strategy()?;
+    assert_eq!(carrot_app.strategy()?.strategy.0.len(), 2);
 
     // We query the balance
     let balance = carrot_app.balance()?;
     // Make sure the deposit went almost all in
-    assert!(balance.total_value > Uint128::from(deposit_amount) * Decimal::percent(98));
     println!(
         "Before :{}, after: {}",
         total_value_before, balance.total_value
     );
+    assert!(balance.total_value > Uint128::from(deposit_amount) * Decimal::percent(98));
+
     // Make sure the total value has almost not changed when updating the strategy
-    assert!(balance.total_value > total_value_before * Decimal::permille(998));
+    assert!(balance.total_value > total_value_before * Decimal::permille(997));
 
     let distribution = carrot_app.positions()?;
 

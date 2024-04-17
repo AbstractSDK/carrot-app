@@ -209,6 +209,7 @@ pub fn _inner_deposit(
 ) -> AppResult<Vec<CosmosMsg>> {
     let (withdraw_strategy, deposit_msgs) =
         generate_deposit_strategy(deps, funds, target_strategy, yield_source_params, app)?;
+
     let deposit_withdraw_msgs = withdraw_strategy
         .into_iter()
         .map(|(el, share)| el.withdraw(deps, Some(share), app).map(Into::into))
