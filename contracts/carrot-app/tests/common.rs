@@ -57,8 +57,8 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
     gas_pool_id: u64,
     initial_deposit: Option<Vec<Coin>>,
 ) -> anyhow::Result<Application<Chain, carrot_app::AppInterface<Chain>>> {
-    let asset0 = USDT.to_owned();
-    let asset1 = USDC.to_owned();
+    let asset0 = USDC.to_owned();
+    let asset1 = USDT.to_owned();
     // We register the pool inside the Abstract ANS
     let client = AbstractClient::builder(chain.clone())
         .dex(DEX_NAME)
@@ -93,7 +93,6 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
     // We deploy the carrot_app
     let publisher = client
         .publisher_builder(Namespace::new("abstract")?)
-        .install_on_sub_account(false)
         .build()?;
     // The dex adapter
     let dex_adapter = publisher

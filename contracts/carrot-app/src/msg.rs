@@ -1,3 +1,4 @@
+use abstract_app::objects::AssetEntry;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{wasm_execute, Coin, CosmosMsg, Decimal, Env, Uint128, Uint64};
 use cw_asset::AssetBase;
@@ -47,7 +48,10 @@ pub enum AppExecuteMsg {
     },
     /// Partial withdraw of the funds available on the app
     /// If amount is omitted, withdraws everything that is on the app
-    Withdraw { amount: Option<Uint128> },
+    Withdraw {
+        value: Option<Uint128>,
+        swap_to: Option<AssetEntry>,
+    },
     /// Auto-compounds the pool rewards into the pool
     Autocompound {},
     /// Rebalances all investments according to a new balance strategy

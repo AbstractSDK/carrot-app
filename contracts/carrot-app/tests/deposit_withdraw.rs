@@ -1,6 +1,7 @@
 mod common;
 
 use crate::common::{setup_test_tube, USDC, USDT};
+use abstract_app::objects::AssetEntry;
 use abstract_client::Application;
 use carrot_app::{
     msg::{AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse},
@@ -12,7 +13,7 @@ use carrot_app::{
     AppInterface,
 };
 use common::{INITIAL_LOWER_TICK, INITIAL_UPPER_TICK};
-use cosmwasm_std::{coin, coins, Decimal, Uint128};
+use cosmwasm_std::{coin, coins, Coins, Decimal, Uint128};
 use cw_orch::{anyhow, prelude::*};
 
 fn query_balances<Chain: CwEnv>(
@@ -111,7 +112,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     // Withdraw some of the value
     let liquidity_amount: Uint128 = balance.balances[0].amount;
     let half_of_liquidity = liquidity_amount / Uint128::new(2);
-    carrot_app.withdraw(Some(half_of_liquidity))?;
+    carrot_app.withdraw(None, Some(half_of_liquidity))?;
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
@@ -128,7 +129,7 @@ fn withdraw_position() -> anyhow::Result<()> {
     assert!(balance_usdt_after_half_withdraw.amount > balance_usdt_before_withdraw.amount);
 
     // Withdraw rest of liquidity
-    carrot_app.withdraw(None)?;
+    carrot_app.withdraw(None, None)?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
         .balance(chain.sender(), Some(USDT.to_owned()))?
@@ -322,6 +323,46 @@ fn create_position_on_instantiation() -> anyhow::Result<()> {
 
     let balance = carrot_app.balance()?;
     assert!(balance.total_value > Uint128::from(20_000u128) * Decimal::percent(99));
+    Ok(())
+}
+
+#[test]
+fn withdraw_to() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    // We should add funds to the account proxy
+    let deposit_amount = 5_000;
+    let deposit_coins = coins(deposit_amount, USDT.to_owned());
+    let mut chain = carrot_app.get_chain().clone();
+
+    let balances_before = query_balances(&carrot_app)?;
+    chain.add_balance(
+        carrot_app.account().proxy()?.to_string(),
+        deposit_coins.clone(),
+    )?;
+
+    // Do the deposit
+    carrot_app.deposit(deposit_coins.clone(), None)?;
+
+    // Check almost everything landed and there is 2 types of coins
+    let balances_after = query_balances(&carrot_app)?;
+    assert!(balances_before < balances_after);
+
+    let balances_before = chain.query_all_balances(carrot_app.account().proxy()?.as_str())?;
+    // Withdraw everything
+    carrot_app.withdraw(Some(AssetEntry::new(USDT)), None)?;
+
+    // Check that the proxy only has one asset type back
+    let mut balances_after: Coins = chain
+        .query_all_balances(carrot_app.account().proxy()?.as_str())?
+        .try_into()?;
+
+    for f in balances_before {
+        balances_after.sub(f)?;
+    }
+    // In balances before remains only the withdrawn funds
+    assert_eq!(balances_after.len(), 1);
+
     Ok(())
 }
 
