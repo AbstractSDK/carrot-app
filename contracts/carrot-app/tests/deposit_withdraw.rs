@@ -3,10 +3,10 @@ mod common;
 use crate::common::{create_position, setup_test_tube, USDC, USDT};
 use abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
-    AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, CreatePositionMessage,
-    PositionResponse,
+    AppExecuteMsg, AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus,
+    CreatePositionMessage, PositionResponse,
 };
-use common::DEX_NAME;
+use common::{DEX_NAME, GAS_DENOM};
 use cosmwasm_std::{coin, coins, Decimal, Uint128};
 use cw_orch::{
     anyhow,
@@ -425,5 +425,28 @@ fn shifted_position_create_deposit() -> anyhow::Result<()> {
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
     assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 3);
+    Ok(())
+}
+
+#[test]
+fn error_on_provided_funds() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    carrot_app
+        .execute(
+            &AppExecuteMsg::CreatePosition(CreatePositionMessage {
+                lower_tick: -37000,
+                upper_tick: 1000,
+                funds: coins(10_000, USDT),
+                asset0: coin(205_000, USDT),
+                asset1: coin(753_000, USDC),
+                max_spread: None,
+                belief_price0: None,
+                belief_price1: None,
+            })
+            .into(),
+            Some(&[coin(10, GAS_DENOM)]),
+        )
+        .expect_err("Should error when funds provided");
     Ok(())
 }

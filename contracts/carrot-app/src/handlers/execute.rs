@@ -2,7 +2,7 @@ use super::swap_helpers::{swap_msg, swap_to_enter_position};
 use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
-    helpers::{get_balance, get_user},
+    helpers::{get_balance, get_user, nonpayable},
     msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
     replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
     state::{
@@ -35,6 +35,8 @@ pub fn execute_handler(
     app: App,
     msg: AppExecuteMsg,
 ) -> AppResult {
+    nonpayable(&info)?;
+
     match msg {
         AppExecuteMsg::UpdateConfig {
             autocompound_cooldown_seconds,
