@@ -9,6 +9,7 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
     ConcentratedliquidityQuerier, FullPositionBreakdown,
 };
 
+use crate::msg::SwapToAsset;
 use crate::{contract::AppResult, error::AppError, msg::CompoundStatus};
 
 const POSITION: Item<Position> = Item::new("position2");
@@ -104,6 +105,9 @@ fn may_load_osmosis_position(
         .map(|position_response| position_response.position.unwrap())
         .ok()
 }
+
+// Temp state
+pub const TEMP_WITHDRAW_TO_ASSET: Item<SwapToAsset> = Item::new("wta");
 
 #[cw_serde]
 pub struct Config {

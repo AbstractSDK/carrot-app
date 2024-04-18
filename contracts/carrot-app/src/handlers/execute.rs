@@ -3,17 +3,20 @@ use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
     helpers::{get_balance, get_user, nonpayable},
-    msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
-    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
-    state::{assert_contract, AutocompoundRewardsConfig, CarrotPosition, Config, CONFIG},
+    msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg, SwapToAsset},
+    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID, WITHDRAW_TO_ASSET_ID},
+    state::{
+        assert_contract, AutocompoundRewardsConfig, CarrotPosition, Config, CONFIG,
+        TEMP_WITHDRAW_TO_ASSET,
+    },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
-    to_json_binary, Addr, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg,
-    Uint128, Uint64, WasmMsg,
+    to_json_binary, Addr, Coin, CosmosMsg, Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo,
+    SubMsg, Uint128, Uint256, Uint64, WasmMsg,
 };
 use cw_asset::Asset;
 use osmosis_std::{
@@ -62,8 +65,9 @@ pub fn execute_handler(
             belief_price1,
             app,
         ),
-        AppExecuteMsg::Withdraw { amount } => withdraw(deps, env, info, Some(amount), app),
-        AppExecuteMsg::WithdrawAll {} => withdraw(deps, env, info, None, app),
+        AppExecuteMsg::Withdraw { amount, swap_to } => {
+            withdraw(deps, env, info, amount, swap_to, app)
+        }
         AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
     }
 }
@@ -195,7 +199,8 @@ fn withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: Option<Uint128>,
+    amount: Option<Uint256>,
+    swap_to: Option<SwapToAsset>,
     app: App,
 ) -> AppResult {
     // Only the authorized addresses (admin ?) can withdraw
@@ -219,9 +224,15 @@ fn withdraw(
     let mut app_response = app
         .response("withdraw")
         .add_attribute("withdraw_amount", withdraw_amount)
-        .add_attribute("total_amount", total_amount)
-        .add_message(withdraw_msg);
+        .add_attribute("total_amount", total_amount);
 
+    // Resolve to_asset if provided
+    app_response = if let Some(swap_to) = swap_to {
+        TEMP_WITHDRAW_TO_ASSET.save(deps.storage, &swap_to)?;
+        app_response.add_submessage(SubMsg::reply_on_success(withdraw_msg, WITHDRAW_TO_ASSET_ID))
+    } else {
+        app_response.add_message(withdraw_msg)
+    };
     // Add the collect_rewards_msgs only if there are rewards AND if we are doing a partial withdraw
     // Context: While partial position withdraws on osmosis keep the rewards unclaimed, full withdraws automatically withdraw rewards
     if !rewards.is_empty() && partial_withdraw {
@@ -232,7 +243,6 @@ fn withdraw(
 }
 
 /// Auto-compound the position with earned fees and incentives.
-
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
     // Everyone can autocompound
     let config = CONFIG.load(deps.storage)?;
@@ -373,19 +383,19 @@ fn _inner_claim_rewards(
 
 fn _inner_withdraw(
     env: &Env,
-    amount: Option<Uint128>,
+    amount: Option<Uint256>,
     carrot_position: CarrotPosition,
     user: Addr,
     authz: abstract_sdk::AuthZ,
-) -> AppResult<(CosmosMsg, String, String, Vec<Coin>)> {
+) -> AppResult<(CosmosMsg, Uint256, Uint256, [Coin; 2])> {
     let position_details = carrot_position.position.position.unwrap();
-    let total_liquidity = position_details.liquidity.replace('.', "");
+    let total_liquidity: Decimal256 = position_details.liquidity.parse()?;
+    let total_liquidity_atomics: Uint256 = total_liquidity.atomics();
 
     let liquidity_amount = if let Some(amount) = amount {
-        amount.to_string()
+        amount
     } else {
-        // TODO: it's decimals inside contracts
-        total_liquidity.clone()
+        total_liquidity_atomics
     };
 
     // We need to execute withdraw on the user's behalf
@@ -394,37 +404,36 @@ fn _inner_withdraw(
         MsgWithdrawPosition {
             position_id: carrot_position.id,
             sender: user.to_string(),
-            liquidity_amount: liquidity_amount.clone(),
+            liquidity_amount: liquidity_amount.to_string(),
         },
     );
 
-    let withdrawn_funds = vec![
-        try_proto_to_cosmwasm_coins(carrot_position.position.asset0)?
-            .first()
-            .map(|c| {
-                Ok::<_, AppError>(Coin {
-                    denom: c.denom.clone(),
-                    amount: c.amount * Uint128::from_str(&liquidity_amount)?
-                        / Uint128::from_str(&total_liquidity)?,
-                })
-            })
-            .transpose()?,
-        try_proto_to_cosmwasm_coins(carrot_position.position.asset1)?
-            .first()
-            .map(|c| {
-                Ok::<_, AppError>(Coin {
-                    denom: c.denom.clone(),
-                    amount: c.amount * Uint128::from_str(&liquidity_amount)?
-                        / Uint128::from_str(&total_liquidity)?,
-                })
-            })
-            .transpose()?,
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    let asset0_osmosis = carrot_position.position.asset0.unwrap();
+    let asset1_osmosis = carrot_position.position.asset1.unwrap();
 
-    Ok((msg, liquidity_amount, total_liquidity, withdrawn_funds))
+    let withdrawn_funds = [
+        Coin {
+            denom: asset0_osmosis.denom,
+            amount: Uint128::try_from(
+                Uint256::from_str(&asset0_osmosis.amount)? * liquidity_amount
+                    / total_liquidity_atomics,
+            )?,
+        },
+        Coin {
+            denom: asset1_osmosis.denom,
+            amount: Uint128::try_from(
+                Uint256::from_str(&asset1_osmosis.amount)? * liquidity_amount
+                    / total_liquidity_atomics,
+            )?,
+        },
+    ];
+
+    Ok((
+        msg,
+        liquidity_amount,
+        total_liquidity_atomics,
+        withdrawn_funds,
+    ))
 }
 
 /// This function creates a position for the user,
@@ -541,6 +550,7 @@ pub fn autocompound_executor_rewards(
             env,
             AnsAsset::new(rewards_config.swap_asset, swap_amount),
             rewards_config.gas_asset,
+            None,
             app,
         )?;
         rewards_messages.extend(msgs);

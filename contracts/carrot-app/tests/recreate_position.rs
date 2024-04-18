@@ -2,7 +2,7 @@ mod common;
 
 use crate::common::{
     create_position, give_authorizations, setup_test_tube, INITIAL_LOWER_TICK, INITIAL_UPPER_TICK,
-    USDC, USDT,
+    USDC, USDC_DENOM, USDT_DENOM,
 };
 use abstract_app::objects::{AccountId, AssetEntry};
 use abstract_client::{AbstractClient, Environment};
@@ -13,7 +13,7 @@ use carrot_app::msg::{
 };
 use carrot_app::state::AutocompoundRewardsConfig;
 use common::REWARD_ASSET;
-use cosmwasm_std::{coin, coins, Uint128, Uint64};
+use cosmwasm_std::{coin, coins, Uint128, Uint256, Uint64};
 use cw_orch::{
     anyhow,
     osmosis_test_tube::osmosis_test_tube::{
@@ -31,17 +31,17 @@ fn create_multiple_positions() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Create position second time, it should fail
     let position_err = create_position(
         &carrot_app,
-        coins(5_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(5_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )
     .unwrap_err();
 
@@ -58,23 +58,23 @@ fn create_multiple_positions_after_withdraw() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Withdraw half of liquidity
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
-    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
-    let half_of_liquidity = liquidity_amount / Uint128::new(2);
-    carrot_app.withdraw(half_of_liquidity)?;
+    let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
+    let half_of_liquidity = liquidity_amount / Uint256::from_u128(2);
+    carrot_app.withdraw(Some(half_of_liquidity), None)?;
 
     // Create position second time, it should fail
     let position_err = create_position(
         &carrot_app,
-        coins(5_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(5_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )
     .unwrap_err();
 
@@ -84,15 +84,15 @@ fn create_multiple_positions_after_withdraw() -> anyhow::Result<()> {
 
     // Withdraw whole liquidity
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
-    let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
-    carrot_app.withdraw(liquidity_amount)?;
+    let liquidity_amount: Uint256 = balance.liquidity.parse().unwrap();
+    carrot_app.withdraw(Some(liquidity_amount), None)?;
 
     // Create position second time, it should fail
     create_position(
         &carrot_app,
-        coins(5_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(5_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     Ok(())
@@ -105,20 +105,20 @@ fn create_multiple_positions_after_withdraw_all() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Withdraw whole liquidity
-    carrot_app.withdraw_all()?;
+    carrot_app.withdraw(None, None)?;
 
     // Create position second time, it should succeed
     create_position(
         &carrot_app,
-        coins(5_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(5_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
     Ok(())
 }
@@ -152,9 +152,9 @@ fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()
     // Create position, ignoring it was manually withdrawn
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     let position = carrot_app.position()?;
@@ -200,9 +200,9 @@ fn install_on_sub_account() -> anyhow::Result<()> {
     give_authorizations(&client, carrot_app.addr_str()?)?;
     create_position(
         &carrot_app,
-        coins(10_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(10_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     let position: PositionResponse = carrot_app.position()?;
@@ -237,9 +237,9 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
         create_position: Some(CreatePositionMessage {
             lower_tick: INITIAL_LOWER_TICK,
             upper_tick: INITIAL_UPPER_TICK,
-            funds: coins(100_000, USDC),
-            asset0: coin(1_000_672_899, USDT),
-            asset1: coin(10_000_000_000, USDC),
+            funds: coins(100_000, USDC_DENOM),
+            asset0: coin(1_000_672_899, USDT_DENOM),
+            asset1: coin(10_000_000_000, USDC_DENOM),
             max_spread: None,
             belief_price0: None,
             belief_price1: None,

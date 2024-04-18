@@ -3,8 +3,7 @@ use abstract_dex_adapter::{msg::GenerateMessagesResponse, DexInterface};
 use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 use osmosis_std::cosmwasm_to_proto_coins;
-const MAX_SPREAD_PERCENT: u64 = 20;
-pub const DEFAULT_SLIPPAGE: Decimal = Decimal::permille(5);
+pub const DEFAULT_MAX_SPREAD: Decimal = Decimal::percent(20);
 
 use crate::{
     contract::{App, AppResult, OSMOSIS},
@@ -35,6 +34,7 @@ pub(crate) fn swap_msg(
     env: &Env,
     offer_asset: AnsAsset,
     ask_asset: AssetEntry,
+    max_spread: Option<Decimal>,
     app: &App,
 ) -> AppResult<Vec<CosmosMsg>> {
     // Don't swap if not required
@@ -44,13 +44,9 @@ pub(crate) fn swap_msg(
     let sender = get_user(deps, app)?;
 
     let dex = app.ans_dex(deps, OSMOSIS.to_string());
-    let trigger_swap_msg: GenerateMessagesResponse = dex.generate_swap_messages(
-        offer_asset,
-        ask_asset,
-        Some(Decimal::percent(MAX_SPREAD_PERCENT)),
-        None,
-        sender.clone(),
-    )?;
+    let max_spread = Some(max_spread.unwrap_or(DEFAULT_MAX_SPREAD));
+    let trigger_swap_msg: GenerateMessagesResponse =
+        dex.generate_swap_messages(offer_asset, ask_asset, max_spread, None, sender.clone())?;
     let authz = app.auth_z(deps, Some(sender))?;
 
     Ok(trigger_swap_msg
@@ -167,7 +163,7 @@ pub fn swap_to_enter_position(
         tokens_to_swap(deps, funds, asset0, asset1, price)?;
 
     Ok((
-        swap_msg(deps, env, offer_asset, ask_asset, app)?,
+        swap_msg(deps, env, offer_asset, ask_asset, max_spread, app)?,
         assets_for_position,
     ))
 }

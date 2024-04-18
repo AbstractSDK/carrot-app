@@ -2,7 +2,8 @@ mod common;
 
 use crate::common::incentives::Incentives;
 use crate::common::{
-    create_position, setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC, USDT,
+    create_position, setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC, USDC_DENOM,
+    USDT, USDT_DENOM,
 };
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
@@ -56,9 +57,9 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(100_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(100_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Do some swaps
@@ -69,8 +70,8 @@ fn check_autocompound() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, USDC.to_owned()),
-            coin(200_000, USDT.to_owned()),
+            coin(200_000, USDC_DENOM.to_owned()),
+            coin(200_000, USDT_DENOM.to_owned()),
         ],
     )?;
     for _ in 0..10 {
@@ -90,29 +91,29 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
     // Autocompound
-    chain.wait_seconds(300)?;
-    carrot_app.autocompound()?;
+    chain.wait_seconds(300).unwrap();
+    carrot_app.autocompound().unwrap();
 
     // Save new balances
-    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance().unwrap();
     let balance_usdc_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC.to_owned()))?
+        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT.to_owned()))?
+        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -139,9 +140,9 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     // Create position
     create_position(
         &carrot_app,
-        coins(100_000, USDT.to_owned()),
-        coin(1_000_000, USDT.to_owned()),
-        coin(1_000_000, USDC.to_owned()),
+        coins(100_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDT_DENOM.to_owned()),
+        coin(1_000_000, USDC_DENOM.to_owned()),
     )?;
 
     // Add incentive
@@ -181,8 +182,8 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     chain.bank_send(
         account.proxy.addr_str()?,
         vec![
-            coin(200_000, USDC.to_owned()),
-            coin(200_000, USDT.to_owned()),
+            coin(200_000, USDC_DENOM.to_owned()),
+            coin(200_000, USDT_DENOM.to_owned()),
         ],
     )?;
     for _ in 0..10 {
