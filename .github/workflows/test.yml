@@ -25,8 +25,13 @@ jobs:
         run: cargo generate-lockfile
       - name: Install just
         uses: extractions/setup-just@v1
+      # Test tube requires go
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ">=1.19.0"
       - name: generate artifacts
-        run: just wasm
+        run: mkdir -p target && just wasm
       - name: cargo test --locked
         run: cargo test --locked --all-features --all-targets
   coverage:
