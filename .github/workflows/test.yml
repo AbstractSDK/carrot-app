@@ -23,9 +23,9 @@ jobs:
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
-      # https://twitter.com/jonhoo/status/1571290371124260865
-      - name: generate artifacts
+      - name: Install just
         uses: extractions/setup-just@v1
+      - name: generate artifacts
         run: just wasm
       - name: cargo test --locked
         run: cargo test --locked --all-features --all-targets
