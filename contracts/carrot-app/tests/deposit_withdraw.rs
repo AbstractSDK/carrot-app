@@ -6,10 +6,10 @@ use crate::common::{create_position, setup_test_tube, USDC, USDC_DENOM, USDT, US
 use abstract_app::objects::AssetEntry;
 use abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
-    AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, CreatePositionMessage,
-    PositionResponse, SwapToAsset,
+    AppExecuteMsg, AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus,
+    CreatePositionMessage, PositionResponse, SwapToAsset,
 };
-use common::DEX_NAME;
+use common::{DEX_NAME, GAS_DENOM};
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint256};
 use cw_orch::{
     anyhow,
@@ -168,7 +168,7 @@ fn create_position_on_instantiation() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(true)?;
 
     let position: PositionResponse = carrot_app.position()?;
-    assert!(position.position.is_some());
+    assert!(position.position_id.is_some());
     Ok(())
 }
 
@@ -178,7 +178,7 @@ fn withdraw_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
     let chain = carrot_app.get_chain().clone();
 
     let position: PositionResponse = carrot_app.position()?;
-    let position_id = position.position.unwrap().position_id;
+    let position_id = position.position_id.unwrap();
 
     let test_tube = chain.app.borrow();
     let cl = ConcentratedLiquidity::new(&*test_tube);
@@ -364,7 +364,7 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
     let cl = ConcentratedLiquidity::new(&*test_tube);
 
     let position: PositionResponse = carrot_app.position()?;
-    let position_id = position.position.unwrap().position_id;
+    let position_id = position.position_id.unwrap();
 
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let liquidity_amount: Uint128 = balance.liquidity.parse().unwrap();
@@ -429,6 +429,29 @@ fn shifted_position_create_deposit() -> anyhow::Result<()> {
         .iter()
         .fold(Uint128::zero(), |acc, e| acc + e.amount);
     assert!(sum.u128() > (deposit_amount - max_difference.u128()) * 3);
+    Ok(())
+}
+
+#[test]
+fn error_on_provided_funds() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
+
+    carrot_app
+        .execute(
+            &AppExecuteMsg::CreatePosition(CreatePositionMessage {
+                lower_tick: -37000,
+                upper_tick: 1000,
+                funds: coins(10_000, USDT),
+                asset0: coin(205_000, USDT),
+                asset1: coin(753_000, USDC),
+                max_spread: None,
+                belief_price0: None,
+                belief_price1: None,
+            })
+            .into(),
+            Some(&[coin(10, GAS_DENOM)]),
+        )
+        .expect_err("Should error when funds provided");
     Ok(())
 }
 

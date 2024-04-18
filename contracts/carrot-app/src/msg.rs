@@ -3,10 +3,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Coin, Decimal, Uint256, Uint64};
 use cw_asset::AssetBase;
 
-use crate::{
-    contract::App,
-    state::{AutocompoundRewardsConfig, Position},
-};
+use crate::{contract::App, state::AutocompoundRewardsConfig};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_app::app_msg_types!(App, AppExecuteMsg, AppQueryMsg);
@@ -76,10 +73,13 @@ pub enum AppExecuteMsg {
 #[cfg_attr(feature = "interface", impl_into(QueryMsg))]
 #[derive(QueryResponses)]
 pub enum AppQueryMsg {
+    /// Get the config of the carrot app
     #[returns(crate::state::Config)]
     Config {},
+    /// Get the balance and liquidity of the position
     #[returns(AssetsBalanceResponse)]
     Balance {},
+    /// Get the position id
     #[returns(PositionResponse)]
     Position {},
     /// Get the status of the compounding logic of the application and pool rewards
@@ -104,7 +104,7 @@ pub struct AssetsBalanceResponse {
 
 #[cw_serde]
 pub struct PositionResponse {
-    pub position: Option<Position>,
+    pub position_id: Option<u64>,
 }
 
 #[cw_serde]

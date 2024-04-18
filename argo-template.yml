@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: carrot-bot-dev
+  namespace: argocd
+spec:
+  destination:
+    namespace: carrot
+    server: https://kubernetes.default.svc
+  project: carrot
+  source:
+    chart: carrot
+    helm:
+      valueFiles:
+        - environments/bot-dev/values.yaml
+      parameters:
+        - name: bot.version
+          value: "<PLACEHOLDER_FOR_GIT_SHA>"
+    repoURL: https://abstractsdk.github.io/deployments/
+    targetRevision: 0.2.x
+  syncPolicy:
+    automated: {}
+    retry:
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m0s
+      limit: 2
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true

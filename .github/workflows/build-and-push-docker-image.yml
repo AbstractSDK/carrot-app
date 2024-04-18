@@ -63,3 +63,27 @@ jobs:
       - name: Push image with SHA tag
         run: |
           docker push 537748208826.dkr.ecr.us-east-1.amazonaws.com/carrot-bot:$GITHUB_SHA
+
+      - name: Generate ArgoCD application manifest
+        run: |
+          yq eval '.spec.source.helm.parameters[0].value = env(GITHUB_SHA)' argo-template.yml> argocd.yaml
+          cat argocd.yaml
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::537748208826:role/github-actions-to-eks
+          aws-region: us-east-1
+
+      - name: Generate kubeconfig
+        run: |
+             {
+               echo 'KUBE_CONFIG<<EOF'
+               aws eks update-kubeconfig --region us-east-1 --name prod-eks-2 --dry-run | base64
+               echo EOF
+             } >> "$GITHUB_ENV"
+
+      - uses: tale/kubectl-action@v1
+        with:
+          base64-kube-config: ${{ env.KUBE_CONFIG }}
+      - run: kubectl apply -f argocd.yaml
