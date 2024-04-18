@@ -5,8 +5,7 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgAddToPositio
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    helpers::get_user,
-    state::{Position, POSITION},
+    state::CarrotPosition,
 };
 
 pub fn add_to_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) -> AppResult {
@@ -22,17 +21,8 @@ pub fn add_to_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) ->
     // Parse the position response from the message
     let response: MsgAddToPositionResponse = parsed.data.unwrap_or_default().try_into()?;
 
-    // We get the creator of the position
-    let creator = get_user(deps.as_ref(), &app)?;
-
     // We update the position
-    let position = Position {
-        owner: creator,
-        position_id: response.position_id,
-        last_compound: env.block.time,
-    };
-
-    POSITION.save(deps.storage, &position)?;
+    CarrotPosition::save_position(deps.storage, &env.block.time, response.position_id)?;
 
     Ok(app
         .response("create_position_reply")
