@@ -3,17 +3,20 @@ use crate::{
     contract::{App, AppResult, OSMOSIS},
     error::AppError,
     helpers::{get_balance, get_user, nonpayable},
-    msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg},
-    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID},
-    state::{assert_contract, AutocompoundRewardsConfig, CarrotPosition, Config, CONFIG},
+    msg::{AppExecuteMsg, CreatePositionMessage, ExecuteMsg, SwapToAsset},
+    replies::{ADD_TO_POSITION_ID, CREATE_POSITION_ID, WITHDRAW_TO_ASSET_ID},
+    state::{
+        assert_contract, AutocompoundRewardsConfig, CarrotPosition, Config, CONFIG,
+        TEMP_WITHDRAW_TO_ASSET,
+    },
 };
 use abstract_app::abstract_sdk::AuthZInterface;
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
 use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
-    to_json_binary, Addr, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo, SubMsg,
-    Uint128, Uint64, WasmMsg,
+    to_json_binary, Addr, Coin, CosmosMsg, Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo,
+    SubMsg, Uint128, Uint256, Uint64, WasmMsg,
 };
 use cw_asset::Asset;
 use osmosis_std::{
@@ -380,11 +383,11 @@ fn _inner_claim_rewards(
 
 fn _inner_withdraw(
     env: &Env,
-    amount: Option<Uint128>,
+    amount: Option<Uint256>,
     carrot_position: CarrotPosition,
     user: Addr,
     authz: abstract_sdk::AuthZ,
-) -> AppResult<(CosmosMsg, Uint256, Uint256, Vec<Coin>)> {
+) -> AppResult<(CosmosMsg, Uint256, Uint256, [Coin; 2])> {
     let position_details = carrot_position.position.position.unwrap();
     let total_liquidity: Decimal256 = position_details.liquidity.parse()?;
     let total_liquidity_atomics: Uint256 = total_liquidity.atomics();
