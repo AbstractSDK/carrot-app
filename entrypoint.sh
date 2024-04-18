@@ -17,5 +17,3 @@ fi
 
 # Execute the CMD instruction
 exec "$@"
-
-exit 0
