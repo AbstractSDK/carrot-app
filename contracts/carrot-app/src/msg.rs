@@ -149,6 +149,9 @@ pub enum AppQueryMsg {
         funds: Vec<Coin>,
         strategy: StrategyUnchecked,
     },
+
+    #[returns(AssetsBalanceResponse)]
+    FundsValue { funds: Vec<Coin> },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -160,7 +163,7 @@ pub struct BalanceResponse {
 }
 #[cosmwasm_schema::cw_serde]
 pub struct AvailableRewardsResponse {
-    pub available_rewards: Vec<Coin>,
+    pub available_rewards: AssetsBalanceResponse,
 }
 
 #[cw_serde]
@@ -189,6 +192,7 @@ pub struct PositionResponse {
 #[cw_serde]
 pub struct CompoundStatusResponse {
     pub status: CompoundStatus,
+    pub execution_rewards: AssetsBalanceResponse,
 }
 
 #[cw_serde]

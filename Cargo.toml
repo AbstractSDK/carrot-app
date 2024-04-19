@@ -6,6 +6,8 @@ resolver = "2"
 [workspace.dependencies]
 cw-orch = "0.20.1"
 
+cosmwasm-std = { version = "1.5" }
+
 abstract-app = { version = "0.21.0" }
 abstract-interface = { version = "0.21.0" }
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git" }

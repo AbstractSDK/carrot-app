@@ -1,12 +1,16 @@
 use abstract_client::{AbstractClient, AccountSource, Environment};
 use carrot_app::{
-    msg::{AppExecuteMsg, CompoundStatusResponse, ExecuteMsg},
+    msg::{AppExecuteMsg, ExecuteMsg},
     AppInterface,
 };
 use cosmos_sdk_proto::{
-    cosmwasm::wasm::v1::{query_client::QueryClient, QueryContractsByCodeRequest},
+    cosmwasm::wasm::v1::{
+        query_client::QueryClient, MsgExecuteContract, QueryContractsByCodeRequest,
+    },
     traits::Message as _,
+    Any,
 };
+use cosmwasm_std::Uint128;
 use cw_orch::{
     anyhow,
     daemon::{queriers::Authz, Daemon},
@@ -208,17 +212,36 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let app = AppInterface::new(id, daemon.clone());
     app.set_address(address);
     use carrot_app::AppQueryMsgFns;
-    let resp: CompoundStatusResponse = app.compound_status()?;
+    let compound = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee
-    if resp.status.is_ready() {
-        // Execute autocompound
-        let daemon = daemon.rebuild().authz_granter(address).build()?;
-        daemon.execute(
-            &ExecuteMsg::from(AppExecuteMsg::Autocompound {}),
-            &[],
-            address,
+    // Ensure that autocompound is allowed on the contract
+    if compound.status.is_ready() {
+        // We simulate the transaction
+        let msg = ExecuteMsg::from(AppExecuteMsg::Autocompound {});
+        let exec_msg: MsgExecuteContract = MsgExecuteContract {
+            sender: daemon.sender().to_string(),
+            contract: address.as_str().parse()?,
+            msg: serde_json::to_vec(&msg)?,
+            funds: vec![],
+        };
+        let tx_simulation = daemon.rt_handle.block_on(
+            daemon
+                .daemon
+                .sender
+                .simulate(vec![Any::from_msg(&exec_msg)?], None),
         )?;
+        let fee_value = app.funds_value(vec![tx_simulation.1])?;
+        let profit = compound
+            .execution_rewards
+            .total_value
+            .checked_sub(fee_value.total_value)
+            .unwrap_or_default();
+        if profit > Uint128::zero() {
+            // If it's worth it, we autocompound
+            let daemon = daemon.rebuild().authz_granter(address).build()?;
+            daemon.execute(&msg, &[], address)?;
+        }
     }
     Ok(())
 }

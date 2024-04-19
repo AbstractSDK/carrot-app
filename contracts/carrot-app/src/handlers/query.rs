@@ -1,4 +1,4 @@
-use cosmwasm_std::{to_json_binary, Binary, Coins, Decimal, Deps, Env, Uint128};
+use cosmwasm_std::{to_json_binary, Binary, Coin, Coins, Decimal, Deps, Env, Uint128};
 
 use crate::autocompound::get_autocompound_status;
 use crate::exchange_rate::query_exchange_rate;
@@ -36,13 +36,14 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
         AppQueryMsg::UpdateStrategyPreview { strategy, funds } => {
             to_json_binary(&update_strategy_preview(deps, funds, strategy, app)?)
         }
+        AppQueryMsg::FundsValue { funds } => to_json_binary(&query_funds_value(deps, funds, app)?),
     }
     .map_err(Into::into)
 }
 
 /// Gets the status of the compounding logic of the application
 /// Accounts for the user's ability to pay for the gas fees of executing the contract.
-fn query_compound_status(deps: Deps, env: Env, _app: &App) -> AppResult<CompoundStatusResponse> {
+fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
     let status = get_autocompound_status(
         deps.storage,
@@ -50,7 +51,23 @@ fn query_compound_status(deps: Deps, env: Env, _app: &App) -> AppResult<Compound
         config.autocompound_config.cooldown_seconds.u64(),
     )?;
 
-    Ok(CompoundStatusResponse { status })
+    let (all_rewards, _collect_rewards_msgs) = STRATEGY_CONFIG
+        .load(deps.storage)?
+        .withdraw_rewards(deps, app)?;
+
+    let funds: Vec<Coin> = all_rewards
+        .iter()
+        .flat_map(|a| {
+            let reward_amount = a.amount * config.autocompound_config.rewards.reward_percent;
+
+            Some(Coin::new(reward_amount.into(), a.denom.clone()))
+        })
+        .collect();
+
+    Ok(CompoundStatusResponse {
+        status,
+        execution_rewards: query_funds_value(deps, funds, app)?,
+    })
 }
 
 pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
@@ -110,8 +127,14 @@ fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
         Ok::<_, AppError>(())
     })?;
 
+    let mut total_value = Uint128::zero();
+    for fund in &rewards {
+        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+        total_value += fund.amount * exchange_rate;
+    }
+
     Ok(AvailableRewardsResponse {
-        available_rewards: rewards.into(),
+        available_rewards: query_funds_value(deps, rewards.into(), app)?,
     })
 }
 
@@ -145,6 +168,24 @@ pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
             .collect::<Result<_, _>>()?,
     })
 }
+
+pub fn query_funds_value(
+    deps: Deps,
+    funds: Vec<Coin>,
+    app: &App,
+) -> AppResult<AssetsBalanceResponse> {
+    let mut total_value = Uint128::zero();
+    for fund in &funds {
+        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+        total_value += fund.amount * exchange_rate;
+    }
+
+    Ok(AssetsBalanceResponse {
+        balances: funds,
+        total_value,
+    })
+}
+
 pub fn withdraw_share(
     deps: Deps,
     amount: Option<Uint128>,

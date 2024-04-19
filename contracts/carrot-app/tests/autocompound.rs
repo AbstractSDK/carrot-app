@@ -4,7 +4,7 @@ use crate::common::{setup_test_tube, DEX_NAME, EXECUTOR_REWARD, GAS_DENOM, LOTS,
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, AvailableRewardsResponse,
-    CompoundStatus, CompoundStatusResponse,
+    CompoundStatus,
 };
 use cosmwasm_std::{coin, coins};
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Account;
@@ -47,8 +47,8 @@ fn check_autocompound() -> anyhow::Result<()> {
     // Check autocompound adds liquidity from the rewards and user balance remain unchanged
 
     // Check it has some rewards to autocompound first
-    let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
-    assert!(!rewards.available_rewards.is_empty());
+    let rewards = carrot_app.available_rewards()?;
+    assert!(!rewards.available_rewards.balances.is_empty());
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
@@ -87,7 +87,7 @@ fn check_autocompound() -> anyhow::Result<()> {
     assert!(balance_usdt_after_autocompound.amount >= balance_usdt_before_autocompound.amount,);
     // Check it used all of the rewards
     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
-    assert!(rewards.available_rewards.is_empty());
+    assert!(rewards.available_rewards.balances.is_empty());
 
     Ok(())
 }
@@ -132,7 +132,7 @@ fn stranger_autocompound() -> anyhow::Result<()> {
 
     // Check it has some rewards to autocompound first
     let available_rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
-    assert!(!available_rewards.available_rewards.is_empty());
+    assert!(!available_rewards.available_rewards.balances.is_empty());
 
     // Save balances
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
@@ -141,12 +141,7 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     chain.wait_seconds(300)?;
     // Check query is able to compute rewards, when swap is required
     let compound_status = carrot_app.compound_status()?;
-    assert_eq!(
-        compound_status,
-        CompoundStatusResponse {
-            status: CompoundStatus::Ready {},
-        }
-    );
+    assert_eq!(compound_status.status, CompoundStatus::Ready {},);
     carrot_app.call_as(&stranger).autocompound()?;
 
     // Save new balances
@@ -157,11 +152,11 @@ fn stranger_autocompound() -> anyhow::Result<()> {
 
     // Check it used all of the rewards
     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
-    assert!(rewards.available_rewards.is_empty());
+    assert!(rewards.available_rewards.balances.is_empty());
 
     // Check stranger gets rewarded
 
-    for reward in available_rewards.available_rewards {
+    for reward in available_rewards.available_rewards.balances {
         let stranger_reward_balance =
             chain.query_balance(stranger.address().as_str(), &reward.denom)?;
         assert_eq!(stranger_reward_balance, reward.amount * EXECUTOR_REWARD);
