@@ -11,7 +11,7 @@ use carrot_app::state::ConfigBase;
 use carrot_app::yield_sources::osmosis_cl_pool::ConcentratedPoolParamsBase;
 use carrot_app::yield_sources::yield_type::YieldParamsBase;
 use carrot_app::yield_sources::{AssetShare, StrategyBase, StrategyElementBase, YieldSourceBase};
-use cosmwasm_std::{coin, coins, Coins, Decimal, Uint128, Uint64};
+use cosmwasm_std::{coin, coins, Coins, Decimal, Uint64};
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::environment::MutCwEnv;
 use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
@@ -49,6 +49,8 @@ pub const SPREAD_FACTOR: &str = "0.01";
 
 pub const INITIAL_LOWER_TICK: i64 = -100000;
 pub const INITIAL_UPPER_TICK: i64 = 10000;
+
+pub const EXECUTOR_REWARD: Decimal = Decimal::percent(30);
 
 // Deploys abstract and other contracts
 pub fn deploy<Chain: MutCwEnv + Stargate>(
@@ -126,11 +128,7 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
             autocompound_config: AutocompoundConfigBase {
                 cooldown_seconds: Uint64::new(300),
                 rewards: AutocompoundRewardsConfigBase {
-                    gas_asset: AssetEntry::new(REWARD_ASSET),
-                    swap_asset: AssetEntry::new(USDC),
-                    reward: Uint128::new(1000),
-                    min_gas_balance: Uint128::new(2000),
-                    max_gas_balance: Uint128::new(10000),
+                    reward_percent: EXECUTOR_REWARD,
                     _phantom: std::marker::PhantomData,
                 },
             },

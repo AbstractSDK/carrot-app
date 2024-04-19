@@ -211,9 +211,7 @@ fn autocompound_instance(daemon: &Daemon, instance: (&str, &Addr)) -> anyhow::Re
     let resp: CompoundStatusResponse = app.compound_status()?;
 
     // TODO: ensure rewards > tx fee
-    // To discuss if we really need it?
-
-    if resp.rewards_available {
+    if resp.status.is_ready() {
         // Execute autocompound
         let daemon = daemon.rebuild().authz_granter(address).build()?;
         daemon.execute(

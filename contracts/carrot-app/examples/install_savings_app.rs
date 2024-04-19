@@ -1,7 +1,7 @@
 #![allow(unused)]
 use abstract_app::objects::{AccountId, AssetEntry};
 use abstract_client::AbstractClient;
-use cosmwasm_std::{coins, Coin, Uint128, Uint256, Uint64};
+use cosmwasm_std::{coins, Coin, Decimal, Uint128, Uint256, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
@@ -66,11 +66,7 @@ fn main() -> anyhow::Result<()> {
             autocompound_config: AutocompoundConfigBase {
                 cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
                 rewards: AutocompoundRewardsConfigBase {
-                    gas_asset: AssetEntry::new(utils::REWARD_ASSET),
-                    swap_asset: app_data.swap_asset,
-                    reward: Uint128::new(50_000),
-                    min_gas_balance: Uint128::new(1000000),
-                    max_gas_balance: Uint128::new(3000000),
+                    reward_percent: Decimal::percent(10),
                     _phantom: std::marker::PhantomData,
                 },
             },

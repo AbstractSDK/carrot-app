@@ -4,15 +4,12 @@ use crate::{
     check::{Checked, Unchecked},
     contract::{App, AppResult},
     error::AppError,
-    handlers::swap_helpers::DEFAULT_SLIPPAGE,
     replies::{OSMOSIS_ADD_TO_POSITION_REPLY_ID, OSMOSIS_CREATE_POSITION_REPLY_ID},
-    state::CONFIG,
 };
-use abstract_app::{objects::AnsAsset, traits::AccountIdentification};
-use abstract_dex_adapter::DexInterface;
+use abstract_app::traits::AccountIdentification;
 use abstract_sdk::Execution;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{ensure, Coin, Coins, CosmosMsg, Decimal, Deps, ReplyOn, SubMsg, Uint128};
+use cosmwasm_std::{Coin, Coins, CosmosMsg, Deps, ReplyOn, SubMsg, Uint128};
 use osmosis_std::{
     cosmwasm_to_proto_coins, try_proto_to_cosmwasm_coins,
     types::osmosis::concentratedliquidity::v1beta1::{
@@ -258,47 +255,4 @@ impl ConcentratedPoolParams {
             .position
             .ok_or(AppError::NoPosition {})
     }
-}
-
-pub fn query_swap_price(
-    deps: Deps,
-    app: &App,
-    max_spread: Option<Decimal>,
-    belief_price0: Option<Decimal>,
-    belief_price1: Option<Decimal>,
-    asset0: AnsAsset,
-    asset1: AnsAsset,
-) -> AppResult<Decimal> {
-    let config = CONFIG.load(deps.storage)?;
-
-    // We take the biggest amount and simulate a swap for the corresponding asset
-    let price = if asset0.amount > asset1.amount {
-        let simulation_result = app
-            .ans_dex(deps, config.dex.clone())
-            .simulate_swap(asset0.clone(), asset1.name)?;
-
-        let price = Decimal::from_ratio(asset0.amount, simulation_result.return_amount);
-        if let Some(belief_price) = belief_price1 {
-            ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion { price }
-            );
-        }
-        price
-    } else {
-        let simulation_result = app
-            .ans_dex(deps, config.dex.clone())
-            .simulate_swap(asset1.clone(), asset0.name)?;
-
-        let price = Decimal::from_ratio(simulation_result.return_amount, asset1.amount);
-        if let Some(belief_price) = belief_price0 {
-            ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion { price }
-            );
-        }
-        price
-    };
-
-    Ok(price)
 }

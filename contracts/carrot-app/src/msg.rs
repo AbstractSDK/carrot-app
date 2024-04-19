@@ -1,6 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{wasm_execute, Coin, CosmosMsg, Decimal, Env, Uint128, Uint64};
-use cw_asset::AssetBase;
 
 use crate::{
     contract::{App, AppResult},
@@ -190,9 +189,6 @@ pub struct PositionResponse {
 #[cw_serde]
 pub struct CompoundStatusResponse {
     pub status: CompoundStatus,
-    pub reward: AssetBase<String>,
-    // Wether user have enough balance to reward or can swap
-    pub rewards_available: bool,
 }
 
 #[cw_serde]

@@ -1,11 +1,13 @@
 mod common;
 
-use crate::common::{setup_test_tube, DEX_NAME, USDC, USDT};
+use crate::common::{setup_test_tube, DEX_NAME, EXECUTOR_REWARD, GAS_DENOM, LOTS, USDC, USDT};
 use abstract_app::abstract_interface::{Abstract, AbstractAccount};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, AvailableRewardsResponse,
+    CompoundStatus, CompoundStatusResponse,
 };
 use cosmwasm_std::{coin, coins};
+use cw_orch::osmosis_test_tube::osmosis_test_tube::Account;
 use cw_orch::{anyhow, prelude::*};
 
 #[test]
@@ -90,74 +92,80 @@ fn check_autocompound() -> anyhow::Result<()> {
     Ok(())
 }
 
-// #[test]
-// fn stranger_autocompound() -> anyhow::Result<()> {
-//     let (_, carrot_app) = setup_test_tube(false)?;
+#[test]
+fn stranger_autocompound() -> anyhow::Result<()> {
+    let (_, carrot_app) = setup_test_tube(false)?;
 
-//     let mut chain = carrot_app.get_chain().clone();
-//     let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
+    let mut chain = carrot_app.get_chain().clone();
+    let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
 
-//     // Create position
-//     create_position(
-//         &carrot_app,
-//         coins(100_000, USDT.to_owned()),
-//         coin(1_000_000, USDT.to_owned()),
-//         coin(1_000_000, USDC.to_owned()),
-//     )?;
+    // Create position
+    let deposit_amount = 5_000;
+    let deposit_coins = coins(deposit_amount, USDT.to_owned());
+    chain.add_balance(
+        carrot_app.account().proxy()?.to_string(),
+        deposit_coins.clone(),
+    )?;
 
-//     // Do some swaps
-//     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
-//     let abs = Abstract::load_from(chain.clone())?;
-//     let account_id = carrot_app.account().id()?;
-//     let account = AbstractAccount::new(&abs, account_id);
-//     chain.bank_send(
-//         account.proxy.addr_str()?,
-//         vec![
-//             coin(200_000, USDC.to_owned()),
-//             coin(200_000, USDT.to_owned()),
-//         ],
-//     )?;
-//     for _ in 0..10 {
-//         dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
-//         dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
-//     }
+    // Do the deposit
+    carrot_app.deposit(deposit_coins.clone(), None)?;
 
-//     // Check autocompound adds liquidity from the rewards, user balance remain unchanged
-//     // and rewards gets passed to the "stranger"
+    // Do some swaps
+    let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
+    let abs = Abstract::load_from(chain.clone())?;
+    let account_id = carrot_app.account().id()?;
+    let account = AbstractAccount::new(&abs, account_id);
+    chain.bank_send(
+        account.proxy.addr_str()?,
+        vec![
+            coin(200_000, USDC.to_owned()),
+            coin(200_000, USDT.to_owned()),
+        ],
+    )?;
+    for _ in 0..10 {
+        dex.ans_swap((USDC, 50_000), USDT, DEX_NAME.to_string(), &account)?;
+        dex.ans_swap((USDT, 50_000), USDC, DEX_NAME.to_string(), &account)?;
+    }
 
-//     // Check it has some rewards to autocompound first
-//     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
-//     assert!(!rewards.available_rewards.is_empty());
+    // Check autocompound adds liquidity from the rewards, user balance remain unchanged
+    // and rewards gets passed to the "stranger"
 
-//     // Save balances
-//     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    // Check it has some rewards to autocompound first
+    let available_rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
+    assert!(!available_rewards.available_rewards.is_empty());
 
-//     // Autocompound by stranger
-//     chain.wait_seconds(300)?;
-//     // Check query is able to compute rewards, when swap is required
-//     let compound_status: CompoundStatusResponse = carrot_app.compound_status()?;
-//     assert_eq!(
-//         compound_status,
-//         CompoundStatusResponse {
-//             status: CompoundStatus::Ready {},
-//             reward: AssetBase::native(REWARD_DENOM, 1000u128),
-//             rewards_available: true
-//         }
-//     );
-//     carrot_app.call_as(&stranger).autocompound()?;
+    // Save balances
+    let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
 
-//     // Save new balances
-//     let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
+    // Autocompound by stranger
+    chain.wait_seconds(300)?;
+    // Check query is able to compute rewards, when swap is required
+    let compound_status = carrot_app.compound_status()?;
+    assert_eq!(
+        compound_status,
+        CompoundStatusResponse {
+            status: CompoundStatus::Ready {},
+        }
+    );
+    carrot_app.call_as(&stranger).autocompound()?;
 
-//     // Liquidity added
-//     assert!(balance_after_autocompound.liquidity > balance_before_autocompound.liquidity);
+    // Save new balances
+    let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
 
-//     // Check it used all of the rewards
-//     let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
-//     assert!(rewards.available_rewards.is_empty());
+    // Liquidity added
+    assert!(balance_after_autocompound.total_value > balance_before_autocompound.total_value);
 
-//     // Check stranger gets rewarded
-//     let stranger_reward_balance = chain.query_balance(stranger.address().as_str(), REWARD_DENOM)?;
-//     assert_eq!(stranger_reward_balance, Uint128::new(1000));
-//     Ok(())
-// }
+    // Check it used all of the rewards
+    let rewards: AvailableRewardsResponse = carrot_app.available_rewards()?;
+    assert!(rewards.available_rewards.is_empty());
+
+    // Check stranger gets rewarded
+
+    for reward in available_rewards.available_rewards {
+        let stranger_reward_balance =
+            chain.query_balance(stranger.address().as_str(), &reward.denom)?;
+        assert_eq!(stranger_reward_balance, reward.amount * EXECUTOR_REWARD);
+    }
+
+    Ok(())
+}

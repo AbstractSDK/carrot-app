@@ -1,18 +1,14 @@
 use std::marker::PhantomData;
 
-use abstract_app::abstract_core::objects::AssetEntry;
-use abstract_app::objects::AnsAsset;
-use abstract_dex_adapter::DexInterface;
-use abstract_sdk::{Execution, TransferInterface};
+use abstract_sdk::{Execution, ExecutorMsg, TransferInterface};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, CosmosMsg, Deps, Env, MessageInfo, Storage, Timestamp, Uint128, Uint64};
+use cosmwasm_std::{Coin, Decimal, Deps, Env, MessageInfo, Storage, Timestamp, Uint64};
 
 use crate::check::{Checked, Unchecked};
 use crate::contract::App;
 use crate::contract::AppResult;
-use crate::handlers::swap_helpers::swap_msg;
 use crate::msg::CompoundStatus;
-use crate::state::{Config, AUTOCOMPOUND_STATE};
+use crate::state::{Config, AUTOCOMPOUND_STATE, CONFIG};
 
 pub type AutocompoundConfig = AutocompoundConfigBase<Checked>;
 pub type AutocompoundConfigUnchecked = AutocompoundConfigBase<Unchecked>;
@@ -41,16 +37,8 @@ impl From<AutocompoundConfig> for AutocompoundConfigUnchecked {
 /// to the address who helped to execute autocompound
 #[cw_serde]
 pub struct AutocompoundRewardsConfigBase<T> {
-    /// Gas denominator for this chain
-    pub gas_asset: AssetEntry,
-    /// Denominator of the asset that will be used for swap to the gas asset
-    pub swap_asset: AssetEntry,
-    /// Reward amount
-    pub reward: Uint128,
-    /// If gas token balance falls below this bound a swap will be generated
-    pub min_gas_balance: Uint128,
-    /// Upper bound of gas tokens expected after the swap
-    pub max_gas_balance: Uint128,
+    /// Percentage of the withdraw, rewards that will be sent to the auto-compounder
+    pub reward_percent: Decimal,
     pub _phantom: PhantomData<T>,
 }
 
@@ -64,8 +52,10 @@ impl Config {
         deps: Deps,
         env: &Env,
         info: MessageInfo,
+        rewards: &[Coin],
         app: &App,
-    ) -> AppResult<Vec<CosmosMsg>> {
+    ) -> AppResult<ExecutorRewards> {
+        let config = CONFIG.load(deps.storage)?;
         Ok(
             // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
             if !app.admin.is_admin(deps, &info.sender)?
@@ -76,67 +66,35 @@ impl Config {
                 )?
                 .is_ready()
             {
-                self.autocompound_executor_rewards(deps, env, &info.sender, app)?
+                let funds: Vec<Coin> = rewards
+                    .iter()
+                    .flat_map(|a| {
+                        let reward_amount =
+                            a.amount * config.autocompound_config.rewards.reward_percent;
+
+                        Some(Coin::new(reward_amount.into(), a.denom.clone()))
+                    })
+                    .collect();
+                ExecutorRewards {
+                    funds: funds.clone(),
+                    msg: Some(
+                        app.executor(deps)
+                            .execute(vec![app.bank(deps).transfer(funds, &info.sender)?])?,
+                    ),
+                }
             } else {
-                vec![]
+                ExecutorRewards {
+                    funds: vec![],
+                    msg: None,
+                }
             },
         )
     }
-    pub fn autocompound_executor_rewards(
-        &self,
-        deps: Deps,
-        env: &Env,
-        executor: &Addr,
-        app: &App,
-    ) -> AppResult<Vec<CosmosMsg>> {
-        let rewards_config = self.autocompound_config.rewards.clone();
+}
 
-        // Get user balance of gas denom
-        let user_gas_balance = app.bank(deps).balance(&rewards_config.gas_asset)?.amount;
-
-        let mut rewards_messages = vec![];
-
-        // If not enough gas coins - swap for some amount
-        if user_gas_balance < rewards_config.min_gas_balance {
-            // Get asset entries
-            let dex = app.ans_dex(deps, self.dex.to_string());
-
-            // Do reverse swap to find approximate amount we need to swap
-            let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;
-            let simulate_swap_response = dex.simulate_swap(
-                AnsAsset::new(rewards_config.gas_asset.clone(), need_gas_coins),
-                rewards_config.swap_asset.clone(),
-            )?;
-
-            // Get user balance of swap denom
-            let user_swap_balance = app.bank(deps).balance(&rewards_config.swap_asset)?.amount;
-
-            // Swap as much as available if not enough for max_gas_balance
-            let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
-
-            let msgs = swap_msg(
-                deps,
-                env,
-                AnsAsset::new(rewards_config.swap_asset, swap_amount),
-                rewards_config.gas_asset.clone(),
-                app,
-            )?;
-            rewards_messages.extend(msgs);
-        }
-
-        // We send their reward to the executor
-        let msg_send = app.bank(deps).transfer(
-            vec![AnsAsset::new(
-                rewards_config.gas_asset,
-                rewards_config.reward,
-            )],
-            executor,
-        )?;
-
-        rewards_messages.push(app.executor(deps).execute(vec![msg_send])?.into());
-
-        Ok(rewards_messages)
-    }
+pub struct ExecutorRewards {
+    pub funds: Vec<Coin>,
+    pub msg: Option<ExecutorMsg>,
 }
 
 #[cw_serde]

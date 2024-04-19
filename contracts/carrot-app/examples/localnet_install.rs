@@ -1,7 +1,6 @@
-use abstract_app::objects::AssetEntry;
 use abstract_client::Application;
 use abstract_dex_adapter::interface::DexAdapter;
-use cosmwasm_std::{Decimal, Uint128, Uint64};
+use cosmwasm_std::{Decimal, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::LOCAL_OSMO, Daemon, DaemonBuilder},
@@ -58,11 +57,7 @@ fn main() -> anyhow::Result<()> {
             autocompound_config: AutocompoundConfigBase {
                 cooldown_seconds: Uint64::new(300),
                 rewards: AutocompoundRewardsConfigBase {
-                    gas_asset: AssetEntry::new(OSMO),
-                    swap_asset: AssetEntry::new(ION),
-                    reward: Uint128::new(1000),
-                    min_gas_balance: Uint128::new(2000),
-                    max_gas_balance: Uint128::new(10000),
+                    reward_percent: Decimal::percent(10),
                     _phantom: std::marker::PhantomData,
                 },
             },

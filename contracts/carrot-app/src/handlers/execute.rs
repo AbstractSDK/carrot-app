@@ -159,6 +159,7 @@ fn update_strategy(
 // /// Auto-compound the position with earned fees and incentives.
 
 fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
+    let config = CONFIG.load(deps.storage)?;
     // Everyone can autocompound
     let strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
@@ -170,11 +171,21 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         return Err(crate::error::AppError::NoRewards {});
     }
 
+    // We reward the caller of this endpoint with some funds
+    let executor_rewards =
+        config.get_executor_reward_messages(deps.as_ref(), &env, info, &all_rewards, &app)?;
+
+    let mut all_rewards: Coins = all_rewards.try_into()?;
+
+    for f in executor_rewards.funds {
+        all_rewards.sub(f)?;
+    }
+
     // Finally we deposit of all rewarded tokens into the position
     let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: env.contract.address.to_string(),
         msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
-            funds: all_rewards,
+            funds: all_rewards.into(),
             yield_sources_params: None,
         }))?,
         funds: vec![],
@@ -185,10 +196,6 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_messages(collect_rewards_msgs)
         .add_message(msg_deposit);
 
-    let config = CONFIG.load(deps.storage)?;
-    let executor_reward_messages =
-        config.get_executor_reward_messages(deps.as_ref(), &env, info, &app)?;
-
     AUTOCOMPOUND_STATE.save(
         deps.storage,
         &AutocompoundState {
@@ -196,7 +203,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         },
     )?;
 
-    Ok(response.add_messages(executor_reward_messages))
+    Ok(response.add_messages(executor_rewards.msg))
 }
 
 pub fn _inner_deposit(
