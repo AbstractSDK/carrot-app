@@ -178,7 +178,7 @@ The `create_position` is permissioned so let's make sure the caller is the owner
 ```rust
 // in handlers/execute.rs under fn create_position
 // This is an Abstract assert_admin function that makes sure the caller is the owner or the manager contract of the Abstract account
-    // For more info check https://docs.Abstract.money/3_framework/4_ownership.html
+    // For more info check https://docs.abstract.money/3_framework/4_ownership.html
 app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 ```
 
@@ -188,7 +188,7 @@ app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 // in handlers/execute.rs
 ```
 
-Let's Abstract away all the following logic in a new inner function that we call `_create_position`.
+Let's abstract away all the following logic in a new inner function that we call `_create_position`.
 that way from our `create_position` function we just have
 
 ```rust
@@ -347,7 +347,7 @@ Now that we have the equalized pair of asset we can create the position with the
 
 - Note below that for the execution we are using the Abstract API for accessing the cosmos SDK AuthZ module
 - Note that we are using a get_user function that allows us to retrieve the owner account address, this is because the caller of this contract i.e `info.sender` is not necessarily the owner. In fact, this swap is occuring during the create_position stage which could be triggered upon contract instantiation by the manager address which is different from the owner address.
-- Note that we are using the Abstract dex adapter API to generate the swapping message specific to osmosis. The format used here in `dex.generate_swap_messages` would remain the same if we would want to generate a swap message on a different dex thanks to this API Abstraction.
+- Note that we are using the Abstract dex adapter API to generate the swapping message specific to osmosis. The format used here in `dex.generate_swap_messages` would remain the same if we would want to generate a swap message on a different dex thanks to this API Aastraction.
 
 ```rust
 pub(crate) fn swap_msg(
