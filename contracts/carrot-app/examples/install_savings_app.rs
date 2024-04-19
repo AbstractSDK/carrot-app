@@ -1,7 +1,7 @@
 #![allow(unused)]
 use abstract_app::objects::{AccountId, AssetEntry};
 use abstract_client::AbstractClient;
-use cosmwasm_std::{Coin, Uint128, Uint256, Uint64};
+use cosmwasm_std::{coins, Coin, Decimal, Uint128, Uint256, Uint64};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
@@ -11,8 +11,14 @@ use cw_orch::{
 use dotenv::dotenv;
 
 use carrot_app::{
-    msg::{AppInstantiateMsg, CreatePositionMessage},
-    state::AutocompoundRewardsConfig,
+    autocompound::{
+        AutocompoundConfig, AutocompoundConfigBase, AutocompoundRewardsConfig,
+        AutocompoundRewardsConfigBase,
+    },
+    contract::OSMOSIS,
+    msg::AppInstantiateMsg,
+    state::ConfigBase,
+    yield_sources::{Strategy, StrategyBase},
 };
 use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 
@@ -54,29 +60,20 @@ fn main() -> anyhow::Result<()> {
 
     let app_data = usdc_usdc_ax::app_data(funds, 100_000_000_000_000, 100_000_000_000_000);
 
-    // Give all authzs and create subaccount with app in single tx
-    let mut msgs = utils::give_authorizations_msgs(&client, savings_app_addr, &app_data)?;
-
+    let mut msgs = vec![];
     let init_msg = AppInstantiateMsg {
-        pool_id: app_data.pool_id,
-        autocompound_cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
-        autocompound_rewards_config: AutocompoundRewardsConfig {
-            gas_asset: AssetEntry::new(utils::REWARD_ASSET),
-            swap_asset: app_data.swap_asset,
-            reward: Uint128::new(50_000),
-            min_gas_balance: Uint128::new(1000000),
-            max_gas_balance: Uint128::new(3000000),
+        config: ConfigBase {
+            autocompound_config: AutocompoundConfigBase {
+                cooldown_seconds: Uint64::new(AUTOCOMPOUND_COOLDOWN_SECONDS),
+                rewards: AutocompoundRewardsConfigBase {
+                    reward_percent: Decimal::percent(10),
+                    _phantom: std::marker::PhantomData,
+                },
+            },
+            dex: OSMOSIS.to_string(),
         },
-        create_position: Some(CreatePositionMessage {
-            lower_tick: app_data.lower_tick,
-            upper_tick: app_data.upper_tick,
-            funds: app_data.funds,
-            asset0: app_data.asset0,
-            asset1: app_data.asset1,
-            max_spread: None,
-            belief_price0: None,
-            belief_price1: None,
-        }),
+        strategy: StrategyBase(vec![]),
+        deposit: Some(coins(100, "usdc")),
     };
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;
 
@@ -199,84 +196,6 @@ mod utils {
     use prost::Message;
     use prost_types::Any;
     use std::iter;
-
-    pub fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
-        client: &AbstractClient<Chain>,
-        savings_app_addr: impl Into<String>,
-        app_data: &CarrotAppInitData,
-    ) -> Result<Vec<Any>, anyhow::Error> {
-        let dex_fee_account = client.account_from(AccountId::local(0))?;
-        let dex_fee_addr = dex_fee_account.proxy()?.to_string();
-        let chain = client.environment().clone();
-
-        let authorization_urls = [
-            MsgCreatePosition::TYPE_URL,
-            MsgSwapExactAmountIn::TYPE_URL,
-            MsgAddToPosition::TYPE_URL,
-            MsgWithdrawPosition::TYPE_URL,
-            MsgCollectIncentives::TYPE_URL,
-            MsgCollectSpreadRewards::TYPE_URL,
-        ]
-        .map(ToOwned::to_owned);
-        let savings_app_addr: String = savings_app_addr.into();
-        let granter = chain.sender().to_string();
-        let grantee = savings_app_addr.clone();
-
-        let reward_denom = client
-            .name_service()
-            .resolve(&AssetEntry::new(REWARD_ASSET))?;
-
-        let mut dex_spend_limit = vec![
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: app_data.denom0.to_string(),
-            amount: LOTS.to_string(),
-        },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: app_data.denom1.to_string(),
-            amount: LOTS.to_string(),
-        },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
-            denom: reward_denom.to_string(),
-            amount: LOTS.to_string(),
-        }];
-        dex_spend_limit.sort_unstable_by(|a, b| a.denom.cmp(&b.denom));
-        let dex_fee_authorization = Any {
-            value: MsgGrant {
-                granter: chain.sender().to_string(),
-                grantee: grantee.clone(),
-                grant: Some(Grant {
-                    authorization: Some(
-                        SendAuthorization {
-                            spend_limit: dex_spend_limit,
-                            allow_list: vec![dex_fee_addr, savings_app_addr],
-                        }
-                        .to_any(),
-                    ),
-                    expiration: None,
-                }),
-            }
-            .encode_to_vec(),
-            type_url: MsgGrant::TYPE_URL.to_owned(),
-        };
-
-        let msgs: Vec<Any> = authorization_urls
-            .into_iter()
-            .map(|msg| Any {
-                value: MsgGrant {
-                    granter: granter.clone(),
-                    grantee: grantee.clone(),
-                    grant: Some(Grant {
-                        authorization: Some(GenericAuthorization { msg }.to_any()),
-                        expiration: None,
-                    }),
-                }
-                .encode_to_vec(),
-                type_url: MsgGrant::TYPE_URL.to_owned(),
-            })
-            .chain(iter::once(dex_fee_authorization))
-            .collect();
-        Ok(msgs)
-    }
 
     pub fn create_account_message<Chain: CwEnv>(
         client: &AbstractClient<Chain>,

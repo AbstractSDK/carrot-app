@@ -1,6 +1,6 @@
 [package]
 name = "carrot-app"
-version = "0.1.0"
+version = "1.0.1"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
   "Adair <adair@abstract.money>",
@@ -34,12 +34,13 @@ interface = [
   "dep:cw-orch",
   "abstract-app/interface-macro",
   "abstract-dex-adapter/interface",
+  "abstract-money-market-adapter/interface",
 ]
 schema = ["abstract-app/schema"]
 
 [dependencies]
 cw-utils = { version = "1.0.3" }
-cosmwasm-std = { version = "1.2" }
+cosmwasm-std = { workspace = true }
 cosmwasm-schema = { version = "1.2" }
 cw-controllers = { version = "1.0.1" }
 cw-storage-plus = "1.2.0"
@@ -48,10 +49,13 @@ schemars = "0.8"
 cw-asset = { version = "3.0" }
 
 abstract-app = { workspace = true }
-abstract-sdk = { version = "0.21.0", features = ["stargate"] }
+abstract-sdk = { workspace = true }
+
 # Dependencies for interface
 abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
+abstract-money-market-adapter = { workspace = true, features = ["mars"] }
 cw-orch = { workspace = true, optional = true }
+abstract-money-market-standard = { workspace = true }
 
 osmosis-std = { version = "0.21.0" }
 prost = { version = "0.12.3" }
@@ -63,12 +67,15 @@ prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
 carrot-app = { path = ".", features = ["interface"] }
-abstract-testing = { version = "0.21.0" }
-abstract-client = { version = "0.21.0" }
-abstract-sdk = { version = "0.21.0", features = ["test-utils"] }
+abstract-testing = { workspace = true }
+abstract-client = { workspace = true }
+abstract-sdk = { workspace = true, features = ["test-utils"] }
+
+# For cw-optimizoor
+env_logger = { version = "0.11.3", default-features = false }
+
 speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"
-env_logger = "0.10.0"
 cw-orch = { workspace = true, features = ["osmosis-test-tube"] }
 clap = { version = "4.3.7", features = ["derive"] }

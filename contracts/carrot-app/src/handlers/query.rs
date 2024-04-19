@@ -1,31 +1,42 @@
-use abstract_app::{
-    abstract_core::objects::AnsAsset,
-    traits::{AbstractNameService, Resolve},
-};
-use abstract_dex_adapter::DexInterface;
-use cosmwasm_std::{ensure, to_json_binary, Binary, Coin, Decimal, Deps, Env};
-use cw_asset::Asset;
-use osmosis_std::try_proto_to_cosmwasm_coins;
+use cosmwasm_std::{to_json_binary, Binary, Coin, Coins, Decimal, Deps, Env, Uint128};
 
+use crate::autocompound::get_autocompound_status;
+use crate::exchange_rate::query_exchange_rate;
+use crate::msg::{PositionResponse, PositionsResponse};
+use crate::state::STRATEGY_CONFIG;
+use crate::yield_sources::yield_type::YieldTypeImplementation;
 use crate::{
-    contract::{App, AppResult, OSMOSIS},
+    contract::{App, AppResult},
     error::AppError,
-    handlers::swap_helpers::DEFAULT_SLIPPAGE,
-    helpers::{get_balance, get_user},
     msg::{
         AppQueryMsg, AssetsBalanceResponse, AvailableRewardsResponse, CompoundStatusResponse,
-        PositionResponse,
+        StrategyResponse,
     },
-    state::{get_osmosis_position, get_position_status, Config, CONFIG, POSITION},
+    state::{Config, CONFIG},
 };
+
+use super::preview::{deposit_preview, update_strategy_preview, withdraw_preview};
 
 pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppResult<Binary> {
     match msg {
         AppQueryMsg::Balance {} => to_json_binary(&query_balance(deps, app)?),
         AppQueryMsg::AvailableRewards {} => to_json_binary(&query_rewards(deps, app)?),
         AppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        AppQueryMsg::Position {} => to_json_binary(&query_position(deps)?),
+        AppQueryMsg::Strategy {} => to_json_binary(&query_strategy(deps)?),
         AppQueryMsg::CompoundStatus {} => to_json_binary(&query_compound_status(deps, env, app)?),
+        AppQueryMsg::StrategyStatus {} => to_json_binary(&query_strategy_status(deps, app)?),
+        AppQueryMsg::Positions {} => to_json_binary(&query_positions(deps, app)?),
+        AppQueryMsg::DepositPreview {
+            funds,
+            yield_sources_params,
+        } => to_json_binary(&deposit_preview(deps, funds, yield_sources_params, app)?),
+        AppQueryMsg::WithdrawPreview { amount } => {
+            to_json_binary(&withdraw_preview(deps, amount, app)?)
+        }
+        AppQueryMsg::UpdateStrategyPreview { strategy, funds } => {
+            to_json_binary(&update_strategy_preview(deps, funds, strategy, app)?)
+        }
+        AppQueryMsg::FundsValue { funds } => to_json_binary(&query_funds_value(deps, funds, app)?),
     }
     .map_err(Into::into)
 }
@@ -34,139 +45,160 @@ pub fn query_handler(deps: Deps, env: Env, app: &App, msg: AppQueryMsg) -> AppRe
 /// Accounts for the user's ability to pay for the gas fees of executing the contract.
 fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundStatusResponse> {
     let config = CONFIG.load(deps.storage)?;
-    let status = get_position_status(
+    let status = get_autocompound_status(
         deps.storage,
         &env,
-        config.autocompound_cooldown_seconds.u64(),
+        config.autocompound_config.cooldown_seconds.u64(),
     )?;
 
-    let gas_denom = config
-        .autocompound_rewards_config
-        .gas_asset
-        .resolve(&deps.querier, &app.ans_host(deps)?)?;
+    let (all_rewards, _collect_rewards_msgs) = STRATEGY_CONFIG
+        .load(deps.storage)?
+        .withdraw_rewards(deps, app)?;
 
-    let reward = Asset::new(gas_denom.clone(), config.autocompound_rewards_config.reward);
+    let funds: Vec<Coin> = all_rewards
+        .iter()
+        .flat_map(|a| {
+            let reward_amount = a.amount * config.autocompound_config.rewards.reward_percent;
 
-    let user = get_user(deps, app)?;
-
-    let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
-
-    let rewards_available = if user_gas_balance >= reward.amount {
-        true
-    } else {
-        // check if can swap
-        let rewards_config = config.autocompound_rewards_config;
-        let dex = app.ans_dex(deps, OSMOSIS.to_string());
-
-        // Reverse swap to see how many swap coins needed
-        let required_gas_coins = reward.amount - user_gas_balance;
-        let response = dex.simulate_swap(
-            AnsAsset::new(rewards_config.gas_asset, required_gas_coins),
-            rewards_config.swap_asset.clone(),
-        )?;
-
-        // Check if user has enough of swap coins
-        let user_swap_balance = get_balance(rewards_config.swap_asset, deps, user, app)?;
-        let required_swap_amount = response.return_amount;
-
-        user_swap_balance > required_swap_amount
-    };
+            Some(Coin::new(reward_amount.into(), a.denom.clone()))
+        })
+        .collect();
 
     Ok(CompoundStatusResponse {
         status,
-        reward: reward.into(),
-        rewards_available,
+        execution_rewards: query_funds_value(deps, funds, app)?,
     })
 }
 
-fn query_position(deps: Deps) -> AppResult<PositionResponse> {
-    let position = POSITION.may_load(deps.storage)?;
+pub fn query_strategy(deps: Deps) -> AppResult<StrategyResponse> {
+    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
-    Ok(PositionResponse { position })
+    Ok(StrategyResponse {
+        strategy: strategy.into(),
+    })
+}
+
+pub fn query_strategy_status(deps: Deps, app: &App) -> AppResult<StrategyResponse> {
+    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
+
+    Ok(StrategyResponse {
+        strategy: strategy.query_current_status(deps, app)?.into(),
+    })
 }
 
 fn query_config(deps: Deps) -> AppResult<Config> {
     Ok(CONFIG.load(deps.storage)?)
 }
-fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
-    let pool = get_osmosis_position(deps)?;
 
-    let balances = try_proto_to_cosmwasm_coins(vec![pool.asset0.unwrap(), pool.asset1.unwrap()])?;
-    let liquidity = pool.position.unwrap().liquidity.replace('.', "");
+pub fn query_balance(deps: Deps, app: &App) -> AppResult<AssetsBalanceResponse> {
+    let mut funds = Coins::default();
+    let mut total_value = Uint128::zero();
+
+    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    strategy.0.iter().try_for_each(|s| {
+        let deposit_value = s
+            .yield_source
+            .params
+            .user_deposit(deps, app)
+            .unwrap_or_default();
+        for fund in deposit_value {
+            let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+            funds.add(fund.clone())?;
+            total_value += fund.amount * exchange_rate;
+        }
+        Ok::<_, AppError>(())
+    })?;
+
     Ok(AssetsBalanceResponse {
-        balances,
-        liquidity,
+        balances: funds.into(),
+        total_value,
     })
 }
 
-fn query_rewards(deps: Deps, _app: &App) -> AppResult<AvailableRewardsResponse> {
-    let pool = get_osmosis_position(deps)?;
+fn query_rewards(deps: Deps, app: &App) -> AppResult<AvailableRewardsResponse> {
+    let strategy = STRATEGY_CONFIG.load(deps.storage)?;
 
-    let mut rewards = cosmwasm_std::Coins::default();
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_incentives)? {
-        rewards.add(coin)?;
-    }
+    let mut rewards = Coins::default();
+    strategy.0.into_iter().try_for_each(|s| {
+        let this_rewards = s.yield_source.params.user_rewards(deps, app)?;
+        for fund in this_rewards {
+            rewards.add(fund)?;
+        }
+        Ok::<_, AppError>(())
+    })?;
 
-    for coin in try_proto_to_cosmwasm_coins(pool.claimable_spread_rewards)? {
-        rewards.add(coin)?;
+    let mut total_value = Uint128::zero();
+    for fund in &rewards {
+        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+        total_value += fund.amount * exchange_rate;
     }
 
     Ok(AvailableRewardsResponse {
-        available_rewards: rewards.into(),
+        available_rewards: query_funds_value(deps, rewards.into(), app)?,
     })
 }
 
-pub fn query_price(
+pub fn query_positions(deps: Deps, app: &App) -> AppResult<PositionsResponse> {
+    Ok(PositionsResponse {
+        positions: STRATEGY_CONFIG
+            .load(deps.storage)?
+            .0
+            .into_iter()
+            .map(|s| {
+                let balance = s.yield_source.params.user_deposit(deps, app)?;
+                let liquidity = s.yield_source.params.user_liquidity(deps, app)?;
+
+                let total_value = balance
+                    .iter()
+                    .map(|fund| {
+                        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+                        Ok(fund.amount * exchange_rate)
+                    })
+                    .sum::<AppResult<Uint128>>()?;
+
+                Ok::<_, AppError>(PositionResponse {
+                    params: s.yield_source.params.into(),
+                    balance: AssetsBalanceResponse {
+                        balances: balance,
+                        total_value,
+                    },
+                    liquidity,
+                })
+            })
+            .collect::<Result<_, _>>()?,
+    })
+}
+
+pub fn query_funds_value(
     deps: Deps,
-    funds: &[Coin],
+    funds: Vec<Coin>,
     app: &App,
-    max_spread: Option<Decimal>,
-    belief_price0: Option<Decimal>,
-    belief_price1: Option<Decimal>,
-) -> AppResult<Decimal> {
-    let config = CONFIG.load(deps.storage)?;
+) -> AppResult<AssetsBalanceResponse> {
+    let mut total_value = Uint128::zero();
+    for fund in &funds {
+        let exchange_rate = query_exchange_rate(deps, fund.denom.clone(), app)?;
+        total_value += fund.amount * exchange_rate;
+    }
 
-    let amount0 = funds
-        .iter()
-        .find(|c| c.denom == config.pool_config.token0)
-        .map(|c| c.amount)
-        .unwrap_or_default();
-    let amount1 = funds
-        .iter()
-        .find(|c| c.denom == config.pool_config.token1)
-        .map(|c| c.amount)
-        .unwrap_or_default();
+    Ok(AssetsBalanceResponse {
+        balances: funds,
+        total_value,
+    })
+}
 
-    // We take the biggest amount and simulate a swap for the corresponding asset
-    let price = if amount0 > amount1 {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
-            AnsAsset::new(config.pool_config.asset0, amount0),
-            config.pool_config.asset1,
-        )?;
+pub fn withdraw_share(
+    deps: Deps,
+    amount: Option<Uint128>,
+    app: &App,
+) -> AppResult<Option<Decimal>> {
+    amount
+        .map(|value| {
+            let total_deposit = query_balance(deps, app)?;
 
-        let price = Decimal::from_ratio(amount0, simulation_result.return_amount);
-        if let Some(belief_price) = belief_price1 {
-            ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion { price }
-            );
-        }
-        price
-    } else {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
-            AnsAsset::new(config.pool_config.asset1, amount1),
-            config.pool_config.asset0,
-        )?;
-
-        let price = Decimal::from_ratio(simulation_result.return_amount, amount1);
-        if let Some(belief_price) = belief_price0 {
-            ensure!(
-                belief_price.abs_diff(price) <= max_spread.unwrap_or(DEFAULT_SLIPPAGE),
-                AppError::MaxSpreadAssertion { price }
-            );
-        }
-        price
-    };
-
-    Ok(price)
+            if total_deposit.total_value.is_zero() {
+                return Err(AppError::NoDeposit {});
+            }
+            Ok(Decimal::from_ratio(value, total_deposit.total_value))
+        })
+        .transpose()
 }
