@@ -442,5 +442,154 @@ pub struct Config {
 #### Store position id from create position response
 
 ```rust
-// in handlers/execute.rs
+// in replies/create_position.rs
+pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) -> AppResult {
+    let SubMsgResult::Ok(SubMsgResponse { data: Some(b), .. }) = reply.result else {
+        return Err(AppError::Std(StdError::generic_err(
+            "Failed to create position",
+        )));
+    };
+
+    let parsed = cw_utils::parse_execute_response_data(&b)?;
+
+    // Parse create position response
+    let response: MsgCreatePositionResponse = parsed.data.clone().unwrap_or_default().try_into()?;
+
+    // We get the creator of the position
+    let creator = get_user(deps.as_ref(), &app)?;
+
+    // We save the position
+    let position = Position {
+        owner: creator,
+        position_id: response.position_id,
+        last_compound: env.block.time,
+    };
+
+    //This is where we persist the Position into the state of the contract
+    POSITION.save(deps.storage, &position)?;
+
+    Ok(app
+        .response("create_position_reply")
+        .add_attribute("initial_position_id", response.position_id.to_string()))
+}
+```
+
+### Compound
+
+This is what is going to make the installers of the Carrot benefit from an APY that is higher than the APR.
+
+This step will be executed by the bots. This is a permissionless step that allows a bot to get incentives by making the contract
+
+1. Collect all the rewards generated from the liquidity position,
+2. Swap the rewards for the best ratio, the same way we previously did during the initial creation of the position
+3. Deposit the claimed funds into the position
+
+We have previously added inthe msg type this arm
+
+```rust
+AppExecuteMsg::Autocompound {} => autocompound(deps, env, info, app),
+```
+
+which calls the `autocompound` function.
+
+#### Collect rewards
+
+```rust
+fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResult {
+    // Everyone can autocompound
+    let config = CONFIG.load(deps.storage)?;
+
+    let position = get_position(deps.as_ref())?;
+
+    let (compound_status, maybe_osmosis_position) = get_position_status(
+        deps.as_ref(),
+        &env,
+        config.autocompound_cooldown_seconds.u64(),
+        Some(position),
+    )?;
+
+    let position_details = osmosis_position.position.unwrap();
+
+    let mut rewards = cosmwasm_std::Coins::default();
+    let mut collect_rewards_msgs = vec![];
+
+    // Get app's user and set up authz.
+    let user = get_user(deps.as_ref(), &app)?;
+    let authz = app.auth_z(deps.as_ref(), Some(user.clone()))?;
+
+    // If there are external incentives, claim them.
+    if !osmosis_position.claimable_incentives.is_empty() {
+        let asset0_denom = osmosis_position.asset0.unwrap().denom;
+        let asset1_denom = osmosis_position.asset1.unwrap().denom;
+
+        for coin in try_proto_to_cosmwasm_coins(osmosis_position.claimable_incentives)? {
+            if coin.denom == asset0_denom || coin.denom == asset1_denom {
+                rewards.add(coin)?;
+            }
+        }
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
+            MsgCollectIncentives {
+                position_ids: vec![position_details.position_id],
+                sender: user.to_string(),
+            },
+        ));
+    }
+
+    // If there is income from swap fees, claim them.
+    if !osmosis_position.claimable_spread_rewards.is_empty() {
+        for coin in try_proto_to_cosmwasm_coins(osmosis_position.claimable_spread_rewards)? {
+            rewards.add(coin)?;
+        }
+        collect_rewards_msgs.push(authz.execute(
+            &env.contract.address,
+            MsgCollectSpreadRewards {
+                position_ids: vec![position_details.position_id],
+                sender: position_details.address.clone(),
+            },
+        ))
+    }
+
+    // If there are no rewards, we can't do anything
+    if rewards.is_empty() {
+        return Err(crate::error::AppError::NoRewards {});
+    }
+```
+
+#### deposit the rewards
+
+```rust
+
+    // Finally we deposit of all rewarded tokens into the position
+    let msg_deposit = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: env.contract.address.to_string(),
+        msg: to_json_binary(&ExecuteMsg::Module(AppExecuteMsg::Deposit {
+            funds: rewards.into(),
+            max_spread: None,
+            belief_price0: None,
+            belief_price1: None,
+        }))?,
+        funds: vec![],
+    });
+
+    let mut response = app
+        .response("auto-compound")
+        .add_messages(collect_rewards_msgs)
+        .add_message(msg_deposit);
+
+    // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
+    if !app.admin.is_admin(deps.as_ref(), &info.sender)? && compound_status.is_ready() {
+        let executor_reward_messages = autocompound_executor_rewards(
+            deps.as_ref(),
+            &env,
+            info.sender.into_string(),
+            &app,
+            config,
+        )?;
+
+        response = response.add_messages(executor_reward_messages);
+    }
+
+    Ok(response)
+}
 ```
