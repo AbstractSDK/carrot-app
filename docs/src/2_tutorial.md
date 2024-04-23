@@ -365,7 +365,7 @@ pub(crate) fn swap_msg(
     let sender = get_user(deps, app)?;
 
     let dex = app.ans_dex(deps, OSMOSIS.to_string());
-    let trigger_swap_msg: GenerateMessagesResponse = dex.generate_swap_messages(
+    let swap_msgs: GenerateMessagesResponse = dex.generate_swap_messages(
         offer_asset,
         ask_asset,
         Some(Decimal::percent(MAX_SPREAD_PERCENT)),
@@ -374,7 +374,7 @@ pub(crate) fn swap_msg(
     )?;
     let authz = app.auth_z(deps, Some(sender))?;
 
-    Ok(trigger_swap_msg
+    Ok(swap_msgs
         .messages
         .into_iter()
         .map(|m| authz.execute(&env.contract.address, m))
@@ -382,7 +382,7 @@ pub(crate) fn swap_msg(
 }
 ```
 
-We also add the get_user function
+We also add the `get_user` function that we previously mentioned.
 
 ```rust
 // in helpers.rs

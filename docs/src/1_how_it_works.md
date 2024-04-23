@@ -6,8 +6,8 @@ The first version of Carrot Savings utilizes a single strategy: managing USDC (U
 
 Here's the process:
 
-1. Installation: The user installs the Carrot Savings App on their Abstract account
-   ![create account](create_account.png).
+1. Installation: The user installs the Carrot Savings App on their Abstract account.
+   ![create account](create_account.png)
 
 ---
 
