@@ -149,9 +149,9 @@ fn autocompound(deps: DepsMut, app: App) -> AppResult {
    2. check that the osmosis pool has not been created yet
    3. Swap the indicated funds to match the asset0/asset1 ratio and deposit as much as possible in the pool for the given parameters
    4. Create a new position
-   5. Store position id from create position response
+   5. Store `position id` from create position response
 
-In order for the contract to be able to create a position for osmosis supercharged pools it needs certain data like the liquidity pool for which to open the position and the ticks that define the range in which your assets will be available for swapping.
+In order for the contract to be able to create a position for osmosis supercharged pools, it needs certain data like the liquidity pool for which to open the position and the ticks that define the range in which your assets will be available for swapping.
 
 > If you want to read more about ticks and how these concentrated liquidity pools work you can check this great medium [article](https://medium.com/@quasar.fi/what-is-concentrated-liquidity-28a42739d3ff) from `quasar`
 
@@ -178,7 +178,7 @@ The `create_position` is permissioned so let's make sure the caller is the owner
 ```rust
 // in handlers/execute.rs under fn create_position
 // This is an Abstract assert_admin function that makes sure the caller is the owner or the manager contract of the Abstract account
-    // For more info check https://docs.abstract.money/3_framework/4_ownership.html
+// For more info check https://docs.abstract.money/3_framework/4_ownership.html
 app.admin.assert_admin(deps.as_ref(), &info.sender)?;
 ```
 
