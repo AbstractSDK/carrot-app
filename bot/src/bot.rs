@@ -302,10 +302,24 @@ fn autocompound_instance(
 }
 
 mod utils {
+    use cosmos_sdk_proto::{
+        cosmos::base::query::v1beta1::{PageRequest, PageResponse},
+        cosmwasm::wasm::v1::QueryContractsByCodeResponse,
+    };
     use cw_asset::AssetBase;
 
     use super::*;
     const MIN_REWARD: (&str, Uint128) = ("uosmo", Uint128::new(100_000));
+
+    pub fn next_page_request(page_response: PageResponse) -> PageRequest {
+        PageRequest {
+            key: page_response.next_key,
+            offset: 0,
+            limit: 0,
+            count_total: false,
+            reverse: false,
+        }
+    }
 
     /// Get the contract instances of a given code_id
     pub async fn fetch_instances(
@@ -314,17 +328,32 @@ mod utils {
         version: &str,
     ) -> anyhow::Result<Vec<String>> {
         let mut cw_querier = QueryClient::new(channel);
-        let contract_addrs = cw_querier
-            .contracts_by_code(QueryContractsByCodeRequest {
-                code_id,
-                // TODO: pagination
-                pagination: None,
-            })
-            .await?
-            .into_inner()
-            .contracts;
-        log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
-        anyhow::Ok(contract_addrs)
+
+        let mut contract_addrs = vec![];
+        let mut pagination = None;
+
+        loop {
+            let QueryContractsByCodeResponse {
+                mut contracts,
+                pagination: next_pagination,
+            } = cw_querier
+                .contracts_by_code(QueryContractsByCodeRequest {
+                    code_id,
+                    pagination,
+                })
+                .await?
+                .into_inner();
+
+            contract_addrs.append(&mut contracts);
+            match next_pagination {
+                Some(page_response) => pagination = Some(next_page_request(page_response)),
+                // Done with pagination can return out all of the contracts
+                None => {
+                    log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
+                    break anyhow::Ok(contract_addrs);
+                }
+            }
+        }
     }
 
     /// Finds the account owner and checks if the contract has authz permissions on it.
