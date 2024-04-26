@@ -341,6 +341,7 @@ mod utils {
                 })
                 .await?
                 .into_inner();
+
             contract_addrs.append(&mut contracts);
             match next_pagination {
                 Some(page_response) => pagination = Some(next_page_request(page_response)),
