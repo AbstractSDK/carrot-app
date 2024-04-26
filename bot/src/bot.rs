@@ -183,6 +183,8 @@ impl Bot {
             ))?;
             fetch_instances_count += contract_addrs.len();
 
+            // Need to reset contract balances in case some of the contracts migrated
+            self.metrics.contract_balance.reset();
             for contract_addr in contract_addrs.iter() {
                 let address = Addr::unchecked(contract_addr.clone());
                 let balance_result = utils::get_carrot_balance(daemon.clone(), &address);
