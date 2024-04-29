@@ -367,9 +367,12 @@ mod utils {
 
             contract_addrs.append(&mut contracts);
             match next_pagination {
-                Some(page_response) => pagination = Some(next_page_request(page_response)),
+                // `next_key` can still be empty, meaning there are no next key
+                Some(page_response) if !page_response.next_key.is_empty() => {
+                    pagination = Some(next_page_request(page_response))
+                }
                 // Done with pagination can return out all of the contracts
-                None => {
+                _ => {
                     log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
                     break anyhow::Ok(contract_addrs);
                 }
