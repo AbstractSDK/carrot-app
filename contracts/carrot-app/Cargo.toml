@@ -69,6 +69,6 @@ abstract-sdk = { version = "0.21.0", features = ["test-utils"] }
 speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 cw-orch = { workspace = true, features = ["osmosis-test-tube"] }
 clap = { version = "4.3.7", features = ["derive"] }
