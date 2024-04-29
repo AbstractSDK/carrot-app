@@ -43,12 +43,9 @@ use std::{
 use tonic::transport::Channel;
 
 use abstract_app::{
-    abstract_core::version_control::ModuleFilter,
+    abstract_core::{ans_host, version_control::ModuleFilter},
     abstract_interface::VCQueryFns,
-    objects::{
-        module::{ModuleInfo, ModuleStatus},
-        AssetEntry,
-    },
+    objects::module::{ModuleInfo, ModuleStatus},
 };
 
 const VERSION_REQ: &str = ">=0.4, <0.5";
@@ -62,7 +59,7 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectSpreadRewards::TYPE_URL,
 ];
 
-const USD_ASSETS: [&str; 3] = ["axelar>usdc", "osmosis>usdc", "kava>usdt"];
+const USD_ASSETS: [&str; 3] = ["eth>axelar>usdc", "noble>usdc", "kava>usdt"];
 
 pub struct Bot {
     pub daemon: Daemon,
@@ -158,16 +155,21 @@ impl Bot {
         let abstr = AbstractClient::new(self.daemon.clone())?;
         // Refresh asset values
         log!(Level::Debug, "Fetching assets");
-        self.assets_value = USD_ASSETS
-            .into_iter()
-            .map(|entry| {
-                abstr
-                    .name_service()
-                    .resolve(&AssetEntry::new(entry))
-                    // For now we just assume 1 usd asset equal to 1 usd
-                    .map(|info| (info, Uint128::one()))
-            })
-            .collect::<Result<_, _>>()?;
+        self.assets_value = {
+            let names = USD_ASSETS
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect::<Vec<String>>();
+            let assets_response: ans_host::AssetsResponse = abstr
+                .name_service()
+                .query(&ans_host::QueryMsg::Assets { names })?;
+            assets_response
+                .assets
+                .into_iter()
+                // For now we just assume 1 usd asset == 1 usd
+                .map(|(_, info)| (info, Uint128::one()))
+                .collect()
+        };
 
         let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
             HashSet::new();
