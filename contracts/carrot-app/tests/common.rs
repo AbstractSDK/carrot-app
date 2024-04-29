@@ -132,8 +132,6 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     };
     // If we create position on instantiate - give auth
     let carrot_app = if create_position_on_init {
-        // TODO: We can't get account factory or module factory objects from the client.
-        // get Account id of the upcoming sub-account
         let next_local_account_id = client.next_local_account_id()?;
 
         let savings_app_addr = client
@@ -324,17 +322,15 @@ pub fn setup_test_tube(
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let create_position_msg = create_position.then(||
-        // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
-        CreatePositionMessage {
+    let create_position_msg = create_position.then(|| CreatePositionMessage {
         lower_tick: INITIAL_LOWER_TICK,
         upper_tick: INITIAL_UPPER_TICK,
         funds: coins(100_000, USDT_DENOM),
         asset0: coin(1_000_000, USDT_DENOM),
         asset1: coin(1_000_000, USDC_DENOM),
-            max_spread: None,
-            belief_price0: None,
-            belief_price1: None,
+        max_spread: None,
+        belief_price0: None,
+        belief_price1: None,
     });
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 
