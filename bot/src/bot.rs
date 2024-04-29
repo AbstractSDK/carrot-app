@@ -5,6 +5,7 @@ use carrot_app::{
     },
     AppInterface,
 };
+use cw_asset::AssetInfo;
 use semver::VersionReq;
 
 use crate::Metrics;
@@ -35,19 +36,19 @@ use osmosis_std::types::{
 };
 use prometheus::{labels, Registry};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
     time::{Duration, SystemTime},
 };
 use tonic::transport::Channel;
 
 use abstract_app::{
-    abstract_core::version_control::ModuleFilter,
+    abstract_core::{ans_host, version_control::ModuleFilter},
     abstract_interface::VCQueryFns,
     objects::module::{ModuleInfo, ModuleStatus},
 };
 
-const VERSION_REQ: &str = ">=0.3";
+const VERSION_REQ: &str = ">=0.4, <0.5";
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
@@ -57,13 +58,8 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectIncentives::TYPE_URL,
     MsgCollectSpreadRewards::TYPE_URL,
 ];
-// TODO: Get these values from ans
-const USDT_OSMOSIS_DENOM: &str =
-    "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
-const USDC_OSMOSIS_DENOM: &str =
-    "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
-const USDC_OSMOSIS_AXL_DENOM: &str =
-    "ibc/D189335C6E4A68B513C10AB227BF1C1D38C746766278BA3EEB4FB14124F1D858";
+
+const USD_ASSETS: [&str; 3] = ["eth>axelar>usdc", "noble>usdc", "kava>usdt"];
 
 pub struct Bot {
     pub daemon: Daemon,
@@ -76,6 +72,8 @@ pub struct Bot {
     pub autocompound_cooldown: Duration,
     // metrics
     metrics: Metrics,
+    // Resolved assets and their value
+    assets_value: HashMap<AssetInfo, Uint128>,
 }
 
 #[derive(Eq, Hash, PartialEq, Clone)]
@@ -138,20 +136,41 @@ impl Bot {
             contract_instances_to_ac: Default::default(),
             autocompound_cooldown,
             metrics,
+            assets_value: Default::default(),
         }
     }
 
-    // Fetches contracts if fetch cooldown passed
-    pub fn fetch_contracts(&mut self) -> anyhow::Result<()> {
+    // Fetches contracts and assets if fetch cooldown passed
+    pub fn fetch_contracts_and_assets(&mut self) -> anyhow::Result<()> {
         // Don't fetch if not ready
         let ready_time = self.last_fetch + self.fetch_contracts_cooldown;
         if SystemTime::now() < ready_time {
             return Ok(());
         }
 
+        log!(Level::Info, "Fetching contracts and assets");
+
         let daemon = &self.daemon;
 
         let abstr = AbstractClient::new(self.daemon.clone())?;
+        // Refresh asset values
+        log!(Level::Debug, "Fetching assets");
+        self.assets_value = {
+            let names = USD_ASSETS
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect::<Vec<String>>();
+            let assets_response: ans_host::AssetsResponse = abstr
+                .name_service()
+                .query(&ans_host::QueryMsg::Assets { names })?;
+            assets_response
+                .assets
+                .into_iter()
+                // For now we just assume 1 usd asset == 1 usd
+                .map(|(_, info)| (info, Uint128::one()))
+                .collect()
+        };
+
         let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
             HashSet::new();
 
@@ -187,7 +206,8 @@ impl Bot {
             self.metrics.contract_balance.reset();
             for contract_addr in contract_addrs.iter() {
                 let address = Addr::unchecked(contract_addr.clone());
-                let balance_result = utils::get_carrot_balance(daemon.clone(), &address);
+                let balance_result =
+                    utils::get_carrot_balance(daemon.clone(), &self.assets_value, &address);
                 let balance = match balance_result {
                     Ok(value) => value,
                     Err(_) => Uint128::zero(), // Handle potential errors
@@ -226,16 +246,17 @@ impl Bot {
             }));
         }
 
+        self.contract_instances_to_ac = contract_instances_to_autocompound;
+
         // Metrics
         self.metrics.fetch_count.inc();
         self.metrics
             .fetch_instances_count
             .set(fetch_instances_count as i64);
-        self.contract_instances_to_ac
-            .clone_from(&contract_instances_to_autocompound);
         self.metrics
             .contract_instances_to_autocompound
-            .set(contract_instances_to_autocompound.len() as i64);
+            .set(self.contract_instances_to_ac.len() as i64);
+
         Ok(())
     }
 
@@ -420,36 +441,24 @@ mod utils {
     }
 
     /// gets the balance managed by an instance
-    pub fn get_carrot_balance(daemon: Daemon, contract_addr: &Addr) -> anyhow::Result<Uint128> {
+    pub fn get_carrot_balance(
+        daemon: Daemon,
+        assets_values: &HashMap<AssetInfo, Uint128>,
+        contract_addr: &Addr,
+    ) -> anyhow::Result<Uint128> {
         let response: carrot_app::msg::AssetsBalanceResponse =
             daemon.query(&QueryMsg::from(AppQueryMsg::Balance {}), contract_addr)?;
 
         let balance = Balance::new(
             response
                 .balances
-                .iter()
-                .filter(|c| {
-                    c.denom.eq(USDT_OSMOSIS_DENOM)
-                        || c.denom.eq(USDC_OSMOSIS_DENOM)
-                        || c.denom.eq(USDC_OSMOSIS_AXL_DENOM)
-                })
-                .map(|c| match c.denom.as_str() {
-                    USDT_OSMOSIS_DENOM => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::one(),
-                    },
-                    USDC_OSMOSIS_DENOM => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::one(),
-                    },
-                    USDC_OSMOSIS_AXL_DENOM => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::one(),
-                    },
-                    _ => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::zero(),
-                    },
+                .into_iter()
+                .map(|coin| ValuedCoin {
+                    usd_value: assets_values
+                        .get(&AssetInfo::native(coin.denom.clone()))
+                        .map(ToOwned::to_owned)
+                        .unwrap_or(Uint128::zero()),
+                    coin,
                 })
                 .collect(),
         );

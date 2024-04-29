@@ -51,7 +51,7 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     // Run long-running autocompound job.
     loop {
         // You can edit retries with CW_ORCH_MAX_TX_QUERY_RETRIES
-        bot.fetch_contracts()?;
+        bot.fetch_contracts_and_assets()?;
         bot.autocompound();
 
         // Drop connection
