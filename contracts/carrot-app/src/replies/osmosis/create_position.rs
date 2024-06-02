@@ -5,8 +5,7 @@ use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePositi
 use crate::{
     contract::{App, AppResult},
     error::AppError,
-    handlers::internal::save_strategy,
-    state::{STRATEGY_CONFIG, TEMP_CURRENT_YIELD},
+    state::{load_strategy, save_strategy, TEMP_CURRENT_YIELD},
     yield_sources::yield_type::YieldType,
 };
 
@@ -24,7 +23,7 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
 
     // We save the position
     let current_position_index = TEMP_CURRENT_YIELD.load(deps.storage)?;
-    let mut strategy = STRATEGY_CONFIG.load(deps.storage)?;
+    let mut strategy = load_strategy(deps.as_ref())?;
 
     let current_yield = strategy.0.get_mut(current_position_index).unwrap();
 
@@ -36,7 +35,7 @@ pub fn create_position_reply(deps: DepsMut, _env: Env, app: App, reply: Reply) -
         YieldType::Mars(_) => return Err(AppError::WrongYieldType {}),
     };
 
-    save_strategy(deps, strategy)?;
+    save_strategy(deps, &mut strategy)?;
 
     Ok(app
         .response("create_position_reply")

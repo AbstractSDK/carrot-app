@@ -13,6 +13,11 @@ use cosmwasm_schema::cw_serde;
 
 use crate::{error::AppError, msg::InternalExecuteMsg};
 
+pub struct DepositStrategy {
+    pub withdraw_strategy: Vec<(StrategyElement, Decimal)>,
+    pub deposit_msgs: Vec<InternalExecuteMsg>,
+}
+
 /// This functions creates the current deposit strategy
 // /// 1. We query the target strategy in storage (target strategy)
 // /// 2. We query the current status of the strategy (current strategy) from all deposits (external queries)
@@ -22,10 +27,10 @@ use crate::{error::AppError, msg::InternalExecuteMsg};
 pub fn generate_deposit_strategy(
     deps: Deps,
     funds: Vec<Coin>,
-    target_strategy: Strategy,
+    mut target_strategy: Strategy,
     yield_source_params: Option<Vec<Option<Vec<AssetShare>>>>,
     app: &App,
-) -> AppResult<(Vec<(StrategyElement, Decimal)>, Vec<InternalExecuteMsg>)> {
+) -> AppResult<DepositStrategy> {
     // This is the current distribution of funds inside the strategies
     let current_strategy_status = target_strategy.query_current_status(deps, app)?;
 
@@ -44,7 +49,10 @@ pub fn generate_deposit_strategy(
     let deposit_msgs =
         this_deposit_strategy.fill_all_and_get_messages(deps, usable_funds.into(), app)?;
 
-    Ok((withdraw_strategy, deposit_msgs))
+    Ok(DepositStrategy {
+        withdraw_strategy,
+        deposit_msgs,
+    })
 }
 
 impl Strategy {
@@ -52,10 +60,10 @@ impl Strategy {
     // This method needs to be called on the stored strategy
     // We error if deposit value is non-zero here
     pub fn current_deposit_strategy(
-        &self,
+        &mut self,
         deps: Deps,
         funds: &mut Coins,
-        current_strategy_status: Self,
+        mut current_strategy_status: Self,
         app: &App,
     ) -> AppResult<(Vec<(StrategyElement, Decimal)>, Self)> {
         let total_value = self.current_balance(deps, app)?.total_value;
@@ -78,7 +86,7 @@ impl Strategy {
         // First we generate the messages for withdrawing strategies that have too much funds
         let withdraw_strategy: Vec<(StrategyElement, Decimal)> = current_strategy_status
             .0
-            .iter()
+            .iter_mut()
             .zip(self.0.clone())
             .map(|(current, target)| {
                 // We need to take into account the total value added by the current shares

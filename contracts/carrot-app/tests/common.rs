@@ -152,6 +152,7 @@ pub fn deploy<Chain: MutCwEnv + Stargate>(
                     upper_tick: INITIAL_UPPER_TICK,
                     position_id: None,
                     _phantom: std::marker::PhantomData,
+                    position_cache: None,
                 }),
             },
             share: Decimal::one(),

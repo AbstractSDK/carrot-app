@@ -20,7 +20,7 @@ pub struct MarsDepositParams {
 }
 
 impl YieldTypeImplementation for MarsDepositParams {
-    fn deposit(&self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
+    fn deposit(&mut self, deps: Deps, funds: Vec<Coin>, app: &App) -> AppResult<Vec<SubMsg>> {
         let ans = app.name_service(deps);
         let ans_fund = ans.query(&AssetInfo::native(self.denom.clone()))?;
 
@@ -31,7 +31,7 @@ impl YieldTypeImplementation for MarsDepositParams {
     }
 
     fn withdraw(
-        &self,
+        &mut self,
         deps: Deps,
         amount: Option<Uint128>,
         app: &App,
@@ -51,12 +51,16 @@ impl YieldTypeImplementation for MarsDepositParams {
             .withdraw(AnsAsset::new(ans_fund, amount))?])
     }
 
-    fn withdraw_rewards(&self, _deps: Deps, _app: &App) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
+    fn withdraw_rewards(
+        &mut self,
+        _deps: Deps,
+        _app: &App,
+    ) -> AppResult<(Vec<Coin>, Vec<CosmosMsg>)> {
         // Mars doesn't have rewards, it's automatically auto-compounded
         Ok((vec![], vec![]))
     }
 
-    fn user_deposit(&self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
+    fn user_deposit(&mut self, deps: Deps, app: &App) -> AppResult<Vec<Coin>> {
         let ans = app.name_service(deps);
         let asset = ans.query(&AssetInfo::native(self.denom.clone()))?;
         let user = app.account_base(deps)?.proxy;
@@ -74,17 +78,20 @@ impl YieldTypeImplementation for MarsDepositParams {
         Ok(coins(deposit.u128(), self.denom.clone()))
     }
 
-    fn user_rewards(&self, _deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
+    fn user_rewards(&mut self, _deps: Deps, _app: &App) -> AppResult<Vec<Coin>> {
         // No rewards, because mars is already auto-compounding
 
         Ok(vec![])
     }
 
-    fn user_liquidity(&self, deps: Deps, app: &App) -> AppResult<Uint128> {
+    fn user_liquidity(&mut self, deps: Deps, app: &App) -> AppResult<Uint128> {
         Ok(self.user_deposit(deps, app)?[0].amount)
     }
 
-    fn share_type(&self) -> super::ShareType {
+    fn share_type(&mut self) -> super::ShareType {
         ShareType::Fixed
     }
+
+    // No cache for mars
+    fn clear_cache(&mut self) {}
 }

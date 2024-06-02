@@ -5,13 +5,9 @@ use crate::{
     msg::{AppExecuteMsg, ExecuteMsg, InternalExecuteMsg},
     replies::REPLY_AFTER_SWAPS_STEP,
     state::{
-        CONFIG, STRATEGY_CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS,
-        TEMP_EXPECTED_SWAP_COIN,
+        CONFIG, TEMP_CURRENT_COIN, TEMP_CURRENT_YIELD, TEMP_DEPOSIT_COINS, TEMP_EXPECTED_SWAP_COIN,
     },
-    yield_sources::{
-        yield_type::{YieldType, YieldTypeImplementation},
-        Strategy,
-    },
+    yield_sources::yield_type::{YieldType, YieldTypeImplementation},
 };
 use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
 use abstract_dex_adapter::DexInterface;
@@ -149,7 +145,7 @@ pub fn execute_one_deposit_step(
 
 pub fn execute_finalize_deposit(
     deps: DepsMut,
-    yield_type: YieldType,
+    mut yield_type: YieldType,
     yield_index: usize,
     app: App,
 ) -> AppResult {
@@ -160,9 +156,4 @@ pub fn execute_finalize_deposit(
     let msgs = yield_type.deposit(deps.as_ref(), available_deposit_coins, &app)?;
 
     Ok(app.response("finalize-deposit").add_submessages(msgs))
-}
-
-pub fn save_strategy(deps: DepsMut, strategy: Strategy) -> AppResult<()> {
-    STRATEGY_CONFIG.save(deps.storage, &strategy)?;
-    Ok(())
 }

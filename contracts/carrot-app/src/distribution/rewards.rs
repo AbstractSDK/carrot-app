@@ -16,7 +16,7 @@ impl Strategy {
         let (rewards, msgs): (Vec<Vec<Coin>>, _) = self
             .0
             .into_iter()
-            .map(|s| {
+            .map(|mut s| {
                 let (rewards, raw_msgs) = s.yield_source.params.withdraw_rewards(deps, app)?;
 
                 Ok::<_, AppError>((

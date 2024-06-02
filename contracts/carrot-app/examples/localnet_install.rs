@@ -111,6 +111,7 @@ fn one_element(upper_tick: i64, lower_tick: i64, share: Decimal) -> StrategyElem
                 upper_tick,
                 position_id: None,
                 _phantom: std::marker::PhantomData,
+                position_cache: None,
             }),
         },
         share,
