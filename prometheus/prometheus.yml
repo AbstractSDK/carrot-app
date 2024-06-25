@@ -10,4 +10,4 @@ scrape_configs:
         - localhost:9090
   - job_name: "abstract-carrot-app-bot"
     static_configs:
-      - targets: ["carrot-app.railway.internal:8000"]
+      - targets: ["savings-app-production.up.railway.app:8000"]
