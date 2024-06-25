@@ -1,7 +1,7 @@
 FROM prom/prometheus
 
 # copy the Prometheus configuration file
-COPY /prometheus/prometheus.yml /etc/prometheus/prometheus.yml
+COPY prometheus/prometheus.yml /etc/prometheus/prometheus.yml
 
 # expose the Prometheus server port
 EXPOSE 8000
