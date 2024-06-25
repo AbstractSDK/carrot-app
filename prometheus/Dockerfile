@@ -4,7 +4,7 @@ FROM prom/prometheus
 COPY prometheus.yml /etc/prometheus/prometheus.yml
 
 # expose the Prometheus server port
-EXPOSE 8000
+EXPOSE 9090
 
 # set the entrypoint command
 USER root
@@ -14,6 +14,6 @@ CMD        [ "--config.file=/etc/prometheus/prometheus.yml", \
              "--storage.tsdb.retention=365d", \
              "--web.console.libraries=/usr/share/prometheus/console_libraries", \
              "--web.console.templates=/usr/share/prometheus/consoles", \
-             "--web.external-url=http://localhost:8000", \
+             "--web.external-url=http://carrot-app-prometheus-production.up.railway.app:9090", \
              "--log.level=info"]
  
