@@ -27,13 +27,10 @@ RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /v
 # Copy the binary from the builder stage
 RUN mv target/release/prod .
 
-# Patch until https://linear.app/abstract-sdk/issue/ORC-79/fix-cw-orch-crashing-when-theres-no-state-file is fixed.
-RUN mkdir ~/.cw-orchestrator
-RUN echo "{}" > ~/.cw-orchestrator/state.json
-
 COPY ./entrypoint.sh ./entrypoint.sh
 RUN chmod +x entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
+EXPOSE 8000
 
 # Command to run the binary
 CMD ./prod --fcd 1d --acd 1h $GRPC_OPTION
