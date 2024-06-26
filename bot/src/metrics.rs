@@ -96,7 +96,7 @@ impl Metrics {
 }
 
 pub async fn serve_metrics(registry: prometheus::Registry) {
-    let addr: std::net::SocketAddr = "0.0.0.0:8000".parse().unwrap();
+    let addr: std::net::SocketAddr = "0.0.0.0:8080".parse().unwrap();
     let metric_server = warp::serve(warp::path("metrics").map(move || {
         let metric_families = registry.gather();
         let mut buffer = vec![];
