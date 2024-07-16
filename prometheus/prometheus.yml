@@ -1,5 +1,5 @@
 global:
-  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+  scrape_interval:     60s # By default, scrape targets every 15 seconds.
   external_labels:
     monitor: 'carrot-bot-prom'
 
@@ -11,3 +11,6 @@ scrape_configs:
   - job_name: "abstract-carrot-app-bot"
     static_configs:
       - targets: ["carrot.metrics.abstract.money"]
+  - job_name: "abstract-metrics"
+    static_configs:
+      - targets: ["scraper.railway.internal"]
