@@ -1,16 +1,16 @@
 global:
-  scrape_interval:     60s # By default, scrape targets every 15 seconds.
+  scrape_interval: 60s # By default, scrape targets every 15 seconds.
   external_labels:
-    monitor: 'carrot-bot-prom'
+    monitor: "carrot-bot-prom"
 
 scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets:
-        - localhost:9090
+          - localhost:9090
   - job_name: "abstract-carrot-app-bot"
     static_configs:
       - targets: ["carrot.metrics.abstract.money"]
   - job_name: "abstract-metrics"
     static_configs:
-      - targets: ["scraper.railway.internal"]
+      - targets: ["scraper-production-c76f.up.railway.app"]
