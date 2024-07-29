@@ -82,9 +82,9 @@ struct CarrotInstance {
     version: String,
 }
 impl CarrotInstance {
-    fn new(address: Addr, version: &str) -> Self {
+    fn new(address: impl Into<String>, version: &str) -> Self {
         Self {
-            address,
+            address: Addr::unchecked(address),
             version: version.to_string(),
         }
     }
@@ -173,6 +173,7 @@ impl Bot {
 
         let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
             HashSet::new();
+        let mut contract_instances_to_skip: HashSet<CarrotInstance> = HashSet::new();
 
         log!(Level::Debug, "Fetching modules");
         let saving_modules = abstr.version_control().module_list(
@@ -192,10 +193,12 @@ impl Bot {
         log!(Level::Debug, "version requirement: {ver_req}");
         for app_info in saving_modules.modules {
             let version = app_info.module.info.version.to_string();
-
+            let version_matches = semver::Version::parse(&version)
+                .map(|v| !ver_req.matches(&v))
+                .unwrap_or(false);
             let code_id = app_info.module.reference.unwrap_app()?;
 
-            let mut contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
+            let contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
                 daemon.channel(),
                 code_id,
                 &version,
@@ -209,8 +212,16 @@ impl Bot {
                 let balance_result =
                     utils::get_carrot_balance(daemon.clone(), &self.assets_value, &address);
                 let balance = match balance_result {
-                    Ok(value) => value,
-                    Err(_) => Uint128::zero(), // Handle potential errors
+                    Ok(value) => {
+                        if !value.is_zero() {
+                            log!(Level::Info, "contract: {contract_addr} balance: {value}");
+                        }
+                        value
+                    }
+                    Err(e) => {
+                        log!(Level::Error, "contract: {contract_addr} err:{e:?}");
+                        Uint128::zero()
+                    }
                 };
 
                 // Update contract_balance GaugeVec with label
@@ -220,34 +231,34 @@ impl Bot {
                     .contract_balance
                     .with(&label)
                     .set(balance.u128().try_into().unwrap());
+
+                // Insert instances that are supposed to be autocompounded
+                if version_matches
+                    && !balance.is_zero()
+                    && utils::has_authz_permission(&abstr, contract_addr).unwrap_or(false)
+                {
+                    contract_instances_to_autocompound.insert((
+                        app_info.module.info.id(),
+                        CarrotInstance::new(contract_addr, version.as_ref()),
+                    ));
+                } else {
+                    contract_instances_to_skip
+                        .insert(CarrotInstance::new(contract_addr, version.as_ref()));
+                }
             }
-
-            // Skip if version mismatches
-            if semver::Version::parse(&version)
-                .map(|v| !ver_req.matches(&v))
-                .unwrap_or(false)
-            {
-                continue;
-            }
-
-            // Only keep the contract addresses that have the required permissions
-            contract_addrs.retain(|address| {
-                utils::has_authz_permission(&abstr, address)
-                    // Don't include if queries fail.
-                    .unwrap_or_default()
-            });
-
-            // Add all the entries to the `contract_instances_to_check`
-            contract_instances_to_autocompound.extend(contract_addrs.into_iter().map(|addr| {
-                (
-                    app_info.module.info.id(),
-                    CarrotInstance::new(Addr::unchecked(addr), version.as_ref()),
-                )
-            }));
         }
 
         self.contract_instances_to_ac = contract_instances_to_autocompound;
 
+        log!(
+            Level::Info,
+            "Skipping instances: {}",
+            contract_instances_to_skip
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()
+                .join(",")
+        );
         // Metrics
         self.metrics.fetch_count.inc();
         self.metrics
@@ -464,10 +475,6 @@ mod utils {
         );
         let balance = balance.calculate_usd_value();
 
-        log!(
-            Level::Info,
-            "contract: {contract_addr:?} balance: {balance:?}"
-        );
         Ok(balance)
     }
 
