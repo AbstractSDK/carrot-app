@@ -12,8 +12,8 @@ use carrot_app::msg::{
 use carrot_app::state::AutocompoundRewardsConfig;
 use cosmwasm_std::{coin, coins, Uint128, Uint64};
 use cw_asset::AssetBase;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::{Account, Module};
 use cw_orch::{anyhow, prelude::*};
+use cw_orch_osmosis_test_tube::osmosis_test_tube::{Account, Module};
 use osmosis_std::shim::Timestamp;
 use osmosis_std::types::cosmos::base::v1beta1;
 use osmosis_std::types::osmosis::incentives::MsgCreateGauge;
@@ -23,7 +23,7 @@ use osmosis_std::types::osmosis::lockup::{LockQueryType, QueryCondition};
 fn check_autocompound() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app.environment().clone();
 
     // Add incentive
     {
@@ -91,12 +91,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
+        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
+        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -108,12 +108,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance().unwrap();
     let balance_usdc_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDC_DENOM.to_owned()))?
+        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender(), Some(USDT_DENOM.to_owned()))?
+        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -134,7 +134,7 @@ fn check_autocompound() -> anyhow::Result<()> {
 fn stranger_autocompound() -> anyhow::Result<()> {
     let (pool_id, carrot_app) = setup_test_tube(false)?;
 
-    let mut chain = carrot_app.get_chain().clone();
+    let mut chain = carrot_app.environment().clone();
     let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
 
     // Create position

@@ -1,5 +1,5 @@
-use abstract_app::abstract_sdk::{feature_objects::AnsHost, Resolve};
-use abstract_app::{abstract_core::objects::AssetEntry, objects::DexAssetPairing};
+use abstract_app::sdk::{feature_objects::AnsHost, Resolve};
+use abstract_app::{objects::DexAssetPairing, std::objects::AssetEntry};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     ensure, Deps, Env, MessageInfo, QuerierWrapper, StdResult, Storage, Timestamp, Uint128, Uint64,

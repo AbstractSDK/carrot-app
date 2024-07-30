@@ -43,12 +43,12 @@ use std::{
 use tonic::transport::Channel;
 
 use abstract_app::{
-    abstract_core::{ans_host, version_control::ModuleFilter},
     abstract_interface::VCQueryFns,
     objects::module::{ModuleInfo, ModuleStatus},
+    std::{ans_host, version_control::ModuleFilter},
 };
 
-const VERSION_REQ: &str = ">=0.4, <0.5";
+const VERSION_REQ: &str = ">=0.4, <0.6";
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,

@@ -1,6 +1,6 @@
 [package]
 name = "carrot-app"
-version = "0.4.0"
+version = "0.5.0"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
   "Adair <adair@abstract.money>",
@@ -29,12 +29,7 @@ export = []
 # enable node-backed tests (ensure Docker is running)
 # run with `cargo test --jobs 1 --features node-tests`
 node-tests = ["interface"]
-interface = [
-  "export",
-  "dep:cw-orch",
-  "abstract-app/interface-macro",
-  "abstract-dex-adapter/interface",
-]
+interface = ["export", "dep:cw-orch"]
 schema = ["abstract-app/schema"]
 
 [dependencies]
@@ -48,13 +43,14 @@ schemars = "0.8"
 cw-asset = { workspace = true }
 
 abstract-app = { workspace = true }
-abstract-sdk = { version = "0.21.0", features = ["stargate"] }
 # Dependencies for interface
 abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
 cw-orch = { workspace = true, optional = true }
 
-osmosis-std = { version = "0.21.0" }
+osmosis-std = { version = "0.25.0" }
 prost = { version = "0.12.3" }
+# TODO: just to enable "stargate" on abstract-app remove, see ABS-480
+abstract-sdk = { version = "0.23.0", features = ["stargate"] }
 
 [dev-dependencies]
 abstract-interface = { workspace = true, features = ["daemon"] }
@@ -63,12 +59,12 @@ prost = { version = "0.12.3" }
 prost-types = { version = "0.12.3" }
 log = { version = "0.4.20" }
 carrot-app = { path = ".", features = ["interface"] }
-abstract-testing = { version = "0.21.0" }
-abstract-client = { version = "0.21.0" }
-abstract-sdk = { version = "0.21.0", features = ["test-utils"] }
+abstract-client = { workspace = true }
+abstract-app = { workspace = true, features = ["test-utils"] }
 speculoos = "0.11.0"
 semver = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
-cw-orch = { workspace = true, features = ["osmosis-test-tube"] }
+cw-orch = { workspace = true }
+cw-orch-osmosis-test-tube = "0.3.0"
 clap = { version = "4.3.7", features = ["derive"] }

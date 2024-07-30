@@ -35,16 +35,13 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let chain = OSMOSIS_1;
     let rt = Runtime::new()?;
-    let daemon = DaemonBuilder::default()
-        .chain(chain)
-        .handle(rt.handle())
-        .build()?;
+    let daemon = DaemonBuilder::new(chain).handle(rt.handle()).build()?;
 
     let client = AbstractClient::new(daemon.clone())?;
-    let next_local_account_id = client.next_local_account_id()?;
+    let random_account_id = client.random_account_id()?;
 
     let savings_app_addr = client.module_instantiate2_address::<carrot_app::AppInterface<Daemon>>(
-        &AccountId::local(next_local_account_id),
+        &AccountId::local(random_account_id),
     )?;
 
     let funds = vec![Coin {
@@ -175,10 +172,10 @@ mod utils {
         module::{ModuleInfo, ModuleVersion},
         AccountId,
     };
+    use abstract_app::std::{account_factory, manager::ModuleInstallConfig};
     use abstract_client::*;
     use abstract_dex_adapter::DEX_ADAPTER_ID;
     use abstract_interface::Abstract;
-    use abstract_sdk::core::{account_factory, manager::ModuleInstallConfig};
     use carrot_app::contract::{APP_ID, APP_VERSION};
     use cosmwasm_std::{to_json_binary, to_json_vec};
     use cw_orch::{environment::CwEnv, prelude::*};
@@ -219,7 +216,7 @@ mod utils {
         ]
         .map(ToOwned::to_owned);
         let savings_app_addr: String = savings_app_addr.into();
-        let granter = chain.sender().to_string();
+        let granter = chain.sender_addr().to_string();
         let grantee = savings_app_addr.clone();
 
         let reward_denom = client
@@ -227,22 +224,22 @@ mod utils {
             .resolve(&AssetEntry::new(REWARD_ASSET))?;
 
         let mut dex_spend_limit = vec![
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+        cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: app_data.denom0.to_string(),
             amount: LOTS.to_string(),
         },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+        cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: app_data.denom1.to_string(),
             amount: LOTS.to_string(),
         },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+        cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: reward_denom.to_string(),
             amount: LOTS.to_string(),
         }];
         dex_spend_limit.sort_unstable_by(|a, b| a.denom.cmp(&b.denom));
         let dex_fee_authorization = Any {
             value: MsgGrant {
-                granter: chain.sender().to_string(),
+                granter: chain.sender_addr().to_string(),
                 grantee: grantee.clone(),
                 grant: Some(Grant {
                     authorization: Some(
@@ -285,16 +282,16 @@ mod utils {
         let chain = client.environment();
         let abstr = Abstract::load_from(chain.clone())?;
         let account_factory_addr = abstr.account_factory.addr_str()?;
-        let next_local_account_id = client.next_local_account_id()?;
+        let random_account_id = client.random_account_id()?;
 
         let msg = Any {
             type_url: MsgExecuteContract::TYPE_URL.to_owned(),
             value: MsgExecuteContract {
-                sender: chain.sender().to_string(),
+                sender: chain.sender_addr().to_string(),
                 contract: account_factory_addr.to_string(),
                 msg: to_json_vec(&account_factory::ExecuteMsg::CreateAccount {
                     governance: GovernanceDetails::Monarchy {
-                        monarch: chain.sender().to_string(),
+                        monarch: chain.sender_addr().to_string(),
                     },
                     name: "bob".to_owned(),
                     description: None,
@@ -319,7 +316,7 @@ mod utils {
                             Some(to_json_binary(&init_msg)?),
                         ),
                     ],
-                    account_id: Some(AccountId::local(next_local_account_id)),
+                    account_id: Some(AccountId::local(random_account_id)),
                 })?,
                 funds: vec![],
             }
@@ -334,14 +331,14 @@ mod utils {
         init_msg: AppInstantiateMsg,
     ) -> anyhow::Result<Any> {
         let chain = client.environment();
-        let next_local_account_id = client.next_local_account_id()?;
+        let random_account_id = client.random_account_id()?;
 
         let msg = Any {
             type_url: MsgExecuteContract::TYPE_URL.to_owned(),
             value: MsgExecuteContract {
-                sender: chain.sender().to_string(),
+                sender: chain.sender_addr().to_string(),
                 contract: account.manager()?.to_string(),
-                msg: to_json_vec(&abstract_sdk::core::manager::ExecuteMsg::CreateSubAccount {
+                msg: to_json_vec(&abstract_app::std::manager::ExecuteMsg::CreateSubAccount {
                     name: "deep-adventurous-afternoon".to_owned(),
                     description: None,
                     link: None,
@@ -365,7 +362,7 @@ mod utils {
                             Some(to_json_binary(&init_msg)?),
                         ),
                     ],
-                    account_id: Some(next_local_account_id),
+                    account_id: Some(random_account_id),
                 })?,
                 funds: vec![],
             }

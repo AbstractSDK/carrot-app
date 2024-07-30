@@ -5,7 +5,7 @@ use crate::common::{
     USDC, USDC_DENOM, USDT_DENOM,
 };
 use abstract_app::objects::{AccountId, AssetEntry};
-use abstract_client::{AbstractClient, Environment};
+use abstract_client::{AbstractClient, Environment as _};
 use carrot_app::error::AppError;
 use carrot_app::msg::{
     AppExecuteMsgFns, AppInstantiateMsg, AppQueryMsgFns, AssetsBalanceResponse,
@@ -14,14 +14,12 @@ use carrot_app::msg::{
 use carrot_app::state::AutocompoundRewardsConfig;
 use common::REWARD_ASSET;
 use cosmwasm_std::{coin, coins, Uint128, Uint256, Uint64};
-use cw_orch::{
-    anyhow,
-    osmosis_test_tube::osmosis_test_tube::{
-        osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition,
-        ConcentratedLiquidity, Module,
-    },
-    prelude::*,
+use cw_orch::{anyhow, prelude::*};
+use cw_orch_osmosis_test_tube::osmosis_test_tube::{
+    osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition,
+    ConcentratedLiquidity, Module,
 };
+use cw_orch_osmosis_test_tube::OsmosisTestTube;
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
 
 #[test]
@@ -126,7 +124,7 @@ fn create_multiple_positions_after_withdraw_all() -> anyhow::Result<()> {
 #[test]
 fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()> {
     let (_, carrot_app) = setup_test_tube(true)?;
-    let chain = carrot_app.get_chain().clone();
+    let chain = carrot_app.environment().clone();
 
     let position = carrot_app.position()?;
 
@@ -143,7 +141,7 @@ fn create_position_after_user_withdraw_liquidity_manually() -> anyhow::Result<()
     cl.withdraw_position(
         MsgWithdrawPosition {
             position_id: position.position_id,
-            sender: chain.sender().to_string(),
+            sender: chain.sender_addr().to_string(),
             liquidity_amount: position.liquidity,
         },
         &chain.sender,
@@ -168,7 +166,7 @@ fn install_on_sub_account() -> anyhow::Result<()> {
     let owner_account = app.account();
     let chain = owner_account.environment();
     let client = AbstractClient::new(chain)?;
-    let next_id = client.next_local_account_id()?;
+    let next_id = client.random_account_id()?;
 
     let init_msg = AppInstantiateMsg {
         pool_id,
@@ -187,7 +185,7 @@ fn install_on_sub_account() -> anyhow::Result<()> {
     let account = client
         .account_builder()
         .sub_account(owner_account)
-        .account_id(next_id)
+        .expected_account_id(next_id)
         .name("carrot-sub-acc")
         .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<OsmosisTestTube>>(
             &init_msg,
@@ -216,7 +214,7 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
     let owner_account = app.account();
     let chain = owner_account.environment();
     let client = AbstractClient::new(chain)?;
-    let next_id = client.next_local_account_id()?;
+    let next_id = client.random_account_id()?;
     let carrot_app_address = client
         .module_instantiate2_address::<carrot_app::AppInterface<OsmosisTestTube>>(
             &AccountId::local(next_id),
@@ -249,7 +247,7 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
     let account = client
         .account_builder()
         .sub_account(owner_account)
-        .account_id(next_id)
+        .expected_account_id(next_id)
         .name("carrot-sub-acc")
         .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<OsmosisTestTube>>(
             &init_msg,
