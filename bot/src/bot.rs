@@ -194,7 +194,7 @@ impl Bot {
         for app_info in saving_modules.modules {
             let version = app_info.module.info.version.to_string();
             let version_matches = semver::Version::parse(&version)
-                .map(|v| !ver_req.matches(&v))
+                .map(|v| ver_req.matches(&v))
                 .unwrap_or(false);
             let code_id = app_info.module.reference.unwrap_app()?;
 
