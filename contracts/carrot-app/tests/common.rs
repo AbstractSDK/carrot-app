@@ -14,6 +14,14 @@ use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, U
 use cw_asset::AssetInfoUnchecked;
 use cw_orch::anyhow;
 use cw_orch::prelude::*;
+use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::{
+    cosmos::bank::v1beta1::SendAuthorization,
+    cosmwasm::wasm::v1::MsgExecuteContract,
+    osmosis::concentratedliquidity::v1beta1::{
+        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+        MsgCollectSpreadRewards, PoolRecord,
+    },
+};
 use cw_orch_osmosis_test_tube::osmosis_test_tube::{
     osmosis_std::types::{
         cosmos::{
@@ -30,12 +38,6 @@ use cw_orch_osmosis_test_tube::osmosis_test_tube::{
     ConcentratedLiquidity, Gamm, GovWithAppAccess, Module,
 };
 use cw_orch_osmosis_test_tube::OsmosisTestTube;
-use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
-use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
-    CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-    MsgCollectSpreadRewards, PoolRecord,
-};
 use prost::Message;
 use prost_types::Any;
 
@@ -422,8 +424,14 @@ pub fn give_authorizations<Chain: CwEnv + Stargate>(
 }
 
 pub mod incentives {
-    use cw_orch_osmosis_test_tube::osmosis_test_tube::{fn_execute, Module, Runner};
-    use osmosis_std::types::osmosis::incentives::{MsgCreateGauge, MsgCreateGaugeResponse};
+    use cw_orch_osmosis_test_tube::osmosis_test_tube::{
+        fn_execute, fn_query,
+        osmosis_std::types::osmosis::incentives::{
+            MsgCreateGauge, MsgCreateGaugeResponse, QueryLockableDurationsRequest,
+            QueryLockableDurationsResponse,
+        },
+        Module, Runner,
+    };
 
     #[allow(unused)]
     pub struct Incentives<'a, R: Runner<'a>> {
@@ -444,6 +452,10 @@ pub mod incentives {
         fn_execute! {
             // (pub)? <fn_name>: <request_type> => <response_type>
             pub create_gauge: MsgCreateGauge => MsgCreateGaugeResponse
+        }
+
+        fn_query! {
+            pub query_lockable_durations ["/osmosis.incentives.Query/LockableDurations"]: QueryLockableDurationsRequest => QueryLockableDurationsResponse
         }
     }
 }

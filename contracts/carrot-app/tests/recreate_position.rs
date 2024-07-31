@@ -15,12 +15,14 @@ use carrot_app::state::AutocompoundRewardsConfig;
 use common::REWARD_ASSET;
 use cosmwasm_std::{coin, coins, Uint128, Uint256, Uint64};
 use cw_orch::{anyhow, prelude::*};
-use cw_orch_osmosis_test_tube::osmosis_test_tube::{
-    osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition,
-    ConcentratedLiquidity, Module,
+use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
+use cw_orch_osmosis_test_tube::{
+    osmosis_test_tube::{
+        osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition,
+        ConcentratedLiquidity, Module,
+    },
+    OsmosisTestTube,
 };
-use cw_orch_osmosis_test_tube::OsmosisTestTube;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
 
 #[test]
 fn create_multiple_positions() -> anyhow::Result<()> {

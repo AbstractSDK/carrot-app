@@ -13,11 +13,11 @@ use common::{DEX_NAME, GAS_DENOM};
 use cosmwasm_std::{coin, coins, Decimal, Uint128, Uint256};
 use cw_orch::anyhow;
 use cw_orch::prelude::*;
+use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
 use cw_orch_osmosis_test_tube::osmosis_test_tube::{
     osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgWithdrawPosition,
     ConcentratedLiquidity, Module,
 };
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::PositionByIdRequest;
 
 #[test]
 fn deposit_lands() -> anyhow::Result<()> {

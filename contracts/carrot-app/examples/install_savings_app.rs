@@ -8,13 +8,13 @@ use cw_orch::{
     prelude::Stargate,
     tokio::runtime::Runtime,
 };
+use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 use dotenv::dotenv;
 
 use carrot_app::{
     msg::{AppInstantiateMsg, CreatePositionMessage},
     state::AutocompoundRewardsConfig,
 };
-use osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 
 pub struct CarrotAppInitData {
     pub pool_id: u64,
@@ -179,7 +179,7 @@ mod utils {
     use carrot_app::contract::{APP_ID, APP_VERSION};
     use cosmwasm_std::{to_json_binary, to_json_vec};
     use cw_orch::{environment::CwEnv, prelude::*};
-    use osmosis_std::types::{
+    use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::{
         cosmos::{
             authz::v1beta1::{GenericAuthorization, Grant, MsgGrant},
             bank::v1beta1::SendAuthorization,
