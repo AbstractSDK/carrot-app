@@ -40,7 +40,6 @@ pub struct CreatePositionMessage {
 /// App execute messages
 #[cosmwasm_schema::cw_serde]
 #[cfg_attr(feature = "interface", derive(cw_orch::ExecuteFns))]
-#[cfg_attr(feature = "interface", impl_into(ExecuteMsg))]
 pub enum AppExecuteMsg {
     /// Update autocompound settings
     UpdateConfig {
@@ -70,7 +69,6 @@ pub enum AppExecuteMsg {
 /// App query messages
 #[cosmwasm_schema::cw_serde]
 #[cfg_attr(feature = "interface", derive(cw_orch::QueryFns))]
-#[cfg_attr(feature = "interface", impl_into(QueryMsg))]
 #[derive(QueryResponses)]
 pub enum AppQueryMsg {
     /// Get the config of the carrot app

@@ -14,10 +14,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let chain = OSMOSIS_1;
     let rt = Runtime::new()?;
-    let daemon = DaemonBuilder::default()
-        .chain(chain)
-        .handle(rt.handle())
-        .build()?;
+    let daemon = DaemonBuilder::new(chain).handle(rt.handle()).build()?;
 
     let abstr = abstract_client::AbstractClient::new(daemon)?;
 

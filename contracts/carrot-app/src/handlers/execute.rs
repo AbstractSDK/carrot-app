@@ -10,10 +10,14 @@ use crate::{
         TEMP_WITHDRAW_TO_ASSET,
     },
 };
-use abstract_app::abstract_sdk::AuthZInterface;
-use abstract_app::{abstract_sdk::features::AbstractResponse, objects::AnsAsset};
+use abstract_app::{
+    objects::AnsAsset,
+    sdk::{
+        features::{AbstractNameService, AbstractResponse},
+        AuthZ, AuthZInterface, Resolve,
+    },
+};
 use abstract_dex_adapter::DexInterface;
-use abstract_sdk::{features::AbstractNameService, Resolve};
 use cosmwasm_std::{
     to_json_binary, Addr, Coin, CosmosMsg, Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo,
     SubMsg, Uint128, Uint256, Uint64, WasmMsg,
@@ -83,9 +87,9 @@ fn update_config(
     if let Some(new_rewards_config) = autocompound_rewards_config {
         // Validate rewards config first
         let ans = app.name_service(deps.as_ref());
-        let asset_pairing_resp: Vec<abstract_sdk::core::ans_host::AssetPairingMapEntry> = ans
+        let asset_pairing_resp: Vec<abstract_app::std::ans_host::AssetPairingMapEntry> = ans
             .pool_list(
-                Some(abstract_sdk::core::ans_host::AssetPairingFilter {
+                Some(abstract_app::std::ans_host::AssetPairingFilter {
                     asset_pair: Some((
                         new_rewards_config.gas_asset.clone(),
                         new_rewards_config.swap_asset.clone(),
@@ -340,7 +344,7 @@ fn _inner_claim_rewards(
     env: &Env,
     carrot_position: CarrotPosition,
     user: Addr,
-    authz: abstract_sdk::AuthZ,
+    authz: AuthZ,
 ) -> AppResult<(Vec<CosmosMsg>, cosmwasm_std::Coins)> {
     let mut rewards = cosmwasm_std::Coins::default();
     let mut collect_rewards_msgs = vec![];
@@ -386,7 +390,7 @@ fn _inner_withdraw(
     amount: Option<Uint256>,
     carrot_position: CarrotPosition,
     user: Addr,
-    authz: abstract_sdk::AuthZ,
+    authz: AuthZ,
 ) -> AppResult<(CosmosMsg, Uint256, Uint256, [Coin; 2])> {
     let position_details = carrot_position.position.position.unwrap();
     let total_liquidity: Decimal256 = position_details.liquidity.parse()?;

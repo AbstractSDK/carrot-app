@@ -1,5 +1,5 @@
 use abstract_app::{
-    abstract_core::objects::AnsAsset,
+    std::objects::AnsAsset,
     traits::{AbstractNameService, Resolve},
 };
 use abstract_dex_adapter::DexInterface;

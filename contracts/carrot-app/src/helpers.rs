@@ -1,5 +1,5 @@
+use abstract_app::sdk::Resolve;
 use abstract_app::{objects::AssetEntry, traits::AbstractNameService};
-use abstract_sdk::Resolve;
 use cosmwasm_std::{Addr, Deps, MessageInfo, Uint128};
 
 use crate::{
