@@ -48,6 +48,7 @@ use abstract_app::{
     std::{ans_host, version_control::ModuleFilter},
 };
 
+const LAST_INCOMPATIBLE_VERSION: &str = "0.3.1";
 const VERSION_REQ: &str = ">=0.4, <0.6";
 
 const AUTHORIZATION_URLS: &[&str] = &[
@@ -176,16 +177,7 @@ impl Bot {
         let mut contract_instances_to_skip: HashSet<CarrotInstance> = HashSet::new();
 
         log!(Level::Debug, "Fetching modules");
-        let saving_modules = abstr.version_control().module_list(
-            Some(ModuleFilter {
-                namespace: Some(self.module_info.namespace.to_string()),
-                name: Some(self.module_info.name.clone()),
-                version: None,
-                status: Some(ModuleStatus::Registered),
-            }),
-            None,
-            None,
-        )?;
+        let saving_modules = utils::carrot_module_list(&abstr, &self.module_info)?;
 
         let mut fetch_instances_count = 0;
 
@@ -338,6 +330,7 @@ fn autocompound_instance(
 }
 
 mod utils {
+    use abstract_app::std::version_control::ModulesListResponse;
     use cosmos_sdk_proto::{
         cosmos::base::query::v1beta1::{PageRequest, PageResponse},
         cosmwasm::wasm::v1::QueryContractsByCodeResponse,
@@ -488,5 +481,40 @@ mod utils {
             _ => false,
         };
         gas_asset && rewards.amount >= MIN_REWARD.1
+    }
+
+    pub fn carrot_module_list(
+        abstr: &AbstractClient<Daemon>,
+        module_info: &ModuleInfo,
+    ) -> Result<ModulesListResponse, cw_orch::core::CwEnvError> {
+        let mut start_after = Some(ModuleInfo {
+            namespace: module_info.namespace.clone(),
+            name: module_info.name.clone(),
+            version: abstract_app::objects::module::ModuleVersion::Version(
+                LAST_INCOMPATIBLE_VERSION.to_owned(),
+            ),
+        });
+        let mut module_list = ModulesListResponse { modules: vec![] };
+        loop {
+            let saving_modules = abstr.version_control().module_list(
+                Some(ModuleFilter {
+                    namespace: Some(module_info.namespace.to_string()),
+                    name: Some(module_info.name.clone()),
+                    version: None,
+                    status: Some(ModuleStatus::Registered),
+                }),
+                None,
+                start_after,
+            )?;
+            if saving_modules.modules.is_empty() {
+                break;
+            }
+            start_after = saving_modules
+                .modules
+                .last()
+                .map(|mod_respose| mod_respose.module.info.clone());
+            module_list.modules.extend(saving_modules.modules);
+        }
+        Ok(module_list)
     }
 }
