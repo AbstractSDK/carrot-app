@@ -185,9 +185,14 @@ impl Bot {
         log!(Level::Debug, "version requirement: {ver_req}");
         for app_info in saving_modules.modules {
             let version = app_info.module.info.version.to_string();
-            let version_matches = semver::Version::parse(&version)
+            // Completely ignore outdated carrots
+            if !semver::Version::parse(&version)
                 .map(|v| ver_req.matches(&v))
-                .unwrap_or(false);
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
             let code_id = app_info.module.reference.unwrap_app()?;
 
             let contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
@@ -225,8 +230,7 @@ impl Bot {
                     .set(balance.u128().try_into().unwrap());
 
                 // Insert instances that are supposed to be autocompounded
-                if version_matches
-                    && !balance.is_zero()
+                if !balance.is_zero()
                     && utils::has_authz_permission(&abstr, contract_addr).unwrap_or(false)
                 {
                     contract_instances_to_autocompound.insert((
