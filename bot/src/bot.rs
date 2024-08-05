@@ -179,7 +179,6 @@ impl Bot {
         log!(Level::Debug, "Fetching modules");
         let saving_modules = utils::carrot_module_list(&abstr, &self.module_info)?;
 
-        panic!("{:?}", saving_modules);
         let mut fetch_instances_count = 0;
 
         let ver_req = VersionReq::parse(VERSION_REQ).unwrap();
