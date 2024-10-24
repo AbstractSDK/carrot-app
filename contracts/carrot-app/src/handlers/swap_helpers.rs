@@ -45,7 +45,7 @@ pub(crate) fn swap_msg(
     }
     let sender = get_user(deps, app)?;
 
-    let dex = app.ans_dex(deps, OSMOSIS.to_string());
+    let dex = app.ans_dex(deps, env, OSMOSIS.to_string());
     let max_spread = Some(max_spread.unwrap_or(DEFAULT_MAX_SPREAD));
     let trigger_swap_msg: GenerateMessagesResponse =
         dex.generate_swap_messages(offer_asset, ask_asset, max_spread, None, sender.clone())?;
@@ -106,7 +106,7 @@ pub(crate) fn tokens_to_swap(
 
     let (offer_asset, ask_asset, assets_for_position) = if x0_a1 < x1_a0 {
         let numerator = x1_a0 - x0_a1;
-        let denominator = asset0.amount + price * asset1.amount;
+        let denominator = asset0.amount + asset1.amount.mul_floor(price);
         let y1 = numerator / denominator;
 
         (
@@ -114,7 +114,7 @@ pub(crate) fn tokens_to_swap(
             config.pool_config.asset0,
             AssetsForPosition {
                 asset0: Coin {
-                    amount: x0.amount + price * y1,
+                    amount: x0.amount + y1.mul_floor(price),
                     denom: x0.denom,
                 },
                 asset1: Coin {
@@ -125,8 +125,7 @@ pub(crate) fn tokens_to_swap(
         )
     } else {
         let numerator = x0_a1 - x1_a0;
-        let denominator =
-            asset1.amount + Decimal::from_ratio(asset0.amount, 1u128) / price * Uint128::one();
+        let denominator = asset1.amount + asset0.amount / Uint128::one().mul_floor(price);
         let y0 = numerator / denominator;
 
         (
@@ -138,7 +137,7 @@ pub(crate) fn tokens_to_swap(
                     denom: x0.denom,
                 },
                 asset1: Coin {
-                    amount: x1.amount + Decimal::from_ratio(y0, 1u128) / price * Uint128::one(),
+                    amount: x1.amount + y0 / Uint128::one().mul_floor(price),
                     denom: x1.denom,
                 },
             },
@@ -160,7 +159,15 @@ pub fn swap_to_enter_position(
     belief_price0: Option<Decimal>,
     belief_price1: Option<Decimal>,
 ) -> AppResult<(Vec<CosmosMsg>, AssetsForPosition)> {
-    let price = query_price(deps, &funds, app, max_spread, belief_price0, belief_price1)?;
+    let price = query_price(
+        deps,
+        env,
+        &funds,
+        app,
+        max_spread,
+        belief_price0,
+        belief_price1,
+    )?;
     let (offer_asset, ask_asset, assets_for_position) =
         tokens_to_swap(deps, funds, asset0, asset1, price)?;
 
@@ -184,6 +191,7 @@ mod tests {
         let expected = expected.into().u128();
         let result = result.u128();
 
+        dbg!(expected, result);
         if expected < result - 1 || expected > result + 1 {
             panic!("Results are not close enough")
         }
@@ -320,9 +328,7 @@ mod tests {
         assert_is_around(
             swap.amount,
             5_000
-                - 5_000 * amount1
-                    / (amount1
-                        + (Decimal::from_ratio(amount0, 1u128) / price * Uint128::one()).u128()),
+                - 5_000 * amount1 / (amount1 + (amount0 / Uint128::one().mul_floor(price).u128())),
         );
         assert_eq!(swap.name, AssetEntry::new(TOKEN1));
         assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
@@ -348,7 +354,7 @@ mod tests {
         assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
         assert_eq!(
             10_000 - swap.amount.u128(),
-            4_000 + (Decimal::from_ratio(swap.amount, 1u128) / price * Uint128::one()).u128()
+            4_000 + (swap.amount / Uint128::one().mul_floor(price)).u128()
         );
     }
 }

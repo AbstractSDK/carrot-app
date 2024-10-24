@@ -1,12 +1,14 @@
 use std::iter;
+use std::rc::Rc;
 
 use abstract_app::objects::module::ModuleInfo;
 use abstract_app::std::{
-    manager::{self, ModuleInstallConfig},
+    account::{self, ModuleInstallConfig},
     objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
 };
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_dex_adapter::DEX_ADAPTER_ID;
+use abstract_interface::Abstract;
 use carrot_app::contract::APP_ID;
 use carrot_app::msg::{AppInstantiateMsg, CreatePositionMessage};
 use carrot_app::state::AutocompoundRewardsConfig;
@@ -22,6 +24,7 @@ use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::{
         MsgCollectSpreadRewards, PoolRecord,
     },
 };
+use cw_orch_osmosis_test_tube::osmosis_test_tube::Account;
 use cw_orch_osmosis_test_tube::osmosis_test_tube::{
     osmosis_std::types::{
         cosmos::{
@@ -99,7 +102,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 },
             ),
         ])
-        .build()?;
+        .build(chain.sender().clone())?;
 
     // We deploy the carrot_app
     let publisher = client
@@ -145,12 +148,11 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             type_url: MsgExecuteContract::TYPE_URL.to_owned(),
             value: MsgExecuteContract {
                 sender: chain.sender_addr().to_string(),
-                contract: publisher.account().manager()?.to_string(),
-                msg: to_json_vec(&manager::ExecuteMsg::CreateSubAccount {
-                    name: "bob".to_owned(),
+                contract: publisher.account().address()?.to_string(),
+                msg: to_json_vec(&account::ExecuteMsg::<Empty>::CreateSubAccount {
+                    name: Some("bob".to_owned()),
                     description: None,
                     link: None,
-                    base_asset: None,
                     namespace: None,
                     install_modules: vec![
                         ModuleInstallConfig::new(ModuleInfo::from_id_latest(DEX_ADAPTER_ID)?, None),
@@ -186,13 +188,13 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     // We update authorized addresses on the adapter for the app
     dex_adapter.execute(
         &abstract_dex_adapter::msg::ExecuteMsg::Base(abstract_app::std::adapter::BaseExecuteMsg {
-            proxy_address: Some(carrot_app.account().proxy()?.to_string()),
+            account_address: Some(carrot_app.account().address()?.to_string()),
             msg: abstract_app::std::adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
                 to_add: vec![carrot_app.addr_str()?],
                 to_remove: vec![],
             },
         }),
-        None,
+        &[],
     )?;
 
     Ok(carrot_app)
@@ -216,14 +218,14 @@ pub fn create_position<Chain: CwEnv>(
             belief_price1: None,
         })
         .into(),
-        None,
+        &[],
     )
     .map_err(Into::into)
 }
 
 pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
-    chain.add_balance(chain.sender_addr(), coins(LOTS, USDC_DENOM))?;
-    chain.add_balance(chain.sender_addr(), coins(LOTS, USDT_DENOM))?;
+    chain.add_balance(&chain.sender_addr(), coins(LOTS, USDC_DENOM))?;
+    chain.add_balance(&chain.sender_addr(), coins(LOTS, USDT_DENOM))?;
 
     let asset0 = USDT_DENOM.to_owned();
     let asset1 = USDC_DENOM.to_owned();
@@ -249,11 +251,13 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                 title: "Create concentrated uosmo:usdc pool".to_string(),
                 description: "Create concentrated uosmo:usdc pool, so that we can trade it"
                     .to_string(),
+                #[allow(deprecated)]
                 pool_records: vec![PoolRecord {
                     denom0: USDT_DENOM.to_owned(),
                     denom1: USDC_DENOM.to_owned(),
                     tick_spacing: TICK_SPACING,
                     spread_factor: Decimal::percent(SPREAD_FACTOR).atomics().to_string(),
+                    exponent_at_price_one: String::default(),
                 }],
             },
             chain.sender_addr().to_string(),
@@ -292,15 +296,15 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
 
     let gamm = Gamm::new(&*test_tube);
     let rewards_pool_provider = test_tube.init_account(&[
-        Coin::new(1_000_000_000, asset1.clone()),
-        Coin::new(2_000_000_000, REWARD_DENOM),
+        Coin::new(1_000_000_000_u128, asset1.clone()),
+        Coin::new(2_000_000_000_u128, REWARD_DENOM),
         Coin::new(LOTS, GAS_DENOM),
     ])?;
 
     let gas_pool_response = gamm.create_basic_pool(
         &[
-            Coin::new(1_000_000_000, asset1),
-            Coin::new(2_000_000_000, REWARD_DENOM),
+            Coin::new(1_000_000_000_u128, asset1),
+            Coin::new(2_000_000_000_u128, REWARD_DENOM),
         ],
         &rewards_pool_provider,
     )?;
@@ -315,7 +319,18 @@ pub fn setup_test_tube(
     Application<OsmosisTestTube, carrot_app::AppInterface<OsmosisTestTube>>,
 )> {
     let _ = env_logger::builder().is_test(true).try_init();
-    let chain = OsmosisTestTube::new(vec![coin(LOTS, GAS_DENOM)]);
+    let mut chain = OsmosisTestTube::new(vec![]);
+
+    let seed = Abstract::<OsmosisTestTube>::mock_mnemonic().to_seed("");
+    let derive_path = Abstract::<OsmosisTestTube>::mock_derive_path(None);
+    let signing_key = cw_orch_osmosis_test_tube::osmosis_test_tube::cosmrs::crypto::secp256k1::SigningKey::derive_from_path(seed, &derive_path.parse().unwrap()).unwrap();
+    let signing_account = cw_orch_osmosis_test_tube::osmosis_test_tube::SigningAccount::new(
+        chain.sender.prefix().to_string(),
+        signing_key,
+        chain.sender.fee_setting().clone(),
+    );
+    chain.set_sender(Rc::new(signing_account));
+    chain.add_balance(&chain.sender_addr(), coins(LOTS, GAS_DENOM))?;
 
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
@@ -340,12 +355,12 @@ pub fn setup_test_tube(
     Ok((pool_id, carrot_app))
 }
 
-pub fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
+pub fn give_authorizations_msgs<Chain: CwEnv>(
     client: &AbstractClient<Chain>,
     savings_app_addr: impl Into<String>,
 ) -> Result<Vec<Any>, anyhow::Error> {
     let dex_fee_account = client.account_from(AccountId::local(0))?;
-    let dex_fee_addr = dex_fee_account.proxy()?.to_string();
+    let dex_fee_addr = dex_fee_account.address()?.to_string();
     let chain = client.environment().clone();
 
     let authorization_urls = [

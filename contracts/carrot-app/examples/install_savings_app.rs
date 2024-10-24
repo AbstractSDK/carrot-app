@@ -172,7 +172,7 @@ mod utils {
         module::{ModuleInfo, ModuleVersion},
         AccountId,
     };
-    use abstract_app::std::{account_factory, manager::ModuleInstallConfig};
+    use abstract_app::std::account::ModuleInstallConfig;
     use abstract_client::*;
     use abstract_dex_adapter::DEX_ADAPTER_ID;
     use abstract_interface::Abstract;
@@ -203,7 +203,7 @@ mod utils {
         app_data: &CarrotAppInitData,
     ) -> Result<Vec<Any>, anyhow::Error> {
         let dex_fee_account = client.account_from(AccountId::local(0))?;
-        let dex_fee_addr = dex_fee_account.proxy()?.to_string();
+        let dex_fee_addr = dex_fee_account.address()?.to_string();
         let chain = client.environment().clone();
 
         let authorization_urls = [
@@ -281,48 +281,48 @@ mod utils {
     ) -> anyhow::Result<Any> {
         let chain = client.environment();
         let abstr = Abstract::load_from(chain.clone())?;
-        let account_factory_addr = abstr.account_factory.addr_str()?;
         let random_account_id = client.random_account_id()?;
 
-        let msg = Any {
-            type_url: MsgExecuteContract::TYPE_URL.to_owned(),
-            value: MsgExecuteContract {
-                sender: chain.sender_addr().to_string(),
-                contract: account_factory_addr.to_string(),
-                msg: to_json_vec(&account_factory::ExecuteMsg::CreateAccount {
-                    governance: GovernanceDetails::Monarchy {
-                        monarch: chain.sender_addr().to_string(),
-                    },
-                    name: "bob".to_owned(),
-                    description: None,
-                    link: None,
-                    base_asset: None,
-                    namespace: None,
-                    install_modules: vec![
-                        ModuleInstallConfig::new(
-                            ModuleInfo::from_id(
-                                DEX_ADAPTER_ID,
-                                ModuleVersion::Version(
-                                    abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
-                                ),
-                            )?,
-                            None,
-                        ),
-                        ModuleInstallConfig::new(
-                            ModuleInfo::from_id(
-                                APP_ID,
-                                ModuleVersion::Version(APP_VERSION.to_owned()),
-                            )?,
-                            Some(to_json_binary(&init_msg)?),
-                        ),
-                    ],
-                    account_id: Some(AccountId::local(random_account_id)),
-                })?,
-                funds: vec![],
-            }
-            .to_proto_bytes(),
-        };
-        Ok(msg)
+        todo!();
+        // let msg = Any {
+        //     type_url: MsgExecuteContract::TYPE_URL.to_owned(),
+        //     value: MsgExecuteContract {
+        //         sender: chain.sender_addr().to_string(),
+        //         contract: account_factory_addr.to_string(),
+        //         msg: to_json_vec(&account_factory::ExecuteMsg::CreateAccount {
+        //             governance: GovernanceDetails::Monarchy {
+        //                 monarch: chain.sender_addr().to_string(),
+        //             },
+        //             name: "bob".to_owned(),
+        //             description: None,
+        //             link: None,
+        //             base_asset: None,
+        //             namespace: None,
+        //             install_modules: vec![
+        //                 ModuleInstallConfig::new(
+        //                     ModuleInfo::from_id(
+        //                         DEX_ADAPTER_ID,
+        //                         ModuleVersion::Version(
+        //                             abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
+        //                         ),
+        //                     )?,
+        //                     None,
+        //                 ),
+        //                 ModuleInstallConfig::new(
+        //                     ModuleInfo::from_id(
+        //                         APP_ID,
+        //                         ModuleVersion::Version(APP_VERSION.to_owned()),
+        //                     )?,
+        //                     Some(to_json_binary(&init_msg)?),
+        //                 ),
+        //             ],
+        //             account_id: Some(AccountId::local(random_account_id)),
+        //         })?,
+        //         funds: vec![],
+        //     }
+        //     .to_proto_bytes(),
+        // };
+        // Ok(msg)
     }
 
     pub fn create_sub_account_message<Chain: CwEnv>(
@@ -333,41 +333,41 @@ mod utils {
         let chain = client.environment();
         let random_account_id = client.random_account_id()?;
 
-        let msg = Any {
-            type_url: MsgExecuteContract::TYPE_URL.to_owned(),
-            value: MsgExecuteContract {
-                sender: chain.sender_addr().to_string(),
-                contract: account.manager()?.to_string(),
-                msg: to_json_vec(&abstract_app::std::manager::ExecuteMsg::CreateSubAccount {
-                    name: "deep-adventurous-afternoon".to_owned(),
-                    description: None,
-                    link: None,
-                    base_asset: None,
-                    namespace: None,
-                    install_modules: vec![
-                        ModuleInstallConfig::new(
-                            ModuleInfo::from_id(
-                                DEX_ADAPTER_ID,
-                                ModuleVersion::Version(
-                                    abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
-                                ),
-                            )?,
-                            None,
-                        ),
-                        ModuleInstallConfig::new(
-                            ModuleInfo::from_id(
-                                APP_ID,
-                                ModuleVersion::Version(APP_VERSION.to_owned()),
-                            )?,
-                            Some(to_json_binary(&init_msg)?),
-                        ),
-                    ],
-                    account_id: Some(random_account_id),
-                })?,
-                funds: vec![],
-            }
-            .to_proto_bytes(),
-        };
-        Ok(msg)
+        todo!()
+        // let msg = Any {
+        //     type_url: MsgExecuteContract::TYPE_URL.to_owned(),
+        //     value: MsgExecuteContract {
+        //         sender: chain.sender_addr().to_string(),
+        //         contract: account.address()?.to_string(),
+        //         msg: to_json_vec(&abstract_app::std::account::ExecuteMsg::CreateSubAccount {
+        //             name: Some("deep-adventurous-afternoon".to_owned()),
+        //             description: None,
+        //             link: None,
+        //             namespace: None,
+        //             install_modules: vec![
+        //                 ModuleInstallConfig::new(
+        //                     ModuleInfo::from_id(
+        //                         DEX_ADAPTER_ID,
+        //                         ModuleVersion::Version(
+        //                             abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
+        //                         ),
+        //                     )?,
+        //                     None,
+        //                 ),
+        //                 ModuleInstallConfig::new(
+        //                     ModuleInfo::from_id(
+        //                         APP_ID,
+        //                         ModuleVersion::Version(APP_VERSION.to_owned()),
+        //                     )?,
+        //                     Some(to_json_binary(&init_msg)?),
+        //                 ),
+        //             ],
+        //             account_id: Some(random_account_id),
+        //         })?,
+        //         funds: vec![],
+        //     }
+        //     .to_proto_bytes(),
+        // };
+        // Ok(msg)
     }
 }

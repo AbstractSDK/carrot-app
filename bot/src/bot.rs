@@ -43,9 +43,9 @@ use std::{
 use tonic::transport::Channel;
 
 use abstract_app::{
-    abstract_interface::VCQueryFns,
+    abstract_interface::RegistryQueryFns,
     objects::module::{ModuleInfo, ModuleStatus},
-    std::{ans_host, version_control::ModuleFilter},
+    std::{ans_host, registry::ModuleFilter},
 };
 
 const LAST_INCOMPATIBLE_VERSION: &str = "0.3.1";
@@ -330,7 +330,7 @@ fn autocompound_instance(
 }
 
 mod utils {
-    use abstract_app::std::version_control::ModulesListResponse;
+    use abstract_app::std::registry::ModulesListResponse;
     use cosmos_sdk_proto::{
         cosmos::base::query::v1beta1::{PageRequest, PageResponse},
         cosmwasm::wasm::v1::QueryContractsByCodeResponse,
@@ -407,8 +407,8 @@ mod utils {
             .block_on(async {
                 authz_querier
                     ._grants(
-                        granter.to_string(),
-                        authz_grantee.clone(),
+                        &granter,
+                        &Addr::unchecked(authz_grantee),
                         // Get every authorization
                         "".to_owned(),
                         None,
@@ -496,7 +496,7 @@ mod utils {
         });
         let mut module_list = ModulesListResponse { modules: vec![] };
         loop {
-            let saving_modules = abstr.version_control().module_list(
+            let saving_modules = abstr.registry().module_list(
                 Some(ModuleFilter {
                     namespace: Some(module_info.namespace.to_string()),
                     name: Some(module_info.name.clone()),

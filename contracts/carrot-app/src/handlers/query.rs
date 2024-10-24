@@ -46,7 +46,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
     let gas_denom = config
         .autocompound_rewards_config
         .gas_asset
-        .resolve(&deps.querier, &app.ans_host(deps)?)?;
+        .resolve(&deps.querier, &app.ans_host(deps, &env)?)?;
 
     // Get user gas balance
     let user = get_user(deps, app)?;
@@ -59,7 +59,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
     } else {
         // check if can swap
         let rewards_config = config.autocompound_rewards_config;
-        let dex = app.ans_dex(deps, OSMOSIS.to_string());
+        let dex = app.ans_dex(deps, &env, OSMOSIS.to_string());
 
         // Reverse swap to see how many swap coins needed
         let required_gas_coins = reward.amount - user_gas_balance;
@@ -69,7 +69,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
         )?;
 
         // Check if user has enough of swap coins
-        let user_swap_balance = get_balance(rewards_config.swap_asset, deps, user, app)?;
+        let user_swap_balance = get_balance(rewards_config.swap_asset, deps, &env, user, app)?;
         let required_swap_amount = response.return_amount;
 
         user_swap_balance > required_swap_amount
@@ -120,6 +120,7 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
 
 pub fn query_price(
     deps: Deps,
+    env: &Env,
     funds: &[Coin],
     app: &App,
     max_spread: Option<Decimal>,
@@ -127,7 +128,7 @@ pub fn query_price(
     belief_price1: Option<Decimal>,
 ) -> AppResult<Decimal> {
     let config = CONFIG.load(deps.storage)?;
-    let ans_host = app.ans_host(deps)?;
+    let ans_host = app.ans_host(deps, env)?;
 
     // We know it's native denom for osmosis pool
     let token0 = config
@@ -154,7 +155,7 @@ pub fn query_price(
 
     // We take the biggest amount and simulate a swap for the corresponding asset
     let price = if amount0 > amount1 {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
+        let simulation_result = app.ans_dex(deps, env, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset0, amount0),
             config.pool_config.asset1,
         )?;
@@ -168,7 +169,7 @@ pub fn query_price(
         }
         price
     } else {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
+        let simulation_result = app.ans_dex(deps, env, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset1, amount1),
             config.pool_config.asset0,
         )?;

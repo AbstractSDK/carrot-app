@@ -47,6 +47,7 @@ pub fn execute_handler(
             autocompound_rewards_config,
         } => update_config(
             deps,
+            env,
             app,
             autocompound_cooldown_seconds,
             autocompound_rewards_config,
@@ -78,6 +79,7 @@ pub fn execute_handler(
 
 fn update_config(
     deps: DepsMut,
+    env: Env,
     app: App,
     autocompound_cooldown_seconds: Option<Uint64>,
     autocompound_rewards_config: Option<AutocompoundRewardsConfig>,
@@ -86,7 +88,7 @@ fn update_config(
 
     if let Some(new_rewards_config) = autocompound_rewards_config {
         // Validate rewards config first
-        let ans = app.name_service(deps.as_ref());
+        let ans = app.name_service(deps.as_ref(), &env);
         let asset_pairing_resp: Vec<abstract_app::std::ans_host::AssetPairingMapEntry> = ans
             .pool_list(
                 Some(abstract_app::std::ans_host::AssetPairingFilter {
@@ -128,7 +130,7 @@ fn create_position(
     app: App,
     create_position_msg: CreatePositionMessage,
 ) -> AppResult {
-    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
+    app.admin.assert_admin(deps.as_ref(), &env, &info.sender)?;
     // Check if there is already saved position
     if CarrotPosition::may_load(deps.as_ref())?.is_some() {
         return Err(AppError::PositionExists {});
@@ -156,7 +158,7 @@ fn deposit(
 ) -> AppResult {
     // Only the admin (manager contracts or account owner) + the smart contract can deposit
     app.admin
-        .assert_admin(deps.as_ref(), &info.sender)
+        .assert_admin(deps.as_ref(), &env, &info.sender)
         .or(assert_contract(&info, &env))?;
 
     let carrot_position = CarrotPosition::load(deps.as_ref())?;
@@ -208,7 +210,7 @@ fn withdraw(
     app: App,
 ) -> AppResult {
     // Only the authorized addresses (admin ?) can withdraw
-    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
+    app.admin.assert_admin(deps.as_ref(), &env, &info.sender)?;
 
     let carrot_position = CarrotPosition::load(deps.as_ref())?;
     // Get app's user and set up authz.
@@ -324,7 +326,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_message(msg_deposit);
 
     // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
-    if !app.admin.is_admin(deps.as_ref(), &info.sender)? && compound_status.is_ready() {
+    if !app.admin.is_admin(deps.as_ref(), &env, &info.sender)? && compound_status.is_ready() {
         let executor_reward_messages = autocompound_executor_rewards(
             deps.as_ref(),
             &env,
@@ -525,7 +527,7 @@ pub fn autocompound_executor_rewards(
     // Get user balance of gas denom
     let gas_denom = rewards_config
         .gas_asset
-        .resolve(&deps.querier, &app.ans_host(deps)?)?;
+        .resolve(&deps.querier, &app.ans_host(deps, env)?)?;
     let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
 
     let mut rewards_messages = vec![];
@@ -533,7 +535,7 @@ pub fn autocompound_executor_rewards(
     // If not enough gas coins - swap for some amount
     if user_gas_balance < rewards_config.min_gas_balance {
         // Get asset entries
-        let dex = app.ans_dex(deps, OSMOSIS.to_string());
+        let dex = app.ans_dex(deps, env, OSMOSIS.to_string());
 
         // Do reverse swap to find approximate amount we need to swap
         let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;
@@ -543,8 +545,13 @@ pub fn autocompound_executor_rewards(
         )?;
 
         // Get user balance of swap denom
-        let user_swap_balance =
-            get_balance(rewards_config.swap_asset.clone(), deps, user.clone(), app)?;
+        let user_swap_balance = get_balance(
+            rewards_config.swap_asset.clone(),
+            deps,
+            env,
+            user.clone(),
+            app,
+        )?;
 
         // Swap as much as available if not enough for max_gas_balance
         let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
