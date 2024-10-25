@@ -125,7 +125,8 @@ pub(crate) fn tokens_to_swap(
         )
     } else {
         let numerator = x0_a1 - x1_a0;
-        let denominator = asset1.amount + asset0.amount / Uint128::one().mul_floor(price);
+        let denominator = asset1.amount
+            + Uint128::one().mul_floor(Decimal::from_ratio(asset0.amount, 1u128) / price);
         let y0 = numerator / denominator;
 
         (
@@ -137,7 +138,8 @@ pub(crate) fn tokens_to_swap(
                     denom: x0.denom,
                 },
                 asset1: Coin {
-                    amount: x1.amount + y0 / Uint128::one().mul_floor(price),
+                    amount: x1.amount
+                        + Uint128::one().mul_floor(Decimal::from_ratio(y0, 1u128) / price),
                     denom: x1.denom,
                 },
             },
@@ -191,7 +193,6 @@ mod tests {
         let expected = expected.into().u128();
         let result = result.u128();
 
-        dbg!(expected, result);
         if expected < result - 1 || expected > result + 1 {
             panic!("Results are not close enough")
         }
@@ -328,7 +329,10 @@ mod tests {
         assert_is_around(
             swap.amount,
             5_000
-                - 5_000 * amount1 / (amount1 + (amount0 / Uint128::one().mul_floor(price).u128())),
+                - 5_000 * amount1
+                    / (amount1
+                        + (Uint128::one().mul_floor(Decimal::from_ratio(amount0, 1u128) / price))
+                            .u128()),
         );
         assert_eq!(swap.name, AssetEntry::new(TOKEN1));
         assert_eq!(ask_asset, AssetEntry::new(TOKEN0));
@@ -354,7 +358,9 @@ mod tests {
         assert_eq!(ask_asset, AssetEntry::new(TOKEN1));
         assert_eq!(
             10_000 - swap.amount.u128(),
-            4_000 + (swap.amount / Uint128::one().mul_floor(price)).u128()
+            4_000
+                + (Uint128::one().mul_floor(Decimal::from_ratio(swap.amount, 1u128) / price))
+                    .u128()
         );
     }
 }
