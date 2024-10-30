@@ -31,13 +31,6 @@ export = []
 node-tests = ["interface"]
 interface = ["export", "dep:cw-orch"]
 schema = ["abstract-app/schema"]
-mock-deployment = [
-  "abstract-app/mock-deployment",
-  "abstract-dex-adapter/mock-deployment",
-]
-
-[package.metadata.optimizer]
-builds = [{ name = "mock", features = ["mock-deployment"] }]
 
 [dependencies]
 cw-utils = { version = "2.0.0" }
@@ -59,10 +52,11 @@ prost = { version = "0.13.1" }
 
 [dev-dependencies]
 abstract-interface = { workspace = true, features = ["daemon"] }
+bip32 = "0.5.2"
 
 prost-types = { version = "0.13.1" }
 log = { version = "0.4.20" }
-carrot-app = { path = ".", features = ["interface", "mock-deployment"] }
+carrot-app = { path = ".", features = ["interface"] }
 abstract-client = { workspace = true }
 abstract-app = { workspace = true, features = ["test-utils", "stargate"] }
 semver = "1.0"

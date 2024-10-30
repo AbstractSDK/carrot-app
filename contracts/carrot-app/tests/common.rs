@@ -2,6 +2,7 @@ use std::iter;
 use std::rc::Rc;
 
 use abstract_app::objects::module::ModuleInfo;
+use abstract_app::objects::namespace::ABSTRACT_NAMESPACE;
 use abstract_app::std::{
     account::{self, ModuleInstallConfig},
     objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
@@ -106,8 +107,10 @@ pub fn deploy<Chain: CwEnv + Stargate>(
 
     // We deploy the carrot_app
     let publisher = client
-        .publisher_builder(Namespace::new("abstract")?)
-        .build()?;
+        .fetch_or_build_account(Namespace::new(ABSTRACT_NAMESPACE)?, |builder| {
+            builder.namespace(Namespace::new(ABSTRACT_NAMESPACE).unwrap())
+        })?
+        .publisher()?;
     // The dex adapter
     let dex_adapter = publisher
         .publish_adapter::<_, abstract_dex_adapter::interface::DexAdapter<Chain>>(
@@ -312,6 +315,8 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
     Ok((pool.id, gas_pool_response.data.pool_id))
 }
 
+const MOCK_MNEMONIC: &str = "clip hire initial neck maid actor venue client foam budget lock catalog sweet steak waste crater broccoli pipe steak sister coyote moment obvious choose";
+
 pub fn setup_test_tube(
     create_position: bool,
 ) -> anyhow::Result<(
@@ -321,8 +326,10 @@ pub fn setup_test_tube(
     let _ = env_logger::builder().is_test(true).try_init();
     let mut chain = OsmosisTestTube::new(vec![]);
 
-    let seed = Abstract::<OsmosisTestTube>::mock_mnemonic().to_seed("");
-    let derive_path = Abstract::<OsmosisTestTube>::mock_derive_path(None);
+    let seed = bip32::Mnemonic::new(MOCK_MNEMONIC, Default::default())
+        .unwrap()
+        .to_seed("");
+    let derive_path = "m/44'/118'/0'/0/0";
     let signing_key = cw_orch_osmosis_test_tube::osmosis_test_tube::cosmrs::crypto::secp256k1::SigningKey::derive_from_path(seed, &derive_path.parse().unwrap()).unwrap();
     let signing_account = cw_orch_osmosis_test_tube::osmosis_test_tube::SigningAccount::new(
         chain.sender.prefix().to_string(),

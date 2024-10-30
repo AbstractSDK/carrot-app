@@ -8,8 +8,8 @@ cw-orch = "0.26.0"
 abstract-app = { version = "0.24.1-beta.2" }
 abstract-adapter = { version = "0.24.1-beta.2" }
 abstract-interface = { version = "0.24.1-beta.2" }
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
 abstract-client = { version = "0.24.1-beta.2" }
 cw-asset = { version = "4.0" }
 cw-orch-osmosis-test-tube = { version = "0.4.0" }
@@ -26,16 +26,16 @@ panic = 'abort'
 incremental = false
 
 [patch.crates-io]
-abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-std = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-# abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-# abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }     # Replace to tag tag = "v0.23.0-dex-adapter" }
+abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-std = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+# abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }
+# abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-test-with-modified-wasm" }     # Replace to tag tag = "v0.23.0-dex-adapter" }
 
 cw-orch-osmosis-test-tube = { git = "https://github.com/AbstractSDK/cw-orchestrator.git", branch = "buckram/revive-osmosis-test-tube" }
 cw-orch-core = { git = "https://github.com/AbstractSDK/cw-orchestrator.git", branch = "buckram/revive-osmosis-test-tube" }
