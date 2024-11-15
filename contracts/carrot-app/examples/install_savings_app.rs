@@ -6,7 +6,6 @@ use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon, DaemonBuilder},
     prelude::Stargate,
-    tokio::runtime::Runtime,
 };
 use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::authz::v1beta1::MsgGrantResponse;
 use dotenv::dotenv;
@@ -34,8 +33,7 @@ fn main() -> anyhow::Result<()> {
     dotenv().ok();
     env_logger::init();
     let chain = OSMOSIS_1;
-    let rt = Runtime::new()?;
-    let daemon = DaemonBuilder::new(chain).handle(rt.handle()).build()?;
+    let daemon = DaemonBuilder::new(chain).build()?;
 
     let client = AbstractClient::new(daemon.clone())?;
     let random_account_id = client.random_account_id()?;
@@ -78,7 +76,7 @@ fn main() -> anyhow::Result<()> {
     let create_sub_account_message = utils::create_account_message(&client, init_msg)?;
 
     msgs.push(create_sub_account_message);
-    let _ = daemon.commit_any::<MsgGrantResponse>(msgs, None)?;
+    let _ = daemon.commit_any(msgs, None)?;
 
     Ok(())
 }
@@ -168,11 +166,14 @@ mod utils {
     pub const LOTS: u128 = 100_000_000_000_000;
     pub const REWARD_ASSET: &str = "osmosis>osmo";
 
-    use abstract_app::objects::{
-        module::{ModuleInfo, ModuleVersion},
-        AccountId,
-    };
     use abstract_app::std::account::ModuleInstallConfig;
+    use abstract_app::{
+        objects::{
+            module::{ModuleInfo, ModuleVersion},
+            salt, AccountId,
+        },
+        std::account,
+    };
     use abstract_client::*;
     use abstract_dex_adapter::DEX_ADAPTER_ID;
     use abstract_interface::Abstract;
@@ -184,7 +185,7 @@ mod utils {
             authz::v1beta1::{GenericAuthorization, Grant, MsgGrant},
             bank::v1beta1::SendAuthorization,
         },
-        cosmwasm::wasm::v1::MsgExecuteContract,
+        cosmwasm::wasm::v1::{MsgExecuteContract, MsgInstantiateContract2},
         osmosis::{
             concentratedliquidity::v1beta1::{
                 MsgAddToPosition, MsgCollectIncentives, MsgCollectSpreadRewards, MsgCreatePosition,
@@ -202,7 +203,7 @@ mod utils {
         savings_app_addr: impl Into<String>,
         app_data: &CarrotAppInitData,
     ) -> Result<Vec<Any>, anyhow::Error> {
-        let dex_fee_account = client.account_from(AccountId::local(0))?;
+        let dex_fee_account = client.fetch_account(AccountId::local(0))?;
         let dex_fee_addr = dex_fee_account.address()?.to_string();
         let chain = client.environment().clone();
 
@@ -282,47 +283,60 @@ mod utils {
         let chain = client.environment();
         let abstr = Abstract::load_from(chain.clone())?;
         let random_account_id = client.random_account_id()?;
+        let salt = salt::generate_instantiate_salt(&AccountId::local(random_account_id));
+        let code_id = abstr.account_code_id()?;
+        let creator = chain.sender_addr().to_string();
 
-        todo!();
-        // let msg = Any {
-        //     type_url: MsgExecuteContract::TYPE_URL.to_owned(),
-        //     value: MsgExecuteContract {
-        //         sender: chain.sender_addr().to_string(),
-        //         contract: account_factory_addr.to_string(),
-        //         msg: to_json_vec(&account_factory::ExecuteMsg::CreateAccount {
-        //             governance: GovernanceDetails::Monarchy {
-        //                 monarch: chain.sender_addr().to_string(),
-        //             },
-        //             name: "bob".to_owned(),
-        //             description: None,
-        //             link: None,
-        //             base_asset: None,
-        //             namespace: None,
-        //             install_modules: vec![
-        //                 ModuleInstallConfig::new(
-        //                     ModuleInfo::from_id(
-        //                         DEX_ADAPTER_ID,
-        //                         ModuleVersion::Version(
-        //                             abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
-        //                         ),
-        //                     )?,
-        //                     None,
-        //                 ),
-        //                 ModuleInstallConfig::new(
-        //                     ModuleInfo::from_id(
-        //                         APP_ID,
-        //                         ModuleVersion::Version(APP_VERSION.to_owned()),
-        //                     )?,
-        //                     Some(to_json_binary(&init_msg)?),
-        //                 ),
-        //             ],
-        //             account_id: Some(AccountId::local(random_account_id)),
-        //         })?,
-        //         funds: vec![],
-        //     }
-        //     .to_proto_bytes(),
-        // };
-        // Ok(msg)
+        let account_address = chain.wasm_querier().instantiate2_addr(
+            code_id,
+            &Addr::unchecked(creator.clone()),
+            salt.clone(),
+        )?;
+
+        let msg = Any {
+            type_url: MsgInstantiateContract2::TYPE_URL.to_owned(),
+            value: MsgInstantiateContract2 {
+                sender: creator,
+                admin: account_address,
+                code_id,
+                label: "Abstract Account".to_owned(),
+                msg: to_json_vec(&account::InstantiateMsg::<Empty> {
+                    code_id,
+                    owner: GovernanceDetails::Monarchy {
+                        monarch: chain.sender_addr().to_string(),
+                    },
+                    name: Some("bob".to_owned()),
+                    description: None,
+                    link: None,
+                    namespace: None,
+                    install_modules: vec![
+                        ModuleInstallConfig::new(
+                            ModuleInfo::from_id(
+                                DEX_ADAPTER_ID,
+                                ModuleVersion::Version(
+                                    abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
+                                ),
+                            )?,
+                            None,
+                        ),
+                        ModuleInstallConfig::new(
+                            ModuleInfo::from_id(
+                                APP_ID,
+                                ModuleVersion::Version(APP_VERSION.to_owned()),
+                            )?,
+                            Some(to_json_binary(&init_msg)?),
+                        ),
+                    ],
+                    account_id: Some(AccountId::local(random_account_id)),
+                    authenticator: None,
+                })?,
+                funds: vec![],
+                salt: salt.to_vec(),
+                fix_msg: false,
+            }
+            .to_proto_bytes(),
+        };
+        Ok(msg)
     }
 
     pub fn create_sub_account_message<Chain: CwEnv>(
@@ -333,41 +347,42 @@ mod utils {
         let chain = client.environment();
         let random_account_id = client.random_account_id()?;
 
-        todo!()
-        // let msg = Any {
-        //     type_url: MsgExecuteContract::TYPE_URL.to_owned(),
-        //     value: MsgExecuteContract {
-        //         sender: chain.sender_addr().to_string(),
-        //         contract: account.address()?.to_string(),
-        //         msg: to_json_vec(&abstract_app::std::account::ExecuteMsg::CreateSubAccount {
-        //             name: Some("deep-adventurous-afternoon".to_owned()),
-        //             description: None,
-        //             link: None,
-        //             namespace: None,
-        //             install_modules: vec![
-        //                 ModuleInstallConfig::new(
-        //                     ModuleInfo::from_id(
-        //                         DEX_ADAPTER_ID,
-        //                         ModuleVersion::Version(
-        //                             abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
-        //                         ),
-        //                     )?,
-        //                     None,
-        //                 ),
-        //                 ModuleInstallConfig::new(
-        //                     ModuleInfo::from_id(
-        //                         APP_ID,
-        //                         ModuleVersion::Version(APP_VERSION.to_owned()),
-        //                     )?,
-        //                     Some(to_json_binary(&init_msg)?),
-        //                 ),
-        //             ],
-        //             account_id: Some(random_account_id),
-        //         })?,
-        //         funds: vec![],
-        //     }
-        //     .to_proto_bytes(),
-        // };
-        // Ok(msg)
+        let msg = Any {
+            type_url: MsgExecuteContract::TYPE_URL.to_owned(),
+            value: MsgExecuteContract {
+                sender: chain.sender_addr().to_string(),
+                contract: account.address()?.to_string(),
+                msg: to_json_vec(
+                    &abstract_app::std::account::ExecuteMsg::<Empty>::CreateSubAccount {
+                        name: Some("deep-adventurous-afternoon".to_owned()),
+                        description: None,
+                        link: None,
+                        namespace: None,
+                        install_modules: vec![
+                            ModuleInstallConfig::new(
+                                ModuleInfo::from_id(
+                                    DEX_ADAPTER_ID,
+                                    ModuleVersion::Version(
+                                        abstract_dex_adapter::contract::CONTRACT_VERSION.to_owned(),
+                                    ),
+                                )?,
+                                None,
+                            ),
+                            ModuleInstallConfig::new(
+                                ModuleInfo::from_id(
+                                    APP_ID,
+                                    ModuleVersion::Version(APP_VERSION.to_owned()),
+                                )?,
+                                Some(to_json_binary(&init_msg)?),
+                            ),
+                        ],
+                        account_id: Some(random_account_id),
+                    },
+                )?,
+                funds: vec![],
+            }
+            .to_proto_bytes(),
+        };
+        Ok(msg)
     }
 }

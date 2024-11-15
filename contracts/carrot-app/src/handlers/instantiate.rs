@@ -32,7 +32,7 @@ pub fn instantiate_handler(
         .try_into()?;
 
     // We query the ANS for useful information on the tokens and pool
-    let ans = app.name_service(deps.as_ref(), &env);
+    let ans = app.name_service(deps.as_ref());
     // ANS Asset entries to indentify the assets inside Abstract
     let asset_entries = ans.query(&vec![
         AssetInfo::Native(pool.token0.clone()),

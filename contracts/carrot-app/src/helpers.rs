@@ -1,6 +1,6 @@
 use abstract_app::sdk::Resolve;
 use abstract_app::{objects::AssetEntry, traits::AbstractNameService};
-use cosmwasm_std::{Addr, Deps, Env, MessageInfo, Uint128};
+use cosmwasm_std::{Addr, Deps, MessageInfo, Uint128};
 
 use crate::{
     contract::{App, AppResult},
@@ -16,14 +16,8 @@ pub fn get_user(deps: Deps, app: &App) -> AppResult<Addr> {
         .map(|admin| deps.api.addr_validate(&admin))??)
 }
 
-pub fn get_balance(
-    a: AssetEntry,
-    deps: Deps,
-    env: &Env,
-    address: Addr,
-    app: &App,
-) -> AppResult<Uint128> {
-    let denom = a.resolve(&deps.querier, &app.ans_host(deps, env)?)?;
+pub fn get_balance(a: AssetEntry, deps: Deps, address: Addr, app: &App) -> AppResult<Uint128> {
+    let denom = a.resolve(&deps.querier, &app.ans_host(deps)?)?;
     let user_gas_balance = denom.query_balance(&deps.querier, address.clone())?;
     Ok(user_gas_balance)
 }

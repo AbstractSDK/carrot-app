@@ -1,6 +1,6 @@
 [package]
 name = "carrot-app"
-version = "0.5.1"
+version = "0.6.0"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
   "Adair <adair@abstract.money>",
@@ -44,7 +44,8 @@ cw-asset = { workspace = true }
 
 abstract-app = { workspace = true, features = ["stargate"] }
 # Dependencies for interface
-abstract-dex-adapter = { workspace = true, features = ["osmosis"] }
+abstract-dex-adapter = { workspace = true, features = [
+], default-features = false }
 cw-orch = { workspace = true, optional = true }
 
 osmosis-std = { version = "0.26.0" }
@@ -52,7 +53,6 @@ prost = { version = "0.13.1" }
 
 [dev-dependencies]
 abstract-interface = { workspace = true, features = ["daemon"] }
-bip32 = "0.5.2"
 
 prost-types = { version = "0.13.1" }
 log = { version = "0.4.20" }
@@ -62,6 +62,6 @@ abstract-app = { workspace = true, features = ["test-utils", "stargate"] }
 semver = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
-cw-orch = { workspace = true }
+cw-orch = { workspace = true, features = ["daemon"] }
 cw-orch-osmosis-test-tube = { workspace = true }
 clap = { version = "4.3.7", features = ["derive"] }
