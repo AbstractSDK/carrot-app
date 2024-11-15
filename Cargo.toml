@@ -4,13 +4,13 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-cw-orch = "0.26.0"
-abstract-app = { version = "0.24.1-beta.2" }
-abstract-adapter = { version = "0.24.1-beta.2" }
-abstract-interface = { version = "0.24.1-beta.2" }
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-client = { version = "0.24.1-beta.2" }
+cw-orch = { version = "0.27.0" }
+abstract-app = { version = "0.24.1" }
+abstract-adapter = { version = "0.24.1" }
+abstract-interface = { version = "0.24.1" }
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "main", default-features = false }
+abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "main" }
+abstract-client = { version = "0.24.1" }
 cw-asset = { version = "4.0" }
 cw-orch-osmosis-test-tube = { version = "0.4.0" }
 
@@ -26,17 +26,13 @@ panic = 'abort'
 incremental = false
 
 [patch.crates-io]
-abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-client = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-std = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-# abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }
-# abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "buckram/update-osmosis-tests" }     # Replace to tag tag = "v0.23.0-dex-adapter" }
-
-cw-orch-osmosis-test-tube = { git = "https://github.com/AbstractSDK/cw-orchestrator.git", branch = "buckram/revive-osmosis-test-tube" }
-cw-orch-core = { git = "https://github.com/AbstractSDK/cw-orchestrator.git", branch = "buckram/revive-osmosis-test-tube" }
-cw-orch-traits = { git = "https://github.com/AbstractSDK/cw-orchestrator.git", branch = "buckram/revive-osmosis-test-tube" }
+abstract-app = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-interface = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-client = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-dex-standard = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-std = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-sdk = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+abstract-adapter-utils = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+# abstract-osmosis-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" }
+# abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", branch = "artifacts/0.24.x" } # Replace to tag tag = "v0.25.0" }

@@ -9,7 +9,9 @@ use crate::{
 };
 
 pub fn create_position_reply(deps: DepsMut, env: Env, app: App, reply: Reply) -> AppResult {
-    let SubMsgResult::Ok(SubMsgResponse { data: Some(b), .. }) = reply.result else {
+    #[allow(deprecated)]
+    let SubMsgResult::Ok(SubMsgResponse { data: Some(b), .. }) = reply.result
+    else {
         return Err(AppError::Std(StdError::generic_err(
             "Failed to create position",
         )));

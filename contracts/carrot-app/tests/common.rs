@@ -1,14 +1,13 @@
 use std::iter;
-use std::rc::Rc;
 
 use abstract_app::objects::module::ModuleInfo;
+use abstract_app::objects::namespace::ABSTRACT_NAMESPACE;
 use abstract_app::std::{
     account::{self, ModuleInstallConfig},
     objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
 };
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_dex_adapter::DEX_ADAPTER_ID;
-use abstract_interface::Abstract;
 use carrot_app::contract::APP_ID;
 use carrot_app::msg::{AppInstantiateMsg, CreatePositionMessage};
 use carrot_app::state::AutocompoundRewardsConfig;
@@ -24,11 +23,10 @@ use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::{
         MsgCollectSpreadRewards, PoolRecord,
     },
 };
-use cw_orch_osmosis_test_tube::osmosis_test_tube::Account;
 use cw_orch_osmosis_test_tube::osmosis_test_tube::{
     osmosis_std::types::{
         cosmos::{
-            authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
+            authz::v1beta1::{GenericAuthorization, Grant, MsgGrant},
             base::v1beta1,
         },
         osmosis::{
@@ -102,12 +100,14 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                 },
             ),
         ])
-        .build(chain.sender().clone())?;
+        .build()?;
 
     // We deploy the carrot_app
     let publisher = client
-        .publisher_builder(Namespace::new("abstract")?)
-        .build()?;
+        .fetch_or_build_account(Namespace::new(ABSTRACT_NAMESPACE)?, |builder| {
+            builder.namespace(Namespace::new(ABSTRACT_NAMESPACE).unwrap())
+        })?
+        .publisher()?;
     // The dex adapter
     let dex_adapter = publisher
         .publish_adapter::<_, abstract_dex_adapter::interface::DexAdapter<Chain>>(
@@ -168,7 +168,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
             .to_proto_bytes(),
         };
         msgs.push(create_sub_account_message);
-        let _ = chain.commit_any::<MsgGrantResponse>(msgs, None)?;
+        let _ = chain.commit_any(msgs, None)?;
 
         // Now get Application struct
         let account = client.account_from(AccountId::local(random_account_id))?;
@@ -319,18 +319,7 @@ pub fn setup_test_tube(
     Application<OsmosisTestTube, carrot_app::AppInterface<OsmosisTestTube>>,
 )> {
     let _ = env_logger::builder().is_test(true).try_init();
-    let mut chain = OsmosisTestTube::new(vec![]);
-
-    let seed = Abstract::<OsmosisTestTube>::mock_mnemonic().to_seed("");
-    let derive_path = Abstract::<OsmosisTestTube>::mock_derive_path(None);
-    let signing_key = cw_orch_osmosis_test_tube::osmosis_test_tube::cosmrs::crypto::secp256k1::SigningKey::derive_from_path(seed, &derive_path.parse().unwrap()).unwrap();
-    let signing_account = cw_orch_osmosis_test_tube::osmosis_test_tube::SigningAccount::new(
-        chain.sender.prefix().to_string(),
-        signing_key,
-        chain.sender.fee_setting().clone(),
-    );
-    chain.set_sender(Rc::new(signing_account));
-    chain.add_balance(&chain.sender_addr(), coins(LOTS, GAS_DENOM))?;
+    let chain = OsmosisTestTube::new(coins(LOTS, GAS_DENOM));
 
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
@@ -359,7 +348,7 @@ pub fn give_authorizations_msgs<Chain: CwEnv>(
     client: &AbstractClient<Chain>,
     savings_app_addr: impl Into<String>,
 ) -> Result<Vec<Any>, anyhow::Error> {
-    let dex_fee_account = client.account_from(AccountId::local(0))?;
+    let dex_fee_account = client.fetch_account(AccountId::local(0))?;
     let dex_fee_addr = dex_fee_account.address()?.to_string();
     let chain = client.environment().clone();
 
@@ -432,9 +421,7 @@ pub fn give_authorizations<Chain: CwEnv + Stargate>(
     savings_app_addr: impl Into<String>,
 ) -> Result<(), anyhow::Error> {
     let msgs = give_authorizations_msgs(client, savings_app_addr)?;
-    client
-        .environment()
-        .commit_any::<MsgGrantResponse>(msgs, None)?;
+    client.environment().commit_any(msgs, None)?;
     Ok(())
 }
 

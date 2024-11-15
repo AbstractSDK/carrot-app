@@ -395,7 +395,7 @@ mod utils {
     ) -> anyhow::Result<bool> {
         let daemon = abstr.environment();
 
-        let account = abstr.account_from(AccountSource::App(Addr::unchecked(contract_addr)))?;
+        let account = abstr.fetch_account(AccountSource::App(Addr::unchecked(contract_addr)))?;
         let granter = account.owner()?;
 
         // Check if authz is indeed given

@@ -47,7 +47,6 @@ pub fn execute_handler(
             autocompound_rewards_config,
         } => update_config(
             deps,
-            env,
             app,
             autocompound_cooldown_seconds,
             autocompound_rewards_config,
@@ -79,7 +78,6 @@ pub fn execute_handler(
 
 fn update_config(
     deps: DepsMut,
-    env: Env,
     app: App,
     autocompound_cooldown_seconds: Option<Uint64>,
     autocompound_rewards_config: Option<AutocompoundRewardsConfig>,
@@ -88,7 +86,7 @@ fn update_config(
 
     if let Some(new_rewards_config) = autocompound_rewards_config {
         // Validate rewards config first
-        let ans = app.name_service(deps.as_ref(), &env);
+        let ans = app.name_service(deps.as_ref());
         let asset_pairing_resp: Vec<abstract_app::std::ans_host::AssetPairingMapEntry> = ans
             .pool_list(
                 Some(abstract_app::std::ans_host::AssetPairingFilter {
@@ -527,7 +525,7 @@ pub fn autocompound_executor_rewards(
     // Get user balance of gas denom
     let gas_denom = rewards_config
         .gas_asset
-        .resolve(&deps.querier, &app.ans_host(deps, env)?)?;
+        .resolve(&deps.querier, &app.ans_host(deps)?)?;
     let user_gas_balance = gas_denom.query_balance(&deps.querier, user.clone())?;
 
     let mut rewards_messages = vec![];
@@ -545,13 +543,8 @@ pub fn autocompound_executor_rewards(
         )?;
 
         // Get user balance of swap denom
-        let user_swap_balance = get_balance(
-            rewards_config.swap_asset.clone(),
-            deps,
-            env,
-            user.clone(),
-            app,
-        )?;
+        let user_swap_balance =
+            get_balance(rewards_config.swap_asset.clone(), deps, user.clone(), app)?;
 
         // Swap as much as available if not enough for max_gas_balance
         let swap_amount = simulate_swap_response.return_amount.min(user_swap_balance);
