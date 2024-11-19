@@ -1,6 +1,6 @@
-use abstract_app::abstract_sdk::AbstractSdkError;
+use abstract_app::sdk::AbstractSdkError;
 use abstract_app::AppError as AbstractAppError;
-use abstract_app::{abstract_core::AbstractError, objects::ans_host::AnsHostError};
+use abstract_app::{objects::ans_host::AnsHostError, std::AbstractError};
 use cosmwasm_std::{Coin, ConversionOverflowError, Decimal, StdError};
 use cw_asset::{AssetError, AssetInfo};
 use cw_controllers::AdminError;
