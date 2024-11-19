@@ -8,7 +8,7 @@ cw-orch = "0.24.0"
 abstract-app = { version = "0.23.0" }
 abstract-interface = { version = "0.23.0" }
 abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.23.0-dex-adapter" }
-abstract-client = { version = "0.23.0" }
+abstract-client = { version = "0.24.2" }
 cw-asset = { version = "3.0" }
 
 [profile.release]
