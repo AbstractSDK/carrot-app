@@ -1,5 +1,5 @@
-use abstract_app::abstract_core::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
-use abstract_app::abstract_sdk::{features::AbstractNameService, AbstractResponse};
+use abstract_app::sdk::{features::AbstractNameService, AbstractResponse};
+use abstract_app::std::ans_host::{AssetPairingFilter, AssetPairingMapEntry};
 use cosmwasm_std::{DepsMut, Env, MessageInfo};
 use cw_asset::AssetInfo;
 use osmosis_std::types::osmosis::{

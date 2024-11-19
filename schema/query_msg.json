@@ -34,6 +34,7 @@
       "description": "App query messages",
       "oneOf": [
         {
+          "description": "Get the config of the carrot app",
           "type": "object",
           "required": [
             "config"
@@ -47,6 +48,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Get the balance and liquidity of the position",
           "type": "object",
           "required": [
             "balance"
@@ -60,6 +62,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Get the position id",
           "type": "object",
           "required": [
             "position"

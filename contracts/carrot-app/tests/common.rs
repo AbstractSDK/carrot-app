@@ -1,43 +1,43 @@
 use std::iter;
 
-use abstract_app::abstract_core::objects::{
-    pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType,
-};
 use abstract_app::objects::module::ModuleInfo;
+use abstract_app::std::{
+    manager::{self, ModuleInstallConfig},
+    objects::{pool_id::PoolAddressBase, AccountId, AssetEntry, PoolMetadata, PoolType},
+};
 use abstract_client::{AbstractClient, Application, Environment, Namespace};
 use abstract_dex_adapter::DEX_ADAPTER_ID;
-use abstract_sdk::core::manager::{self, ModuleInstallConfig};
 use carrot_app::contract::APP_ID;
 use carrot_app::msg::{AppInstantiateMsg, CreatePositionMessage};
 use carrot_app::state::AutocompoundRewardsConfig;
 use cosmwasm_std::{coin, coins, to_json_binary, to_json_vec, Decimal, Uint128, Uint64};
 use cw_asset::AssetInfoUnchecked;
-use cw_orch::osmosis_test_tube::osmosis_test_tube::Gamm;
-use cw_orch::{
-    anyhow,
-    osmosis_test_tube::osmosis_test_tube::{
-        osmosis_std::types::{
-            cosmos::{
-                authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
-                base::v1beta1,
-            },
-            osmosis::{
-                concentratedliquidity::v1beta1::{
-                    MsgCreatePosition, MsgWithdrawPosition, Pool, PoolsRequest,
-                },
-                gamm::v1beta1::MsgSwapExactAmountIn,
-            },
-        },
-        ConcentratedLiquidity, GovWithAppAccess, Module,
+use cw_orch::anyhow;
+use cw_orch::prelude::*;
+use cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::{
+    cosmos::bank::v1beta1::SendAuthorization,
+    cosmwasm::wasm::v1::MsgExecuteContract,
+    osmosis::concentratedliquidity::v1beta1::{
+        CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
+        MsgCollectSpreadRewards, PoolRecord,
     },
-    prelude::*,
 };
-use osmosis_std::types::cosmos::bank::v1beta1::SendAuthorization;
-use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::{
-    CreateConcentratedLiquidityPoolsProposal, MsgAddToPosition, MsgCollectIncentives,
-    MsgCollectSpreadRewards, PoolRecord,
+use cw_orch_osmosis_test_tube::osmosis_test_tube::{
+    osmosis_std::types::{
+        cosmos::{
+            authz::v1beta1::{GenericAuthorization, Grant, MsgGrant, MsgGrantResponse},
+            base::v1beta1,
+        },
+        osmosis::{
+            concentratedliquidity::v1beta1::{
+                MsgCreatePosition, MsgWithdrawPosition, Pool, PoolsRequest,
+            },
+            gamm::v1beta1::MsgSwapExactAmountIn,
+        },
+    },
+    ConcentratedLiquidity, Gamm, GovWithAppAccess, Module,
 };
+use cw_orch_osmosis_test_tube::OsmosisTestTube;
 use prost::Message;
 use prost_types::Any;
 
@@ -132,13 +132,11 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     };
     // If we create position on instantiate - give auth
     let carrot_app = if create_position_on_init {
-        // TODO: We can't get account factory or module factory objects from the client.
-        // get Account id of the upcoming sub-account
-        let next_local_account_id = client.next_local_account_id()?;
+        let random_account_id = client.random_account_id()?;
 
         let savings_app_addr = client
             .module_instantiate2_address::<carrot_app::AppInterface<Chain>>(&AccountId::local(
-                next_local_account_id,
+                random_account_id,
             ))?;
 
         // Give all authzs and create subaccount with app in single tx
@@ -146,7 +144,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         let create_sub_account_message = Any {
             type_url: MsgExecuteContract::TYPE_URL.to_owned(),
             value: MsgExecuteContract {
-                sender: chain.sender().to_string(),
+                sender: chain.sender_addr().to_string(),
                 contract: publisher.account().manager()?.to_string(),
                 msg: to_json_vec(&manager::ExecuteMsg::CreateSubAccount {
                     name: "bob".to_owned(),
@@ -161,7 +159,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
                             Some(to_json_binary(&init_msg)?),
                         ),
                     ],
-                    account_id: Some(next_local_account_id),
+                    account_id: Some(random_account_id),
                 })?,
                 funds: vec![],
             }
@@ -171,7 +169,7 @@ pub fn deploy<Chain: CwEnv + Stargate>(
         let _ = chain.commit_any::<MsgGrantResponse>(msgs, None)?;
 
         // Now get Application struct
-        let account = client.account_from(AccountId::local(next_local_account_id))?;
+        let account = client.account_from(AccountId::local(random_account_id))?;
         account.application::<carrot_app::AppInterface<Chain>>()?
     } else {
         // We install the carrot-app
@@ -187,15 +185,13 @@ pub fn deploy<Chain: CwEnv + Stargate>(
     };
     // We update authorized addresses on the adapter for the app
     dex_adapter.execute(
-        &abstract_dex_adapter::msg::ExecuteMsg::Base(
-            abstract_app::abstract_core::adapter::BaseExecuteMsg {
-                proxy_address: Some(carrot_app.account().proxy()?.to_string()),
-                msg: abstract_app::abstract_core::adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
-                    to_add: vec![carrot_app.addr_str()?],
-                    to_remove: vec![],
-                },
+        &abstract_dex_adapter::msg::ExecuteMsg::Base(abstract_app::std::adapter::BaseExecuteMsg {
+            proxy_address: Some(carrot_app.account().proxy()?.to_string()),
+            msg: abstract_app::std::adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
+                to_add: vec![carrot_app.addr_str()?],
+                to_remove: vec![],
             },
-        ),
+        }),
         None,
     )?;
 
@@ -226,8 +222,8 @@ pub fn create_position<Chain: CwEnv>(
 }
 
 pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
-    chain.add_balance(chain.sender(), coins(LOTS, USDC_DENOM))?;
-    chain.add_balance(chain.sender(), coins(LOTS, USDT_DENOM))?;
+    chain.add_balance(chain.sender_addr(), coins(LOTS, USDC_DENOM))?;
+    chain.add_balance(chain.sender_addr(), coins(LOTS, USDT_DENOM))?;
 
     let asset0 = USDT_DENOM.to_owned();
     let asset1 = USDC_DENOM.to_owned();
@@ -235,7 +231,7 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
     // let create_pool_response = chain.commit_any::<MsgCreateConcentratedPoolResponse>(
     //     vec![Any {
     //         value: MsgCreateConcentratedPool {
-    //             sender: chain.sender().to_string(),
+    //             sender: chain.sender_addr().to_string(),
     //             denom0: USDT.to_owned(),
     //             denom1: USDC.to_owned(),
     //             tick_spacing: TICK_SPACING,
@@ -260,7 +256,7 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
                     spread_factor: Decimal::percent(SPREAD_FACTOR).atomics().to_string(),
                 }],
             },
-            chain.sender().to_string(),
+            chain.sender_addr().to_string(),
             &chain.sender,
         )
         .unwrap();
@@ -274,7 +270,7 @@ pub fn create_pool(mut chain: OsmosisTestTube) -> anyhow::Result<(u64, u64)> {
         .create_position(
             MsgCreatePosition {
                 pool_id: pool.id,
-                sender: chain.sender().to_string(),
+                sender: chain.sender_addr().to_string(),
                 lower_tick: INITIAL_LOWER_TICK,
                 upper_tick: INITIAL_UPPER_TICK,
                 tokens_provided: vec![
@@ -324,17 +320,15 @@ pub fn setup_test_tube(
     // We create a usdt-usdc pool
     let (pool_id, gas_pool_id) = create_pool(chain.clone())?;
 
-    let create_position_msg = create_position.then(||
-        // TODO: Requires instantiate2 to test it (we need to give authz authorization before instantiating)
-        CreatePositionMessage {
+    let create_position_msg = create_position.then(|| CreatePositionMessage {
         lower_tick: INITIAL_LOWER_TICK,
         upper_tick: INITIAL_UPPER_TICK,
         funds: coins(100_000, USDT_DENOM),
         asset0: coin(1_000_000, USDT_DENOM),
         asset1: coin(1_000_000, USDC_DENOM),
-            max_spread: None,
-            belief_price0: None,
-            belief_price1: None,
+        max_spread: None,
+        belief_price0: None,
+        belief_price1: None,
     });
     let carrot_app = deploy(chain.clone(), pool_id, gas_pool_id, create_position_msg)?;
 
@@ -364,25 +358,25 @@ pub fn give_authorizations_msgs<Chain: CwEnv + Stargate>(
     ]
     .map(ToOwned::to_owned);
     let savings_app_addr: String = savings_app_addr.into();
-    let granter = chain.sender().to_string();
+    let granter = chain.sender_addr().to_string();
     let grantee = savings_app_addr.clone();
 
     let dex_spend_limit = vec![
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+        cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: USDC_DENOM.to_owned(),
             amount: LOTS.to_string(),
         },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+        cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: USDT_DENOM.to_owned(),
             amount: LOTS.to_string(),
         },
-        cw_orch::osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
+        cw_orch_osmosis_test_tube::osmosis_test_tube::osmosis_std::types::cosmos::base::v1beta1::Coin {
             denom: REWARD_DENOM.to_owned(),
             amount: LOTS.to_string(),
         }];
     let dex_fee_authorization = Any {
         value: MsgGrant {
-            granter: chain.sender().to_string(),
+            granter: chain.sender_addr().to_string(),
             grantee: grantee.clone(),
             grant: Some(Grant {
                 authorization: Some(
@@ -430,8 +424,14 @@ pub fn give_authorizations<Chain: CwEnv + Stargate>(
 }
 
 pub mod incentives {
-    use cw_orch::osmosis_test_tube::osmosis_test_tube::{fn_execute, Module, Runner};
-    use osmosis_std::types::osmosis::incentives::{MsgCreateGauge, MsgCreateGaugeResponse};
+    use cw_orch_osmosis_test_tube::osmosis_test_tube::{
+        fn_execute, fn_query,
+        osmosis_std::types::osmosis::incentives::{
+            MsgCreateGauge, MsgCreateGaugeResponse, QueryLockableDurationsRequest,
+            QueryLockableDurationsResponse,
+        },
+        Module, Runner,
+    };
 
     #[allow(unused)]
     pub struct Incentives<'a, R: Runner<'a>> {
@@ -452,6 +452,10 @@ pub mod incentives {
         fn_execute! {
             // (pub)? <fn_name>: <request_type> => <response_type>
             pub create_gauge: MsgCreateGauge => MsgCreateGaugeResponse
+        }
+
+        fn_query! {
+            pub query_lockable_durations ["/osmosis.incentives.Query/LockableDurations"]: QueryLockableDurationsRequest => QueryLockableDurationsResponse
         }
     }
 }

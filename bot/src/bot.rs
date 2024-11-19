@@ -5,6 +5,7 @@ use carrot_app::{
     },
     AppInterface,
 };
+use cw_asset::AssetInfo;
 use semver::VersionReq;
 
 use crate::Metrics;
@@ -35,19 +36,20 @@ use osmosis_std::types::{
 };
 use prometheus::{labels, Registry};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
     time::{Duration, SystemTime},
 };
 use tonic::transport::Channel;
 
 use abstract_app::{
-    abstract_core::version_control::ModuleFilter,
     abstract_interface::VCQueryFns,
     objects::module::{ModuleInfo, ModuleStatus},
+    std::{ans_host, version_control::ModuleFilter},
 };
 
-const VERSION_REQ: &str = ">=0.3";
+const LAST_INCOMPATIBLE_VERSION: &str = "0.3.1";
+const VERSION_REQ: &str = ">=0.4, <0.6";
 
 const AUTHORIZATION_URLS: &[&str] = &[
     MsgCreatePosition::TYPE_URL,
@@ -57,13 +59,8 @@ const AUTHORIZATION_URLS: &[&str] = &[
     MsgCollectIncentives::TYPE_URL,
     MsgCollectSpreadRewards::TYPE_URL,
 ];
-// TODO: Get these values from ans
-const USDT_OSMOSIS_DENOM: &str =
-    "ibc/4ABBEF4C8926DDDB320AE5188CFD63267ABBCEFC0583E4AE05D6E5AA2401DDAB";
-const USDC_OSMOSIS_DENOM: &str =
-    "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
-const USDC_OSMOSIS_AXL_DENOM: &str =
-    "ibc/D189335C6E4A68B513C10AB227BF1C1D38C746766278BA3EEB4FB14124F1D858";
+
+const USD_ASSETS: [&str; 3] = ["eth>axelar>usdc", "noble>usdc", "kava>usdt"];
 
 pub struct Bot {
     pub daemon: Daemon,
@@ -76,6 +73,8 @@ pub struct Bot {
     pub autocompound_cooldown: Duration,
     // metrics
     metrics: Metrics,
+    // Resolved assets and their value
+    assets_value: HashMap<AssetInfo, Uint128>,
 }
 
 #[derive(Eq, Hash, PartialEq, Clone)]
@@ -84,9 +83,9 @@ struct CarrotInstance {
     version: String,
 }
 impl CarrotInstance {
-    fn new(address: Addr, version: &str) -> Self {
+    fn new(address: impl Into<String>, version: &str) -> Self {
         Self {
-            address,
+            address: Addr::unchecked(address),
             version: version.to_string(),
         }
     }
@@ -138,34 +137,47 @@ impl Bot {
             contract_instances_to_ac: Default::default(),
             autocompound_cooldown,
             metrics,
+            assets_value: Default::default(),
         }
     }
 
-    // Fetches contracts if fetch cooldown passed
-    pub fn fetch_contracts(&mut self) -> anyhow::Result<()> {
+    // Fetches contracts and assets if fetch cooldown passed
+    pub fn fetch_contracts_and_assets(&mut self) -> anyhow::Result<()> {
         // Don't fetch if not ready
         let ready_time = self.last_fetch + self.fetch_contracts_cooldown;
         if SystemTime::now() < ready_time {
             return Ok(());
         }
 
+        log!(Level::Info, "Fetching contracts and assets");
+
         let daemon = &self.daemon;
 
         let abstr = AbstractClient::new(self.daemon.clone())?;
+        // Refresh asset values
+        log!(Level::Debug, "Fetching assets");
+        self.assets_value = {
+            let names = USD_ASSETS
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect::<Vec<String>>();
+            let assets_response: ans_host::AssetsResponse = abstr
+                .name_service()
+                .query(&ans_host::QueryMsg::Assets { names })?;
+            assets_response
+                .assets
+                .into_iter()
+                // For now we just assume 1 usd asset == 1 usd
+                .map(|(_, info)| (info, Uint128::one()))
+                .collect()
+        };
+
         let mut contract_instances_to_autocompound: HashSet<(String, CarrotInstance)> =
             HashSet::new();
+        let mut contract_instances_to_skip: HashSet<CarrotInstance> = HashSet::new();
 
         log!(Level::Debug, "Fetching modules");
-        let saving_modules = abstr.version_control().module_list(
-            Some(ModuleFilter {
-                namespace: Some(self.module_info.namespace.to_string()),
-                name: Some(self.module_info.name.clone()),
-                version: None,
-                status: Some(ModuleStatus::Registered),
-            }),
-            None,
-            None,
-        )?;
+        let saving_modules = utils::carrot_module_list(&abstr, &self.module_info)?;
 
         let mut fetch_instances_count = 0;
 
@@ -173,22 +185,40 @@ impl Bot {
         log!(Level::Debug, "version requirement: {ver_req}");
         for app_info in saving_modules.modules {
             let version = app_info.module.info.version.to_string();
+            // Completely ignore outdated carrots
+            if !semver::Version::parse(&version)
+                .map(|v| ver_req.matches(&v))
+                .unwrap_or(false)
+            {
+                continue;
+            }
 
             let code_id = app_info.module.reference.unwrap_app()?;
 
-            let mut contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
+            let contract_addrs = daemon.rt_handle.block_on(utils::fetch_instances(
                 daemon.channel(),
                 code_id,
                 &version,
             ))?;
             fetch_instances_count += contract_addrs.len();
 
+            // Need to reset contract balances in case some of the contracts migrated
+            self.metrics.contract_balance.reset();
             for contract_addr in contract_addrs.iter() {
                 let address = Addr::unchecked(contract_addr.clone());
-                let balance_result = utils::get_carrot_balance(daemon.clone(), &address);
+                let balance_result =
+                    utils::get_carrot_balance(daemon.clone(), &self.assets_value, &address);
                 let balance = match balance_result {
-                    Ok(value) => value,
-                    Err(_) => Uint128::zero(), // Handle potential errors
+                    Ok(value) => {
+                        if !value.is_zero() {
+                            log!(Level::Info, "contract: {contract_addr} balance: {value}");
+                        }
+                        value
+                    }
+                    Err(e) => {
+                        log!(Level::Error, "contract: {contract_addr} err:{e:?}");
+                        Uint128::zero()
+                    }
                 };
 
                 // Update contract_balance GaugeVec with label
@@ -198,42 +228,42 @@ impl Bot {
                     .contract_balance
                     .with(&label)
                     .set(balance.u128().try_into().unwrap());
+
+                // Insert instances that are supposed to be autocompounded
+                if !balance.is_zero()
+                    && utils::has_authz_permission(&abstr, contract_addr).unwrap_or(false)
+                {
+                    contract_instances_to_autocompound.insert((
+                        app_info.module.info.id(),
+                        CarrotInstance::new(contract_addr, version.as_ref()),
+                    ));
+                } else {
+                    contract_instances_to_skip
+                        .insert(CarrotInstance::new(contract_addr, version.as_ref()));
+                }
             }
-
-            // Skip if version mismatches
-            if semver::Version::parse(&version)
-                .map(|v| !ver_req.matches(&v))
-                .unwrap_or(false)
-            {
-                continue;
-            }
-
-            // Only keep the contract addresses that have the required permissions
-            contract_addrs.retain(|address| {
-                utils::has_authz_permission(&abstr, address)
-                    // Don't include if queries fail.
-                    .unwrap_or_default()
-            });
-
-            // Add all the entries to the `contract_instances_to_check`
-            contract_instances_to_autocompound.extend(contract_addrs.into_iter().map(|addr| {
-                (
-                    app_info.module.info.id(),
-                    CarrotInstance::new(Addr::unchecked(addr), version.as_ref()),
-                )
-            }));
         }
 
+        self.contract_instances_to_ac = contract_instances_to_autocompound;
+
+        log!(
+            Level::Info,
+            "Skipping instances: {}",
+            contract_instances_to_skip
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()
+                .join(",")
+        );
         // Metrics
         self.metrics.fetch_count.inc();
         self.metrics
             .fetch_instances_count
             .set(fetch_instances_count as i64);
-        self.contract_instances_to_ac
-            .clone_from(&contract_instances_to_autocompound);
         self.metrics
             .contract_instances_to_autocompound
-            .set(contract_instances_to_autocompound.len() as i64);
+            .set(self.contract_instances_to_ac.len() as i64);
+
         Ok(())
     }
 
@@ -300,10 +330,25 @@ fn autocompound_instance(
 }
 
 mod utils {
+    use abstract_app::std::version_control::ModulesListResponse;
+    use cosmos_sdk_proto::{
+        cosmos::base::query::v1beta1::{PageRequest, PageResponse},
+        cosmwasm::wasm::v1::QueryContractsByCodeResponse,
+    };
     use cw_asset::AssetBase;
 
     use super::*;
     const MIN_REWARD: (&str, Uint128) = ("uosmo", Uint128::new(100_000));
+
+    pub fn next_page_request(page_response: PageResponse) -> PageRequest {
+        PageRequest {
+            key: page_response.next_key,
+            offset: 0,
+            limit: 0,
+            count_total: false,
+            reverse: false,
+        }
+    }
 
     /// Get the contract instances of a given code_id
     pub async fn fetch_instances(
@@ -312,17 +357,35 @@ mod utils {
         version: &str,
     ) -> anyhow::Result<Vec<String>> {
         let mut cw_querier = QueryClient::new(channel);
-        let contract_addrs = cw_querier
-            .contracts_by_code(QueryContractsByCodeRequest {
-                code_id,
-                // TODO: pagination
-                pagination: None,
-            })
-            .await?
-            .into_inner()
-            .contracts;
-        log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
-        anyhow::Ok(contract_addrs)
+
+        let mut contract_addrs = vec![];
+        let mut pagination = None;
+
+        loop {
+            let QueryContractsByCodeResponse {
+                mut contracts,
+                pagination: next_pagination,
+            } = cw_querier
+                .contracts_by_code(QueryContractsByCodeRequest {
+                    code_id,
+                    pagination,
+                })
+                .await?
+                .into_inner();
+
+            contract_addrs.append(&mut contracts);
+            match next_pagination {
+                // `next_key` can still be empty, meaning there are no next key
+                Some(page_response) if !page_response.next_key.is_empty() => {
+                    pagination = Some(next_page_request(page_response))
+                }
+                // Done with pagination can return out all of the contracts
+                _ => {
+                    log!(Level::Info, "Savings addrs({version}): {contract_addrs:?}");
+                    break anyhow::Ok(contract_addrs);
+                }
+            }
+        }
     }
 
     /// Finds the account owner and checks if the contract has authz permissions on it.
@@ -386,45 +449,29 @@ mod utils {
     }
 
     /// gets the balance managed by an instance
-    pub fn get_carrot_balance(daemon: Daemon, contract_addr: &Addr) -> anyhow::Result<Uint128> {
+    pub fn get_carrot_balance(
+        daemon: Daemon,
+        assets_values: &HashMap<AssetInfo, Uint128>,
+        contract_addr: &Addr,
+    ) -> anyhow::Result<Uint128> {
         let response: carrot_app::msg::AssetsBalanceResponse =
             daemon.query(&QueryMsg::from(AppQueryMsg::Balance {}), contract_addr)?;
 
         let balance = Balance::new(
             response
                 .balances
-                .iter()
-                .filter(|c| {
-                    c.denom.eq(USDT_OSMOSIS_DENOM)
-                        || c.denom.eq(USDC_OSMOSIS_DENOM)
-                        || c.denom.eq(USDC_OSMOSIS_AXL_DENOM)
-                })
-                .map(|c| match c.denom.as_str() {
-                    USDT_OSMOSIS_DENOM => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::one(),
-                    },
-                    USDC_OSMOSIS_DENOM => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::one(),
-                    },
-                    USDC_OSMOSIS_AXL_DENOM => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::one(),
-                    },
-                    _ => ValuedCoin {
-                        coin: c.clone(),
-                        usd_value: Uint128::zero(),
-                    },
+                .into_iter()
+                .map(|coin| ValuedCoin {
+                    usd_value: assets_values
+                        .get(&AssetInfo::native(coin.denom.clone()))
+                        .map(ToOwned::to_owned)
+                        .unwrap_or(Uint128::zero()),
+                    coin,
                 })
                 .collect(),
         );
         let balance = balance.calculate_usd_value();
 
-        log!(
-            Level::Info,
-            "contract: {contract_addr:?} balance: {balance:?}"
-        );
         Ok(balance)
     }
 
@@ -434,5 +481,40 @@ mod utils {
             _ => false,
         };
         gas_asset && rewards.amount >= MIN_REWARD.1
+    }
+
+    pub fn carrot_module_list(
+        abstr: &AbstractClient<Daemon>,
+        module_info: &ModuleInfo,
+    ) -> Result<ModulesListResponse, cw_orch::core::CwEnvError> {
+        let mut start_after = Some(ModuleInfo {
+            namespace: module_info.namespace.clone(),
+            name: module_info.name.clone(),
+            version: abstract_app::objects::module::ModuleVersion::Version(
+                LAST_INCOMPATIBLE_VERSION.to_owned(),
+            ),
+        });
+        let mut module_list = ModulesListResponse { modules: vec![] };
+        loop {
+            let saving_modules = abstr.version_control().module_list(
+                Some(ModuleFilter {
+                    namespace: Some(module_info.namespace.to_string()),
+                    name: Some(module_info.name.clone()),
+                    version: None,
+                    status: Some(ModuleStatus::Registered),
+                }),
+                None,
+                start_after,
+            )?;
+            if saving_modules.modules.is_empty() {
+                break;
+            }
+            start_after = saving_modules
+                .modules
+                .last()
+                .map(|mod_respose| mod_respose.module.info.clone());
+            module_list.modules.extend(saving_modules.modules);
+        }
+        Ok(module_list)
     }
 }

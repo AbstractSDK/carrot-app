@@ -7,7 +7,7 @@ spec:
   destination:
     namespace: carrot
     server: https://kubernetes.default.svc
-  project: carrot
+  project: default
   source:
     chart: carrot
     helm:

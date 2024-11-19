@@ -4,11 +4,11 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
-cw-orch = "0.20.1"
-abstract-app = { version = "0.21.0" }
-abstract-interface = { version = "0.21.0" }
-abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.21.0" }
-abstract-client = { version = "0.21.0" }
+cw-orch = "0.24.0"
+abstract-app = { version = "0.23.0" }
+abstract-interface = { version = "0.23.0" }
+abstract-dex-adapter = { git = "https://github.com/abstractsdk/abstract.git", tag = "v0.23.0-dex-adapter" }
+abstract-client = { version = "0.23.0" }
 cw-asset = { version = "3.0" }
 
 [profile.release]

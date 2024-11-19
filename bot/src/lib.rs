@@ -12,6 +12,7 @@ use carrot_app::contract::{APP_ID, APP_VERSION};
 use cw_orch::{
     anyhow,
     daemon::{networks::OSMOSIS_1, Daemon},
+    prelude::*,
     tokio::runtime::Runtime,
 };
 
@@ -21,17 +22,13 @@ use prometheus::Registry;
 pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     let rt = Runtime::new()?;
     let registry = Registry::new();
-    let mut chain_info = OSMOSIS_1;
-    let grpc_urls = if !bot_args.grps_urls.is_empty() {
-        bot_args.grps_urls.iter().map(String::as_ref).collect()
-    } else {
-        chain_info.grpc_urls.to_vec()
+    let mut chain_info: ChainInfoOwned = OSMOSIS_1.into();
+    if !bot_args.grps_urls.is_empty() {
+        chain_info.grpc_urls = bot_args.grps_urls;
     };
 
-    chain_info.grpc_urls = &grpc_urls;
-    let daemon = Daemon::builder()
+    let daemon = Daemon::builder(chain_info.clone())
         .handle(rt.handle())
-        .chain(chain_info.clone())
         .build()?;
 
     let module_info =
@@ -51,7 +48,7 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
     // Run long-running autocompound job.
     loop {
         // You can edit retries with CW_ORCH_MAX_TX_QUERY_RETRIES
-        bot.fetch_contracts()?;
+        bot.fetch_contracts_and_assets()?;
         bot.autocompound();
 
         // Drop connection
@@ -61,9 +58,8 @@ pub fn cron_main(bot_args: BotArgs) -> anyhow::Result<()> {
         std::thread::sleep(bot.autocompound_cooldown);
 
         // Reconnect
-        bot.daemon = Daemon::builder()
+        bot.daemon = Daemon::builder(chain_info.clone())
             .handle(rt.handle())
-            .chain(chain_info.clone())
             .build()?;
     }
 }
