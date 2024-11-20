@@ -27,7 +27,7 @@ jobs:
         uses: extractions/setup-just@v1
       # Test tube requires go
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ">=1.19.0"
       - name: generate artifacts
