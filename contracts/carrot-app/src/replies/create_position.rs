@@ -1,4 +1,4 @@
-use abstract_app::abstract_sdk::AbstractResponse;
+use abstract_app::sdk::AbstractResponse;
 use cosmwasm_std::{DepsMut, Env, Reply, StdError, SubMsgResponse, SubMsgResult};
 use osmosis_std::types::osmosis::concentratedliquidity::v1beta1::MsgCreatePositionResponse;
 

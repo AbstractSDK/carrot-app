@@ -1,6 +1,8 @@
-use abstract_app::objects::{AnsAsset, AssetEntry};
+use abstract_app::{
+    objects::{AnsAsset, AssetEntry},
+    sdk::AuthZInterface,
+};
 use abstract_dex_adapter::{msg::GenerateMessagesResponse, DexInterface};
-use abstract_sdk::AuthZInterface;
 use cosmwasm_std::{Coin, CosmosMsg, Decimal, Deps, Env, Uint128};
 use osmosis_std::cosmwasm_to_proto_coins;
 pub const DEFAULT_MAX_SPREAD: Decimal = Decimal::percent(20);
