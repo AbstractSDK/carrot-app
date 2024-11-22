@@ -59,7 +59,7 @@ fn query_compound_status(deps: Deps, env: Env, app: &App) -> AppResult<CompoundS
     } else {
         // check if can swap
         let rewards_config = config.autocompound_rewards_config;
-        let dex = app.ans_dex(deps, OSMOSIS.to_string());
+        let dex = app.ans_dex(deps, &env, OSMOSIS.to_string());
 
         // Reverse swap to see how many swap coins needed
         let required_gas_coins = reward.amount - user_gas_balance;
@@ -120,6 +120,7 @@ fn query_balance(deps: Deps, _app: &App) -> AppResult<AssetsBalanceResponse> {
 
 pub fn query_price(
     deps: Deps,
+    env: &Env,
     funds: &[Coin],
     app: &App,
     max_spread: Option<Decimal>,
@@ -154,7 +155,7 @@ pub fn query_price(
 
     // We take the biggest amount and simulate a swap for the corresponding asset
     let price = if amount0 > amount1 {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
+        let simulation_result = app.ans_dex(deps, env, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset0, amount0),
             config.pool_config.asset1,
         )?;
@@ -168,7 +169,7 @@ pub fn query_price(
         }
         price
     } else {
-        let simulation_result = app.ans_dex(deps, OSMOSIS.to_string()).simulate_swap(
+        let simulation_result = app.ans_dex(deps, env, OSMOSIS.to_string()).simulate_swap(
             AnsAsset::new(config.pool_config.asset1, amount1),
             config.pool_config.asset0,
         )?;

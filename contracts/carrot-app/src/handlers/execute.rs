@@ -128,7 +128,7 @@ fn create_position(
     app: App,
     create_position_msg: CreatePositionMessage,
 ) -> AppResult {
-    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
+    app.admin.assert_admin(deps.as_ref(), &env, &info.sender)?;
     // Check if there is already saved position
     if CarrotPosition::may_load(deps.as_ref())?.is_some() {
         return Err(AppError::PositionExists {});
@@ -156,7 +156,7 @@ fn deposit(
 ) -> AppResult {
     // Only the admin (manager contracts or account owner) + the smart contract can deposit
     app.admin
-        .assert_admin(deps.as_ref(), &info.sender)
+        .assert_admin(deps.as_ref(), &env, &info.sender)
         .or(assert_contract(&info, &env))?;
 
     let carrot_position = CarrotPosition::load(deps.as_ref())?;
@@ -208,7 +208,7 @@ fn withdraw(
     app: App,
 ) -> AppResult {
     // Only the authorized addresses (admin ?) can withdraw
-    app.admin.assert_admin(deps.as_ref(), &info.sender)?;
+    app.admin.assert_admin(deps.as_ref(), &env, &info.sender)?;
 
     let carrot_position = CarrotPosition::load(deps.as_ref())?;
     // Get app's user and set up authz.
@@ -324,7 +324,7 @@ fn autocompound(deps: DepsMut, env: Env, info: MessageInfo, app: App) -> AppResu
         .add_message(msg_deposit);
 
     // If called by non-admin and reward cooldown has ended, send rewards to the contract caller.
-    if !app.admin.is_admin(deps.as_ref(), &info.sender)? && compound_status.is_ready() {
+    if !app.admin.is_admin(deps.as_ref(), &env, &info.sender)? && compound_status.is_ready() {
         let executor_reward_messages = autocompound_executor_rewards(
             deps.as_ref(),
             &env,
@@ -533,7 +533,7 @@ pub fn autocompound_executor_rewards(
     // If not enough gas coins - swap for some amount
     if user_gas_balance < rewards_config.min_gas_balance {
         // Get asset entries
-        let dex = app.ans_dex(deps, OSMOSIS.to_string());
+        let dex = app.ans_dex(deps, env, OSMOSIS.to_string());
 
         // Do reverse swap to find approximate amount we need to swap
         let need_gas_coins = rewards_config.max_gas_balance - user_gas_balance;

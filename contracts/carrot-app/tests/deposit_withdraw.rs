@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::common::{create_position, setup_test_tube, USDC, USDC_DENOM, USDT, USDT_DENOM};
 use abstract_app::objects::AssetEntry;
-use abstract_interface::{Abstract, AbstractAccount};
+use abstract_interface::{Abstract, AccountI};
 use carrot_app::msg::{
     AppExecuteMsg, AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus,
     CreatePositionMessage, PositionResponse, SwapToAsset,
@@ -90,12 +90,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     let balance: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_withdraw = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -106,12 +106,12 @@ fn withdraw_position() -> anyhow::Result<()> {
 
     let balance_usdc_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_half_withdraw = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -122,12 +122,12 @@ fn withdraw_position() -> anyhow::Result<()> {
     carrot_app.withdraw(None, None)?;
     let balance_usdc_after_full_withdraw = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_full_withdraw = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -292,9 +292,9 @@ fn partial_withdraw_position_autoclaims() -> anyhow::Result<()> {
     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
     let abs = Abstract::load_from(chain.clone())?;
     let account_id = carrot_app.account().id()?;
-    let account = AbstractAccount::new(&abs, account_id);
+    let account = AccountI::load_from(&abs, account_id)?;
     chain.bank_send(
-        account.proxy.addr_str()?,
+        account.addr_str()?,
         vec![
             coin(200_000, USDC_DENOM.to_owned()),
             coin(200_000, USDT_DENOM.to_owned()),
@@ -352,9 +352,9 @@ fn manual_partial_withdraw_position_doesnt_autoclaim() -> anyhow::Result<()> {
     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
     let abs = Abstract::load_from(chain.clone())?;
     let account_id = carrot_app.account().id()?;
-    let account = AbstractAccount::new(&abs, account_id);
+    let account = AccountI::load_from(&abs, account_id)?;
     chain.bank_send(
-        account.proxy.addr_str()?,
+        account.addr_str()?,
         vec![
             coin(200_000, USDC_DENOM.to_owned()),
             coin(200_000, USDT_DENOM.to_owned()),
@@ -471,7 +471,7 @@ fn error_on_provided_funds() -> anyhow::Result<()> {
                 belief_price1: None,
             })
             .into(),
-            Some(&[coin(10, GAS_DENOM)]),
+            &[coin(10, GAS_DENOM)],
         )
         .expect_err("Should error when funds provided");
     Ok(())
@@ -500,10 +500,10 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
     {
         let asset0_balance_before = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
         let asset1_balance_before = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
 
         carrot_app.withdraw(
             Some(withdraw_liquidity_amount),
@@ -515,10 +515,10 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
 
         let asset0_balance_after = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
         let asset1_balance_after = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
 
         assert_eq!(asset0_balance_before, asset0_balance_after);
         assert!(
@@ -531,10 +531,10 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
     {
         let asset0_balance_before = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
         let asset1_balance_before = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
 
         carrot_app.withdraw(
             Some(withdraw_liquidity_amount),
@@ -546,10 +546,10 @@ fn withdraw_to_asset() -> anyhow::Result<()> {
 
         let asset0_balance_after = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?;
         let asset1_balance_after = chain
             .bank_querier()
-            .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
+            .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?;
 
         assert_eq!(asset1_balance_before, asset1_balance_after);
         assert!(

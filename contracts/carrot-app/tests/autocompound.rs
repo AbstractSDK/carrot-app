@@ -5,7 +5,7 @@ use crate::common::{
     create_position, setup_test_tube, DEX_NAME, GAS_DENOM, LOTS, REWARD_DENOM, USDC, USDC_DENOM,
     USDT, USDT_DENOM,
 };
-use abstract_app::abstract_interface::{Abstract, AbstractAccount};
+use abstract_app::abstract_interface::{Abstract, AccountI};
 use carrot_app::msg::{
     AppExecuteMsgFns, AppQueryMsgFns, AssetsBalanceResponse, CompoundStatus, CompoundStatusResponse,
 };
@@ -33,7 +33,7 @@ fn check_autocompound() -> anyhow::Result<()> {
 
     let mut chain = carrot_app.environment().clone();
     chain.add_balance(
-        chain.sender_addr(),
+        &chain.sender_addr(),
         coins(5_000_000, format!("gamm/pool/{pool_id}")),
     )?;
 
@@ -81,9 +81,9 @@ fn check_autocompound() -> anyhow::Result<()> {
     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
     let abs = Abstract::load_from(chain.clone())?;
     let account_id = carrot_app.account().id()?;
-    let account = AbstractAccount::new(&abs, account_id);
+    let account = AccountI::load_from(&abs, account_id)?;
     chain.bank_send(
-        account.proxy.addr_str()?,
+        account.addr_str()?,
         vec![
             coin(200_000, USDC_DENOM.to_owned()),
             coin(200_000, USDT_DENOM.to_owned()),
@@ -119,12 +119,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_before_autocompound: AssetsBalanceResponse = carrot_app.balance()?;
     let balance_usdc_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_before_autocompound = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -136,12 +136,12 @@ fn check_autocompound() -> anyhow::Result<()> {
     let balance_after_autocompound: AssetsBalanceResponse = carrot_app.balance().unwrap();
     let balance_usdc_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDC_DENOM.to_owned()))?
         .pop()
         .unwrap();
     let balance_usdt_after_autocompound = chain
         .bank_querier()
-        .balance(chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
+        .balance(&chain.sender_addr(), Some(USDT_DENOM.to_owned()))?
         .pop()
         .unwrap();
 
@@ -164,7 +164,7 @@ fn stranger_autocompound() -> anyhow::Result<()> {
 
     let mut chain = carrot_app.environment().clone();
     chain.add_balance(
-        chain.sender_addr(),
+        &chain.sender_addr(),
         coins(5_000_000, format!("gamm/pool/{pool_id}")),
     )?;
     let stranger = chain.init_account(coins(LOTS, GAS_DENOM))?;
@@ -212,9 +212,9 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     let dex: abstract_dex_adapter::interface::DexAdapter<_> = carrot_app.module()?;
     let abs = Abstract::load_from(chain.clone())?;
     let account_id = carrot_app.account().id()?;
-    let account = AbstractAccount::new(&abs, account_id);
+    let account = AccountI::load_from(&abs, account_id)?;
     chain.bank_send(
-        account.proxy.addr_str()?,
+        account.addr_str()?,
         vec![
             coin(200_000, USDC_DENOM.to_owned()),
             coin(200_000, USDT_DENOM.to_owned()),
@@ -277,7 +277,8 @@ fn stranger_autocompound() -> anyhow::Result<()> {
     assert!(status.spread_rewards.is_empty());
 
     // Check stranger gets rewarded
-    let stranger_reward_balance = chain.query_balance(stranger.address().as_str(), REWARD_DENOM)?;
+    let stranger_reward_balance =
+        chain.query_balance(&Addr::unchecked(stranger.address()), REWARD_DENOM)?;
     assert_eq!(stranger_reward_balance, Uint128::new(1000));
     Ok(())
 }

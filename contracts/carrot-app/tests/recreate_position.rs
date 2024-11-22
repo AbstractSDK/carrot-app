@@ -192,7 +192,7 @@ fn install_on_sub_account() -> anyhow::Result<()> {
         .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<OsmosisTestTube>>(
             &init_msg,
             Empty {},
-        )?
+        )
         .build()?;
 
     let carrot_app = account.application::<carrot_app::AppInterface<_>>()?;
@@ -254,7 +254,7 @@ fn install_on_sub_account_create_position_on_install() -> anyhow::Result<()> {
         .install_app_with_dependencies::<carrot_app::contract::interface::AppInterface<OsmosisTestTube>>(
             &init_msg,
             Empty {},
-        )?
+        )
         .build()?;
 
     let carrot_app = account.application::<carrot_app::AppInterface<_>>()?;

@@ -19,10 +19,12 @@ fn main() -> anyhow::Result<()> {
     let abstr = abstract_client::AbstractClient::new(daemon)?;
 
     let publisher = abstr
-        .publisher_builder(Namespace::new(ABSTRACT_NAMESPACE)?)
-        .build()?;
+        .fetch_or_build_account(Namespace::new(ABSTRACT_NAMESPACE)?, |builder| {
+            builder.namespace(Namespace::new(ABSTRACT_NAMESPACE).unwrap())
+        })?
+        .publisher()?;
 
     publisher.publish_app::<AppInterface<Daemon>>()?;
-    abstr.version_control().approve_any_abstract_modules()?;
+    abstr.registry().approve_any_abstract_modules()?;
     Ok(())
 }

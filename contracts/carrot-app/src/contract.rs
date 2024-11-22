@@ -58,15 +58,15 @@ impl<Chain: cw_orch::environment::CwEnv> abstract_app::abstract_interface::Depen
     fn dependency_install_configs(
         _configuration: Self::DependenciesConfig,
     ) -> Result<
-        Vec<abstract_app::std::manager::ModuleInstallConfig>,
+        Vec<abstract_app::std::account::ModuleInstallConfig>,
         abstract_app::abstract_interface::AbstractInterfaceError,
     > {
-        let dex_dependency_install_configs: Vec<abstract_app::std::manager::ModuleInstallConfig> =
+        let dex_dependency_install_configs: Vec<abstract_app::std::account::ModuleInstallConfig> =
             <abstract_dex_adapter::interface::DexAdapter<Chain> as abstract_app::abstract_interface::DependencyCreation>::dependency_install_configs(
                 cosmwasm_std::Empty {},
             )?;
 
-        let adapter_install_config = abstract_app::std::manager::ModuleInstallConfig::new(
+        let adapter_install_config = abstract_app::std::account::ModuleInstallConfig::new(
             abstract_app::std::objects::module::ModuleInfo::from_id(
                 abstract_dex_adapter::DEX_ADAPTER_ID,
                 abstract_dex_adapter::contract::CONTRACT_VERSION.into(),
