@@ -66,5 +66,5 @@ semver = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
 cw-orch = { workspace = true }
-cw-orch-osmosis-test-tube = "0.3.0"
+cw-orch-osmosis-test-tube = "0.5.1"
 clap = { version = "4.3.7", features = ["derive"] }
